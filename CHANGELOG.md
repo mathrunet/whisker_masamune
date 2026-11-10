@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Added `masamune-whisker-shimmer`: `ShimmerBox` and `ShimmerMultiLine` loading placeholders
+  (katana_ui's shimmer widgets), plus `use_shimmer` / `shimmer_gradient` for custom ones.
+
 ## 0.3.0
 
 - Added `masamune-whisker-adapter`: `MasamuneAdapter` / `MasamuneAdapters` register plugin

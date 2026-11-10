@@ -1,0 +1,18 @@
+[package]
+name = "masamune-whisker-shimmer"
+description = "Shimmer loading placeholders for Whisker apps: ShimmerBox and ShimmerMultiLine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-appearance.workspace = true

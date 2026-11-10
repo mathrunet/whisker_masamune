@@ -56,6 +56,7 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
 | `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
 | `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) |
+| `masamune-whisker-shimmer` | Shimmer loading placeholders (`ShimmerBox`, `ShimmerMultiLine`) ([usage](packages/masamune-whisker-shimmer/README.md)) |
 | `masamune-whisker-ai-debugger` | [Dev-only AI debugger overlay](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases and camera |
 
 Every native module is implemented for Android and iOS (iOS 15 or later) behind the same Rust
@@ -102,7 +103,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.3.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.3.1" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]
