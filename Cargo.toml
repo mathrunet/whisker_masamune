@@ -6,7 +6,7 @@ exclude = ["patches/whisker-router"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/mathrunet/whisker_masamune"
@@ -39,21 +39,21 @@ whisker-safe-area = "0.14"
 whisker-keyboard = "0.14"
 tempfile = "3"
 serde_yaml = "0.9"
-masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.1.0" }
-masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.1.0" }
-masamune-whisker-workers = { path = "packages/masamune-whisker-workers", version = "0.1.0" }
-masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.1.0" }
-masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.1.0" }
-masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.1.0" }
-masamune-whisker-boot = { path = "packages/masamune-whisker-boot", version = "0.1.0" }
-masamune-whisker-screen = { path = "packages/masamune-whisker-screen", version = "0.1.0" }
-masamune-whisker-localize-build = { path = "packages/masamune-whisker-localize-build", version = "0.1.0" }
-masamune-whisker-turso = { path = "packages/masamune-whisker-turso", version = "0.1.0" }
-masamune-whisker-tidb = { path = "packages/masamune-whisker-tidb", version = "0.1.0" }
-masamune-whisker-firestore = { path = "packages/masamune-whisker-firestore", version = "0.1.0" }
-masamune-whisker-firebase-firestore-db = { path = "packages/masamune-whisker-firebase-firestore-db", version = "0.1.0" }
-masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.1.0" }
-masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.1.0" }
+masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.2.0" }
+masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.2.0" }
+masamune-whisker-workers = { path = "packages/masamune-whisker-workers", version = "0.2.0" }
+masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.2.0" }
+masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.2.0" }
+masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.2.0" }
+masamune-whisker-boot = { path = "packages/masamune-whisker-boot", version = "0.2.0" }
+masamune-whisker-screen = { path = "packages/masamune-whisker-screen", version = "0.2.0" }
+masamune-whisker-localize-build = { path = "packages/masamune-whisker-localize-build", version = "0.2.0" }
+masamune-whisker-turso = { path = "packages/masamune-whisker-turso", version = "0.2.0" }
+masamune-whisker-tidb = { path = "packages/masamune-whisker-tidb", version = "0.2.0" }
+masamune-whisker-firestore = { path = "packages/masamune-whisker-firestore", version = "0.2.0" }
+masamune-whisker-firebase-firestore-db = { path = "packages/masamune-whisker-firebase-firestore-db", version = "0.2.0" }
+masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.2.0" }
+masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.2.0" }
 
 # The workspace builds and tests against the patched router, like the apps that use it.
 [patch.crates-io]
