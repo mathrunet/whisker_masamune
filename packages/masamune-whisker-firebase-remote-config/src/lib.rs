@@ -7,6 +7,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+mod adapter;
+
+pub use adapter::{FirebaseRemoteConfigMasamuneAdapter, fetch};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde_json::json;

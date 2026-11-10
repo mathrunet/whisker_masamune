@@ -9,6 +9,9 @@
 
 pub mod cng;
 
+mod adapter;
+
+pub use adapter::{DEFAULT_SCOPES, GoogleSignInMasamuneAdapter};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde::Deserialize;
@@ -37,16 +40,17 @@ pub fn is_already_registered(error: &NativeError) -> bool {
     error.0 == "already-registered"
 }
 
-/// Signs in with Google and makes it the current Firebase Auth user (scopes: email and profile).
+/// Signs in with Google and makes it the current Firebase Auth user (scopes:
+/// [`GoogleSignInMasamuneAdapter::scopes`], email and profile by default).
 pub async fn sign_in() -> NativeResult<GoogleSignInResult> {
     module()
-        .call_async("signIn", &json!({ "scopes": ["email", "profile"] }))
+        .call_async("signIn", &json!({ "scopes": adapter::scopes() }))
         .await
 }
 
 /// Links Google to the current user (e.g. anonymous). The uid and data are kept.
 pub async fn link() -> NativeResult<GoogleSignInResult> {
     module()
-        .call_async("link", &json!({ "scopes": ["email", "profile"] }))
+        .call_async("link", &json!({ "scopes": adapter::scopes() }))
         .await
 }

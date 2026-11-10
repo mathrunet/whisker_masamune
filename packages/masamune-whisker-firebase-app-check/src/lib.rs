@@ -10,6 +10,9 @@
 
 pub mod cng;
 
+mod adapter;
+
+pub use adapter::FirebaseAppCheckMasamuneAdapter;
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde_json::json;

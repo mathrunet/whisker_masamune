@@ -8,6 +8,9 @@
 
 pub mod cng;
 
+mod adapter;
+
+pub use adapter::{DEFAULT_MAX_SIZE, ImagePickerMasamuneAdapter, pick};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 

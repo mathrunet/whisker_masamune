@@ -12,6 +12,18 @@
   `load_products` (run after startup by the adapter) fills `products()` in the configured order.
   On Android, calls made while the store connection is being set up now wait for it instead of
   failing with `billing setup failed`.
+- Added adapters to more crates (all existing functions keep working without them):
+  - `AdmobMasamuneAdapter`: default banner and interstitial units (`default_banner_ad_unit_id`,
+    `show_default_interstitial`) and an optional App Tracking Transparency request after startup.
+  - `AiDebuggerMasamuneAdapter`: installs the panic hook once and hands the controller to the root.
+  - `AppleSignInMasamuneAdapter` / `GoogleSignInMasamuneAdapter`: the scopes `sign_in` and `link`
+    request (unchanged defaults).
+  - `FirebaseAiMasamuneAdapter`: the model used by requests whose `model` is empty.
+  - `FirebaseAppCheckMasamuneAdapter`: activates App Check while the app prepares.
+  - `FirebaseRemoteConfigMasamuneAdapter`: the intervals `fetch` uses, optionally fetched after
+    startup.
+  - `ImagePickerMasamuneAdapter`: the size `pick` scales images down to.
+  - `InAppReviewMasamuneAdapter`: the store pages `review` falls back to.
 - `masamune-whisker-appearance`: `ThemeConfig` is now the app-wide theme, like Masamune's
   `AppThemeData`.
   - `Palette` adds `tertiary`, the `*_container` colors, `on_error`, `on_warning`, `success`,

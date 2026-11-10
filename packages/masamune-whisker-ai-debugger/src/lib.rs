@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+mod adapter;
 mod config;
 mod controller;
 mod logger_adapter;
@@ -9,6 +10,7 @@ mod settings;
 mod transport;
 mod types;
 
+pub use adapter::AiDebuggerMasamuneAdapter;
 pub use config::{AiDebugConfigError, AiDebugSpawner, AiDebuggerConfig};
 pub use controller::{AiDebugController, INDICATOR_TRACE_PREFIX, MODEL_LOAD_TRACE_PREFIX};
 pub use logger_adapter::AiDebuggerLoggerAdapter;

@@ -9,6 +9,9 @@
 
 pub mod cng;
 
+mod adapter;
+
+pub use adapter::{AdmobMasamuneAdapter, default_banner_ad_unit_id, show_default_interstitial};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde::Deserialize;

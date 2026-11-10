@@ -8,6 +8,9 @@
 
 pub mod cng;
 
+mod adapter;
+
+pub use adapter::{AppleSignInMasamuneAdapter, DEFAULT_SCOPES};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde::Deserialize;
@@ -36,16 +39,17 @@ pub fn is_already_registered(error: &NativeError) -> bool {
     error.0 == "already-registered"
 }
 
-/// Signs in with Apple and makes it the current Firebase Auth user (scopes: email and name).
+/// Signs in with Apple and makes it the current Firebase Auth user (scopes:
+/// [`AppleSignInMasamuneAdapter::scopes`], email and name by default).
 pub async fn sign_in() -> NativeResult<AppleSignInResult> {
     module()
-        .call_async("signIn", &json!({ "scopes": ["email", "name"] }))
+        .call_async("signIn", &json!({ "scopes": adapter::scopes() }))
         .await
 }
 
 /// Links Apple to the current user (e.g. anonymous). The uid and data are kept.
 pub async fn link() -> NativeResult<AppleSignInResult> {
     module()
-        .call_async("link", &json!({ "scopes": ["email", "name"] }))
+        .call_async("link", &json!({ "scopes": adapter::scopes() }))
         .await
 }

@@ -878,6 +878,7 @@ name = "masamune-whisker-admob"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -894,6 +895,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "log",
+ "masamune-whisker-adapter",
  "masamune-whisker-billing",
  "masamune-whisker-device-info",
  "masamune-whisker-image-picker",
@@ -941,6 +943,7 @@ name = "masamune-whisker-apple-sign-in"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1015,6 +1018,7 @@ version = "0.2.1"
 dependencies = [
  "futures-channel",
  "futures-util",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1026,6 +1030,7 @@ name = "masamune-whisker-firebase-app-check"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1047,6 +1052,7 @@ dependencies = [
 name = "masamune-whisker-firebase-remote-config"
 version = "0.2.1"
 dependencies = [
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1115,6 +1121,7 @@ name = "masamune-whisker-google-sign-in"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1127,6 +1134,7 @@ name = "masamune-whisker-image-picker"
 version = "0.2.1"
 dependencies = [
  "anyhow",
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1138,6 +1146,7 @@ dependencies = [
 name = "masamune-whisker-in-app-review"
 version = "0.2.1"
 dependencies = [
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",

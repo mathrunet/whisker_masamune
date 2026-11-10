@@ -22,6 +22,7 @@ image-picker = ["dep:masamune-whisker-image-picker"]
 
 [dependencies]
 whisker.workspace = true
+masamune-whisker-adapter.workspace = true
 whisker-input.workspace = true
 whisker-image.workspace = true
 whisker-local-store.workspace = true

@@ -1,5 +1,8 @@
 //! In-app review requests.
 
+mod adapter;
+
+pub use adapter::{InAppReviewMasamuneAdapter, review};
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde_json::json;

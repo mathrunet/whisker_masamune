@@ -131,6 +131,11 @@ while preparing the app. Each adapter prepares itself (for example the notificat
 and starts its background work (for example re-arming saved notifications); plugins read their
 settings with `XxxMasamuneAdapter::primary()`.
 
+Crates with an adapter: admob, ai-debugger, apple-sign-in, billing, firebase-ai,
+firebase-app-check, firebase-remote-config, google-sign-in, image-picker, in-app-review and
+local-notification. share and view-capture have no runtime settings, and build-time settings stay
+in their CNG plugins.
+
 ```rust
 #[whisker::main]
 fn app() -> Element {

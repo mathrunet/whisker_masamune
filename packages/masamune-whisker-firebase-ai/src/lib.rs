@@ -12,6 +12,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use futures_channel::mpsc;
 use futures_util::StreamExt;
+mod adapter;
+
+pub use adapter::FirebaseAiMasamuneAdapter;
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde::{Deserialize, Serialize};
@@ -226,7 +229,7 @@ pub struct GenerationConfig {
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateRequest {
-    /// Model name (e.g. `gemini-3.5-flash-lite`).
+    /// Model name (e.g. `gemini-3.5-flash-lite`). Empty uses [`FirebaseAiMasamuneAdapter::model`].
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<String>,
@@ -268,6 +271,7 @@ impl GenerateResponse {
 
 /// Generates content (non-streaming; returns once the full response is ready).
 pub async fn generate(request: &GenerateRequest) -> NativeResult<GenerateResponse> {
+    let request = adapter::with_default_model(request);
     module()
         .call_async("generate", &json!({ "request": request }))
         .await
@@ -294,6 +298,7 @@ pub async fn stream(
     request: &GenerateRequest,
     mut on_chunk: impl FnMut(GenerateResponse),
 ) -> NativeResult<()> {
+    let request = adapter::with_default_model(request);
     let request_id = format!("request-{}", NEXT_REQUEST.fetch_add(1, Ordering::Relaxed));
     let (tx, mut rx) = mpsc::unbounded::<ChunkEvent>();
     let watched = request_id.clone();
