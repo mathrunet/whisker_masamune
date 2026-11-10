@@ -21,8 +21,8 @@ async fn callable_envelope_tokens_database_and_typed_response() {
         .await;
     let adapter =
         FirebaseFunctionsAdapter::at_endpoint(format!("{}/project/region/", server.uri()))
-            .with_auth(AuthProvider::fixed("id-token"))
-            .with_app_check(AuthProvider::fixed("app-token"))
+            .with_auth(Auth::fixed("id-token"))
+            .with_app_check(Auth::fixed("app-token"))
             .with_firestore_database_id("named");
     #[derive(serde::Deserialize)]
     struct Reply {
@@ -133,13 +133,13 @@ async fn token_failures_and_invalid_requests_never_dispatch() {
     let adapter = FirebaseFunctionsAdapter::at_endpoint(server.uri());
     let auth_fail = adapter
         .clone()
-        .with_auth(AuthProvider::new(|_| async { Err(ApiError::NotSignedIn) }));
+        .with_auth(Auth::from_fn(|_| async { Err(AuthError::NotSignedIn) }));
     assert_eq!(
         auth_fail.send(FunctionRequest::new("run")).await,
         Err(FunctionsError::Api(ApiError::NotSignedIn))
     );
-    let app_fail = adapter.clone().with_app_check(AuthProvider::new(|_| async {
-        Err(ApiError::Other("attestation failed".into()))
+    let app_fail = adapter.clone().with_app_check(Auth::from_fn(|_| async {
+        Err(AuthError::Other("attestation failed".into()))
     }));
     assert_eq!(
         app_fail.send(FunctionRequest::new("run")).await,
@@ -147,7 +147,7 @@ async fn token_failures_and_invalid_requests_never_dispatch() {
             "attestation failed".into()
         )))
     );
-    let app_missing = adapter.clone().with_app_check(AuthProvider::none());
+    let app_missing = adapter.clone().with_app_check(Auth::none());
     assert!(app_missing.send(FunctionRequest::new("run")).await.is_err());
     let mut request = FunctionRequest::new("run");
     request.query.push(("lost".into(), "input".into()));
@@ -184,7 +184,7 @@ async fn timeout_covers_token_and_http_without_retries() {
         Err(FunctionsError::Api(ApiError::Timeout))
     );
     let slow_token = adapter
-        .with_app_check(AuthProvider::new(|_| async {
+        .with_app_check(Auth::from_fn(|_| async {
             tokio::time::sleep(Duration::from_secs(1)).await;
             Ok(Some("token".into()))
         }))

@@ -5,8 +5,12 @@
 //! [`RemoteStore`](masamune_whisker_model::RemoteStore) over that REST API, so wrap it in a
 //! [`CachedTurso`] for the on-device libsql cache:
 //!
+//! Requests go through a [`Functions`] handle, so the crate depends only on the adapter
+//! interface; the app chooses the backend (usually `CloudflareFunctionsAdapter`):
+//!
 //! ```ignore
-//! let turso = Turso::new(Workers::new(EDGE).with_auth(AuthProvider::firebase()));
+//! let functions = Functions::new(CloudflareFunctionsAdapter::new(EDGE).with_auth(firebase_auth()));
+//! let turso = Turso::new(functions);
 //! let store = CachedTurso::new(turso, Some(ModelCache::shared()?), CacheOptions::new("turso"));
 //! let user = store.load(&uid, "user", &uid, ReadOptions::default()).await?;
 //! ```
@@ -17,8 +21,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use masamune_whisker_model::{CachedStore, Query, RemoteStore, RestDatabase, Row, now_ms};
-use masamune_whisker_workers::{ApiError, ApiResult, Method, RetryPolicy, Workers, retry};
+pub use masamune_whisker_functions::Functions;
+use masamune_whisker_functions::Method;
+use masamune_whisker_model::{
+    ApiError, ApiResult, CachedStore, Query, RemoteStore, RestDatabase, RetryPolicy, Row, now_ms,
+    retry,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
@@ -82,12 +90,12 @@ pub struct Turso {
 }
 
 impl Turso {
-    pub fn new(workers: Workers) -> Self {
-        Self::with_config(workers, TursoConfig::default()).expect("default turso config")
+    pub fn new(functions: Functions) -> Self {
+        Self::with_config(functions, TursoConfig::default()).expect("default turso config")
     }
 
-    pub fn with_config(workers: Workers, config: TursoConfig) -> ApiResult<Self> {
-        let rest = RestDatabase::new(workers, config.action.clone())
+    pub fn with_config(functions: Functions, config: TursoConfig) -> ApiResult<Self> {
+        let rest = RestDatabase::new(functions, config.action.clone())
             .with_prefix(config.prefix.as_deref())?;
         Ok(Self { rest, config })
     }
@@ -125,15 +133,15 @@ impl Turso {
         scopes: &[TokenScope],
         ttl_seconds: u32,
     ) -> ApiResult<TursoToken> {
-        let workers = self.rest.workers();
-        let url = workers.url_with(&[&self.config.action, "token", "database", database], &[])?;
         let mut body = json!({ "targets": scopes, "ttlSeconds": ttl_seconds });
         if let Some(prefix) = self.rest.prefix() {
             body["prefix"] = Value::String(prefix.to_owned());
         }
-        let response = workers
-            .send(Method::POST, url, Some(&body), Duration::from_secs(20))
-            .await?;
+        let request = self
+            .rest
+            .request(Method::POST, &["token", "database", database], &[])
+            .with_body(body);
+        let response = self.rest.send(request, Duration::from_secs(20)).await?;
         serde_json::from_value(response).map_err(|e| ApiError::Decode(e.to_string()))
     }
 }
@@ -229,7 +237,7 @@ impl RemoteStore for Turso {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use masamune_whisker_workers::AuthProvider;
+    use masamune_whisker_functions::{Auth, RestApiFunctionsAdapter};
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
@@ -286,7 +294,7 @@ mod tests {
             .bool_fields
             .insert("user".into(), vec!["deleted".into()]);
         let turso = Turso::with_config(
-            Workers::new(server.uri()).with_auth(AuthProvider::fixed("t")),
+            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t"))),
             config,
         )
         .unwrap();

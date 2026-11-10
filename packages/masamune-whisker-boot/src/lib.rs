@@ -40,9 +40,9 @@ impl std::fmt::Display for BootError {
 
 impl std::error::Error for BootError {}
 
-#[cfg(feature = "workers")]
-impl From<masamune_whisker_workers::ApiError> for BootError {
-    fn from(error: masamune_whisker_workers::ApiError) -> Self {
+#[cfg(feature = "functions")]
+impl From<masamune_whisker_functions::ApiError> for BootError {
+    fn from(error: masamune_whisker_functions::ApiError) -> Self {
         if error.is_offline() {
             BootError::Offline
         } else {

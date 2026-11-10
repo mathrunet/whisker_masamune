@@ -12,13 +12,19 @@ include = ["Cargo.toml", "README.md", "src/**"]
 
 [features]
 default = []
-firebase = ["masamune-whisker-workers/firebase-functions"]
+# Firebase Auth ID tokens and native App Check (`with_firebase_providers`).
+firebase = [
+    "dep:masamune-whisker-auth-firebase",
+    "dep:masamune-whisker-firebase-app-check",
+]
 
 [dependencies]
-masamune-whisker-workers.workspace = true
 masamune-whisker-functions.workspace = true
+masamune-whisker-auth-firebase = { workspace = true, optional = true }
+masamune-whisker-firebase-app-check = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

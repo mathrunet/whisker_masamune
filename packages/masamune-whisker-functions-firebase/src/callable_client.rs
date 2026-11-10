@@ -4,38 +4,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::{ApiError, AuthProvider, HeaderMap, Url, client};
-
-/// Callable errors preserve the server status, message, and application details.
-#[derive(Clone, Debug, PartialEq)]
-pub enum CallableFailure {
-    Transport(ApiError),
-    Remote {
-        http_status: u16,
-        status: String,
-        message: String,
-        details: Value,
-    },
-}
-
-impl From<ApiError> for CallableFailure {
-    fn from(error: ApiError) -> Self {
-        Self::Transport(error)
-    }
-}
-
-impl std::fmt::Display for CallableFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Transport(error) => error.fmt(f),
-            Self::Remote {
-                status, message, ..
-            } => write!(f, "callable {status}: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for CallableFailure {}
+use masamune_whisker_functions::{ApiError, Auth, CallableFailure, HeaderMap, Url, client};
 
 /// Callable transport with injectable auth and App Check token sources.
 ///
@@ -44,8 +13,8 @@ impl std::error::Error for CallableFailure {}
 #[derive(Clone)]
 pub struct CallableClient {
     pub endpoint: String,
-    pub auth: AuthProvider,
-    pub app_check: Option<AuthProvider>,
+    pub auth: Auth,
+    pub app_check: Option<Auth>,
     pub timeout: Duration,
 }
 
@@ -59,7 +28,7 @@ impl CallableClient {
     pub fn at_endpoint(endpoint: impl Into<String>) -> Self {
         Self {
             endpoint: endpoint.into(),
-            auth: AuthProvider::none(),
+            auth: Auth::none(),
             app_check: None,
             timeout: Duration::from_secs(60),
         }

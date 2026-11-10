@@ -17,6 +17,5 @@ crate-type = ["rlib"]
 whisker.workspace = true
 serde_json.workspace = true
 log.workspace = true
-masamune-whisker-workers.workspace = true
 masamune-whisker-model.workspace = true
 masamune-whisker-firebase-firestore-db.workspace = true

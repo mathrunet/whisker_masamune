@@ -8,16 +8,20 @@
 //!
 //! - Key aliases: `@uid` is the `id` column and `@time` the `updated_at` column.
 //! - Keys starting with `@` are not written.
+//! - Requests go through a [`Functions`] handle (usually `CloudflareFunctionsAdapter`), so the
+//!   crate depends only on the adapter interface.
 //! - Requests are retried on 429, 500, 502, 503, 504 and network errors (200 ms … 5 s with
 //!   jitter), like Flutter.
 
 use std::collections::HashMap;
 use std::time::Duration;
 
+pub use masamune_whisker_functions::Functions;
+use masamune_whisker_functions::Method;
 use masamune_whisker_model::{
-    CachedStore, Filter, Order, Query, RemoteStore, RestDatabase, Row, data_rows,
+    ApiError, ApiResult, CachedStore, Filter, Order, Query, RemoteStore, RestDatabase, RetryPolicy,
+    Row, data_rows, retry,
 };
-use masamune_whisker_workers::{ApiError, ApiResult, Method, RetryPolicy, Workers, retry};
 use serde_json::{Value, json};
 
 /// A [`Tidb`] store with the on-device cache.
@@ -102,12 +106,12 @@ fn writable(mut row: Row) -> Row {
 }
 
 impl Tidb {
-    pub fn new(workers: Workers) -> Self {
-        Self::with_config(workers, TidbConfig::default()).expect("default tidb config")
+    pub fn new(functions: Functions) -> Self {
+        Self::with_config(functions, TidbConfig::default()).expect("default tidb config")
     }
 
-    pub fn with_config(workers: Workers, config: TidbConfig) -> ApiResult<Self> {
-        let rest = RestDatabase::new(workers, config.action.clone())
+    pub fn with_config(functions: Functions, config: TidbConfig) -> ApiResult<Self> {
+        let rest = RestDatabase::new(functions, config.action.clone())
             .with_prefix(config.prefix.as_deref())?;
         Ok(Self { rest, config })
     }
@@ -159,24 +163,16 @@ impl Tidb {
         if let Some(filters) = query.where_json() {
             params.push(("where", filters));
         }
-        let workers = self.rest.workers();
-        let mut segments: Vec<&str> = self
-            .config
-            .action
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect();
-        segments.extend(["database", database, table]);
         if let Some(prefix) = self.rest.prefix() {
             params.push(("prefix", prefix.to_owned()));
         }
-        let url = workers.url_with(&segments, &params)?;
+        let request = self
+            .rest
+            .request(Method::GET, &["database", database, table], &params);
         retry(&self.config.retry, || {
-            let url = url.clone();
+            let request = request.clone();
             async move {
-                let response = workers
-                    .send(Method::GET, url, None, Duration::from_secs(20))
-                    .await?;
+                let response = self.rest.send(request, Duration::from_secs(20)).await?;
                 Ok(data_rows(&response))
             }
         })
@@ -296,7 +292,7 @@ impl RemoteStore for Tidb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use masamune_whisker_workers::AuthProvider;
+    use masamune_whisker_functions::{Auth, RestApiFunctionsAdapter};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering};
     use wiremock::matchers::{body_json, method, path, query_param};
@@ -309,7 +305,7 @@ mod tests {
             ..TidbConfig::default()
         };
         Tidb::with_config(
-            Workers::new(server.uri()).with_auth(AuthProvider::fixed("t")),
+            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t"))),
             config,
         )
         .unwrap()
@@ -452,7 +448,9 @@ mod tests {
         ) else {
             return;
         };
-        let db = Tidb::new(Workers::new(base).with_auth(AuthProvider::fixed(token)));
+        let db = Tidb::new(Functions::new(
+            RestApiFunctionsAdapter::new(base).with_auth(Auth::fixed(token)),
+        ));
         let table = std::env::var("TIDB_E2E_TABLE").unwrap_or_else(|_| "whisker_e2e".into());
         let database = std::env::var("TIDB_E2E_DATABASE").unwrap_or_else(|_| "e2e".into());
         let row = json!({"title": "e2e"}).as_object().unwrap().clone();

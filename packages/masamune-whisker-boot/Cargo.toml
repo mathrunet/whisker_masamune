@@ -16,7 +16,7 @@ crate-type = ["rlib"]
 [features]
 default = []
 # `From<ApiError> for BootError`.
-workers = ["dep:masamune-whisker-workers"]
+functions = ["dep:masamune-whisker-functions"]
 
 [dependencies]
 whisker.workspace = true
@@ -25,4 +25,4 @@ tokio.workspace = true
 log.workspace = true
 masamune-whisker-ui.workspace = true
 masamune-whisker-app-control.workspace = true
-masamune-whisker-workers = { workspace = true, optional = true }
+masamune-whisker-functions = { workspace = true, optional = true }

@@ -5,17 +5,17 @@
 
 use std::time::Duration;
 
+pub use masamune_whisker_functions::Auth;
 use masamune_whisker_functions::{
     FunctionRequest, FunctionsAdapter, FunctionsError, FunctionsFuture, RestApiFunctionsAdapter,
 };
-pub use masamune_whisker_workers::AuthProvider;
 
 /// Routes actions to edge or region Workers, using the same bearer token provider.
 #[derive(Clone)]
 pub struct CloudflareFunctionsAdapter {
     edge: RestApiFunctionsAdapter,
     region: Option<RestApiFunctionsAdapter>,
-    auth: AuthProvider,
+    auth: Auth,
     timeout: Duration,
 }
 
@@ -25,7 +25,7 @@ impl CloudflareFunctionsAdapter {
         Self {
             edge: RestApiFunctionsAdapter::new(endpoint),
             region: None,
-            auth: AuthProvider::none(),
+            auth: Auth::none(),
             timeout: Duration::from_secs(30),
         }
     }
@@ -37,7 +37,7 @@ impl CloudflareFunctionsAdapter {
         );
         self
     }
-    pub fn with_auth(mut self, auth: AuthProvider) -> Self {
+    pub fn with_auth(mut self, auth: Auth) -> Self {
         self.edge = self.edge.with_auth(auth.clone());
         self.region = self.region.map(|adapter| adapter.with_auth(auth.clone()));
         self.auth = auth;

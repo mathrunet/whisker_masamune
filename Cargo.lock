@@ -901,7 +901,6 @@ dependencies = [
  "masamune-whisker-image-picker",
  "masamune-whisker-logger",
  "masamune-whisker-view-capture",
- "masamune-whisker-workers",
  "regex",
  "reqwest",
  "serde",
@@ -952,6 +951,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-auth"
+version = "0.2.1"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "masamune-whisker-auth-firebase"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-auth",
+ "whisker-firebase",
+]
+
+[[package]]
 name = "masamune-whisker-billing"
 version = "0.2.1"
 dependencies = [
@@ -968,8 +982,8 @@ version = "0.2.1"
 dependencies = [
  "log",
  "masamune-whisker-app-control",
+ "masamune-whisker-functions",
  "masamune-whisker-ui",
- "masamune-whisker-workers",
  "tokio",
  "whisker",
  "whisker-router",
@@ -1066,7 +1080,6 @@ dependencies = [
  "log",
  "masamune-whisker-firebase-firestore-db",
  "masamune-whisker-model",
- "masamune-whisker-workers",
  "serde_json",
  "whisker",
 ]
@@ -1085,7 +1098,9 @@ dependencies = [
 name = "masamune-whisker-functions"
 version = "0.2.1"
 dependencies = [
- "masamune-whisker-workers",
+ "log",
+ "masamune-whisker-auth",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
@@ -1097,7 +1112,6 @@ name = "masamune-whisker-functions-cloudflare"
 version = "0.2.1"
 dependencies = [
  "masamune-whisker-functions",
- "masamune-whisker-workers",
  "serde",
  "serde_json",
  "tokio",
@@ -1108,8 +1122,9 @@ dependencies = [
 name = "masamune-whisker-functions-firebase"
 version = "0.2.1"
 dependencies = [
+ "masamune-whisker-auth-firebase",
+ "masamune-whisker-firebase-app-check",
  "masamune-whisker-functions",
- "masamune-whisker-workers",
  "serde",
  "serde_json",
  "tokio",
@@ -1207,8 +1222,8 @@ dependencies = [
  "futures-util",
  "libsql",
  "log",
+ "masamune-whisker-functions",
  "masamune-whisker-logger",
- "masamune-whisker-workers",
  "serde",
  "serde_json",
  "tempfile",
@@ -1252,8 +1267,8 @@ name = "masamune-whisker-storage-cloudflare"
 version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
+ "masamune-whisker-functions",
  "masamune-whisker-storage",
- "masamune-whisker-workers",
  "serde_json",
  "tempfile",
  "tokio",
@@ -1273,8 +1288,8 @@ name = "masamune-whisker-tidb"
 version = "0.2.1"
 dependencies = [
  "log",
+ "masamune-whisker-functions",
  "masamune-whisker-model",
- "masamune-whisker-workers",
  "serde_json",
  "tokio",
  "wiremock",
@@ -1285,8 +1300,8 @@ name = "masamune-whisker-turso"
 version = "0.2.1"
 dependencies = [
  "log",
+ "masamune-whisker-functions",
  "masamune-whisker-model",
- "masamune-whisker-workers",
  "serde",
  "serde_json",
  "tokio",
@@ -1314,20 +1329,6 @@ name = "masamune-whisker-view-capture"
 version = "0.2.1"
 dependencies = [
  "whisker",
-]
-
-[[package]]
-name = "masamune-whisker-workers"
-version = "0.2.1"
-dependencies = [
- "log",
- "masamune-whisker-firebase-app-check",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "whisker-firebase",
- "wiremock",
 ]
 
 [[package]]

@@ -107,10 +107,33 @@
 - Added `masamune-whisker-functions`, `masamune-whisker-functions-cloudflare` and
   `masamune-whisker-functions-firebase`: typed actions, injectable adapters, JSON REST,
   edge/region routing, callable error details, and runtime stubs.
-- `masamune-whisker-workers`: added the SDK-independent `CallableClient` and custom
-  request headers. Deadlines now include token acquisition. The legacy `Callable`
-  keeps its API but now returns App Check acquisition errors instead of continuing
-  without a required token; malformed callable responses also fail explicitly.
+- **Breaking:** removed `masamune-whisker-workers`. Its parts moved to base crates
+  modeled after Flutter Masamune's `katana_auth` / `katana_functions`, so backend
+  crates depend only on interfaces:
+  - Added `masamune-whisker-auth` (`AuthAdapter`, `Auth`, `RuntimeAuthAdapter`,
+    `AuthError`) and `masamune-whisker-auth-firebase` (`FirebaseAuthAdapter`,
+    `firebase_auth()`, `current_uid()`).
+  - `masamune-whisker-functions` now owns `ApiError`, `ApiResult`, `RetryPolicy`,
+    `retry`, `with_timeout`, `client()`, `read_json` and `CallableFailure`, and adds
+    `Functions::send`, `FunctionRequest::with_segments` and builder helpers, and
+    `ApiError: From<FunctionsError>`.
+  - `CallableClient` moved to `masamune-whisker-functions-firebase`; its `firebase`
+    feature provides `with_firebase_providers()` and `firebase_app_check_auth()`.
+    The legacy `Callable` was removed; use `FirebaseFunctionsAdapter`.
+  - `masamune-whisker-functions-cloudflare` dropped its `firebase-auth` feature;
+    inject `firebase_auth()` (or any `AuthAdapter`) with `with_auth`.
+  - `RestDatabase::new`, `Turso::new` / `with_config`, `Tidb::new` / `with_config` and
+    `CloudflareStorageAdapter::new` take a `Functions` handle instead of `Workers`;
+    `RestDatabase::workers()` became `functions()` / `request()` / `send()`.
+    `masamune-whisker-storage-cloudflare::map_error` accepts `FunctionsError` too.
+  - `masamune-whisker-model` re-exports `ApiError`, `ApiResult`, `RetryPolicy`,
+    `retry` and `with_timeout`. `masamune-whisker-boot`'s `workers` feature is now
+    `functions`.
+  - Migration: `Workers::new(url).with_auth(AuthProvider::firebase())` →
+    `Functions::new(CloudflareFunctionsAdapter::new(url).with_auth(firebase_auth()))`;
+    `AuthProvider::new` / `fixed` / `none` → `Auth::from_fn` / `fixed` / `none`;
+    `Callable::new(project, region)` →
+    `FirebaseFunctionsAdapter::new(project, region).with_firebase_providers()`.
 - Added `masamune-whisker-storage` (`StorageAdapter`, `LocalFile`, `RemoteFile`, `RuntimeStorageAdapter`),
   `masamune-whisker-storage-firebase` (Cloud Storage for Firebase) and
   `masamune-whisker-storage-cloudflare` (Cloudflare R2 through the `storage_cloudflare` worker).

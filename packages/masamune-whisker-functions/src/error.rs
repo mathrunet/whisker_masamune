@@ -1,3 +1,5 @@
+use masamune_whisker_auth::AuthError;
+
 /// Failure of a server request.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ApiError {
@@ -74,3 +76,12 @@ impl From<reqwest::Error> for ApiError {
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
+
+impl From<AuthError> for ApiError {
+    fn from(error: AuthError) -> Self {
+        match error {
+            AuthError::NotSignedIn => ApiError::NotSignedIn,
+            AuthError::Other(message) => ApiError::Other(message),
+        }
+    }
+}

@@ -1,5 +1,5 @@
-//! REST client of the Masamune Cloudflare database workers (`masamune_cloudflare_turso`,
-//! `masamune_cloudflare_tidb`).
+//! REST client of the Masamune database workers (`masamune_cloudflare_turso`,
+//! `masamune_cloudflare_tidb`) over any `FunctionsAdapter`.
 //!
 //! Paths are `/{action}/database/{database}/{table}[/{id}]`:
 //!
@@ -7,10 +7,14 @@
 //! - `POST` `{prefix?, value}` upserts, `PUT` `{prefix?, where?, value}` updates, `DELETE`
 //!   `{prefix?, where?}` deletes.
 //! - Responses are `{"data": [...]}` (or `{"data": n}` for counts).
+//!
+//! The adapter decides the transport: `CloudflareFunctionsAdapter` speaks this REST protocol
+//! directly. Adapters that only support POST actions (Firebase callable) reject these requests
+//! with a configuration error until a matching server endpoint exists.
 
 use std::time::Duration;
 
-use masamune_whisker_workers::{ApiError, ApiResult, Method, Url, Workers};
+use masamune_whisker_functions::{ApiError, ApiResult, FunctionRequest, Functions, Method};
 use serde_json::{Map, Value, json};
 
 use crate::query::{Filter, Query, Row};
@@ -50,16 +54,16 @@ pub fn data_rows(response: &Value) -> Vec<Row> {
 /// Client of one database worker action (`"turso"`, `"tidb"`, …).
 #[derive(Clone, Debug)]
 pub struct RestDatabase {
-    workers: Workers,
+    functions: Functions,
     action: String,
     prefix: Option<String>,
     write_timeout: Duration,
 }
 
 impl RestDatabase {
-    pub fn new(workers: Workers, action: impl Into<String>) -> Self {
+    pub fn new(functions: Functions, action: impl Into<String>) -> Self {
         Self {
-            workers,
+            functions,
             action: action.into(),
             prefix: None,
             write_timeout: Duration::from_secs(20),
@@ -77,23 +81,52 @@ impl RestDatabase {
         self
     }
 
-    pub fn workers(&self) -> &Workers {
-        &self.workers
+    pub fn functions(&self) -> &Functions {
+        &self.functions
+    }
+
+    pub fn action(&self) -> &str {
+        &self.action
     }
 
     pub fn prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
     }
 
-    fn url(
+    /// Request to `/{action}/{segments…}` with encoded segments and query parameters.
+    /// The prefix is not added; callers put it in the query or the body.
+    pub fn request(
         &self,
+        method: Method,
+        segments: &[&str],
+        query: &[(&str, String)],
+    ) -> FunctionRequest {
+        let mut path: Vec<&str> = self.action.split('/').filter(|s| !s.is_empty()).collect();
+        path.extend(segments);
+        let mut request = FunctionRequest::new(self.action.clone())
+            .with_segments(&path)
+            .with_method(method);
+        for (key, value) in query {
+            request = request.with_query(*key, value.clone());
+        }
+        request
+    }
+
+    /// Sends `request` with `timeout` and returns the JSON response.
+    pub async fn send(&self, mut request: FunctionRequest, timeout: Duration) -> ApiResult<Value> {
+        request.timeout = Some(timeout);
+        Ok(self.functions.send(request).await?)
+    }
+
+    fn table_request(
+        &self,
+        method: Method,
         database: &str,
         table: &str,
         id: Option<&str>,
         query: &[(&str, String)],
-    ) -> ApiResult<Url> {
-        let mut segments: Vec<&str> = self.action.split('/').filter(|s| !s.is_empty()).collect();
-        segments.extend(["database", database, table]);
+    ) -> FunctionRequest {
+        let mut segments = vec!["database", database, table];
         if let Some(id) = id {
             segments.push(id);
         }
@@ -101,7 +134,7 @@ impl RestDatabase {
         if let Some(prefix) = &self.prefix {
             query.push(("prefix", prefix.clone()));
         }
-        self.workers.url_with(&segments, &query)
+        self.request(method, &segments, &query)
     }
 
     fn body(&self, mut body: Map<String, Value>) -> Value {
@@ -119,8 +152,8 @@ impl RestDatabase {
         id: &str,
         timeout: Duration,
     ) -> ApiResult<Option<Row>> {
-        let url = self.url(database, table, Some(id), &[])?;
-        match self.workers.send(Method::GET, url, None, timeout).await {
+        let request = self.table_request(Method::GET, database, table, Some(id), &[]);
+        match self.send(request, timeout).await {
             Ok(response) => Ok(data_rows(&response).into_iter().next()),
             Err(error) if error.is_not_found() => Ok(None),
             Err(error) => Err(error),
@@ -145,10 +178,8 @@ impl RestDatabase {
         if let Some(limit) = query.limit {
             params.push(("limit", limit.to_string()));
         }
-        let url = self.url(database, table, None, &params)?;
-        Ok(data_rows(
-            &self.workers.send(Method::GET, url, None, timeout).await?,
-        ))
+        let request = self.table_request(Method::GET, database, table, None, &params);
+        Ok(data_rows(&self.send(request, timeout).await?))
     }
 
     /// Number of rows matching `query` (`count=true`).
@@ -163,8 +194,8 @@ impl RestDatabase {
         if let Some(filters) = query.where_json() {
             params.push(("where", filters));
         }
-        let url = self.url(database, table, None, &params)?;
-        let response = self.workers.send(Method::GET, url, None, timeout).await?;
+        let request = self.table_request(Method::GET, database, table, None, &params);
+        let response = self.send(request, timeout).await?;
         match response.get("data") {
             Some(Value::Number(n)) => n
                 .as_u64()
@@ -184,19 +215,12 @@ impl RestDatabase {
         id: Option<&str>,
         value: Row,
     ) -> ApiResult<Vec<Row>> {
-        let url = self.url(database, table, id, &[])?;
         let mut body = Map::new();
         body.insert("value".into(), Value::Object(value));
-        let response = self
-            .workers
-            .send(
-                Method::POST,
-                url,
-                Some(&self.body(body)),
-                self.write_timeout,
-            )
-            .await?;
-        Ok(data_rows(&response))
+        let request = self
+            .table_request(Method::POST, database, table, id, &[])
+            .with_body(self.body(body));
+        Ok(data_rows(&self.send(request, self.write_timeout).await?))
     }
 
     /// Updates rows (`PUT`) selected by `id` or `filters` (one of them is required).
@@ -211,17 +235,15 @@ impl RestDatabase {
         if id.is_none() && filters.is_empty() {
             return Err(ApiError::Other("update needs an id or filters".into()));
         }
-        let url = self.url(database, table, id, &[])?;
         let mut body = Map::new();
         if !filters.is_empty() {
             body.insert("where".into(), json!(filters));
         }
         body.insert("value".into(), Value::Object(value));
-        let response = self
-            .workers
-            .send(Method::PUT, url, Some(&self.body(body)), self.write_timeout)
-            .await?;
-        Ok(data_rows(&response))
+        let request = self
+            .table_request(Method::PUT, database, table, id, &[])
+            .with_body(self.body(body));
+        Ok(data_rows(&self.send(request, self.write_timeout).await?))
     }
 
     /// Deletes rows (`DELETE`) selected by `id` or `filters` (one of them is required).
@@ -235,19 +257,14 @@ impl RestDatabase {
         if id.is_none() && filters.is_empty() {
             return Err(ApiError::Other("delete needs an id or filters".into()));
         }
-        let url = self.url(database, table, id, &[])?;
         let mut body = Map::new();
         if !filters.is_empty() {
             body.insert("where".into(), json!(filters));
         }
-        self.workers
-            .send(
-                Method::DELETE,
-                url,
-                Some(&self.body(body)),
-                self.write_timeout,
-            )
-            .await?;
+        let request = self
+            .table_request(Method::DELETE, database, table, id, &[])
+            .with_body(self.body(body));
+        self.send(request, self.write_timeout).await?;
         Ok(())
     }
 }
@@ -255,7 +272,7 @@ impl RestDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use masamune_whisker_workers::AuthProvider;
+    use masamune_whisker_functions::{Auth, RestApiFunctionsAdapter};
     use serde_json::json;
     use wiremock::matchers::{body_json, method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -307,7 +324,7 @@ mod tests {
             .mount(&server)
             .await;
         let db = RestDatabase::new(
-            Workers::new(server.uri()).with_auth(AuthProvider::fixed("t")),
+            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t"))),
             "turso",
         )
         .with_prefix(Some("dev"))

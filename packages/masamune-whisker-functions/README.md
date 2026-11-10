@@ -54,7 +54,7 @@ The same `FunctionsAction` can be passed to any adapter when its endpoint accept
 the same input/output contract. REST-only options (method/path/query) are rejected
 by Firebase callable adapters. `worker_type` is used only by Cloudflare.
 
-- `RestApiFunctionsAdapter`: generic JSON HTTP APIs, optional bearer `AuthProvider`.
+- `RestApiFunctionsAdapter`: generic JSON HTTP APIs, optional bearer `Auth`.
 - `masamune-whisker-functions-cloudflare`: edge/region Workers and bearer auth.
 - `masamune-whisker-functions-firebase`: Firebase callable protocol and App Check.
 - `RuntimeFunctionsAdapter`: a callback receiving the complete request for tests.
@@ -64,8 +64,10 @@ No adapter retries automatically, including non-idempotent calls. A per-action
 includes token acquisition, HTTP dispatch and response reading. Action construction
 and response conversion are application code and run outside this deadline.
 Managed JSON/auth headers take precedence over custom headers when configured.
-Use `.with_auth(AuthProvider::new(...))` to load a fresh token on each call;
-`AuthProvider::fixed` is intended for tests and explicitly fixed tokens.
+Tokens come from `masamune-whisker-auth`: pass any `AuthAdapter` wrapped in `Auth`
+(for example `masamune_whisker_auth_firebase::firebase_auth()`), or
+`Auth::from_fn(...)` to load a fresh token on each call. `Auth::fixed` is intended
+for tests and explicitly fixed tokens.
 
 ## Runtime tests
 
@@ -88,10 +90,15 @@ for unmatched stub names; implement dispatch in the callback.
 ## Dependencies and platform support
 
 Add `masamune-whisker-functions` and the selected backend crate using the same git
-revision/tag as the rest of `whisker_masamune`. These packages reuse the existing
-Workers transport and do not require changes to the Whisker framework. Existing
-`Workers` and feature-gated `Callable` APIs remain available. As before, the latter
-maps remote errors to `ApiError::Other`; the new adapter preserves structured errors.
+revision/tag as the rest of `whisker_masamune`. This crate is the shared HTTP
+foundation: `ApiError`, `RetryPolicy` / `retry` / `with_timeout` and the reqwest
+client live here. Backend crates (`masamune-whisker-turso`, `-tidb`,
+`-storage-cloudflare`, …) accept a `Functions` handle and depend only on this
+interface, so the app picks Cloudflare, Firebase or a runtime stub at boot.
+`Functions::send` exposes raw `FunctionRequest`s for such crates;
+`FunctionRequest::with_segments` percent-encodes dynamic path segments.
+`ApiError: From<FunctionsError>` flattens adapter errors (callable failures keep
+their HTTP status).
 
 The HTTP transport uses the workspace's native Reqwest/Tokio setup. It is not a
 browser-WASM transport. Native Firebase providers follow the platform coverage of

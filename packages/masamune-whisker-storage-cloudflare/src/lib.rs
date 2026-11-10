@@ -12,9 +12,14 @@
 //!
 //! Files travel base64-encoded inside JSON, so keep them to a few megabytes.
 //!
+//! Requests go through a [`Functions`] handle, so this crate depends only on the adapter
+//! interface. Every operation is a plain `POST {action}` with a JSON body, so it works with
+//! `CloudflareFunctionsAdapter` as well as with a Firebase callable that implements the same
+//! contract.
+//!
 //! ```ignore
-//! let workers = Workers::new(EDGE).with_auth(AuthProvider::firebase());
-//! let storage = CloudflareStorageAdapter::new(workers, "https://files.example.com");
+//! let functions = Functions::new(CloudflareFunctionsAdapter::new(EDGE).with_auth(firebase_auth()));
+//! let storage = CloudflareStorageAdapter::new(functions, "https://files.example.com");
 //! let file = storage.upload_bytes(&png, "users/alice/avatar.png", None).await?;
 //! ```
 
@@ -23,17 +28,18 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+pub use masamune_whisker_functions::Functions;
+use masamune_whisker_functions::{ApiError, FunctionRequest};
 pub use masamune_whisker_storage::{
     LocalFile, RemoteFile, StorageAdapter, StorageError, StorageResult,
 };
 use masamune_whisker_storage::{encode_path, normalize_path, resolve_mime_type, write_file};
-use masamune_whisker_workers::{ApiError, Workers};
 use serde_json::{Map, Value, json};
 
 /// Cloudflare R2 through the Masamune storage worker.
 #[derive(Clone, Debug)]
 pub struct CloudflareStorageAdapter {
-    workers: Workers,
+    functions: Functions,
     public_base_url: String,
     action: String,
     download_url_expires_in: Duration,
@@ -41,13 +47,11 @@ pub struct CloudflareStorageAdapter {
 }
 
 impl CloudflareStorageAdapter {
-    /// `workers` is the worker endpoint (with the user's [`AuthProvider`]) and
-    /// `public_base_url` the public domain of the bucket (the worker's `STORAGE_PUBLIC_BASE_URL`).
-    ///
-    /// [`AuthProvider`]: masamune_whisker_workers::AuthProvider
-    pub fn new(workers: Workers, public_base_url: impl Into<String>) -> Self {
+    /// `functions` sends the requests (with the user's token) and `public_base_url` is the
+    /// public domain of the bucket (the worker's `STORAGE_PUBLIC_BASE_URL`).
+    pub fn new(functions: Functions, public_base_url: impl Into<String>) -> Self {
         Self {
-            workers,
+            functions,
             public_base_url: public_base_url.into().trim_end_matches('/').to_owned(),
             action: "storage_cloudflare".into(),
             download_url_expires_in: Duration::from_secs(60 * 60),
@@ -88,11 +92,10 @@ impl CloudflareStorageAdapter {
         body.insert("operation".into(), operation.into());
         body.insert("path".into(), path.into());
         body.extend(fields);
-        let response = self
-            .workers
-            .post_with_timeout(&self.action, &Value::Object(body), timeout)
-            .await
-            .map_err(map_error)?;
+        let request = FunctionRequest::new(self.action.clone())
+            .with_body(Value::Object(body))
+            .with_timeout(timeout);
+        let response = self.functions.send(request).await.map_err(map_error)?;
         match response.get("status").and_then(Value::as_u64) {
             Some(status) if status >= 400 => Err(map_error(ApiError::Http {
                 status: status as u16,
@@ -186,9 +189,11 @@ impl StorageAdapter for CloudflareStorageAdapter {
     }
 }
 
-/// Maps worker errors to [`StorageError`].
-pub fn map_error(error: ApiError) -> StorageError {
-    match error {
+/// Maps worker errors ([`ApiError`] or [`FunctionsError`]) to [`StorageError`].
+///
+/// [`FunctionsError`]: masamune_whisker_functions::FunctionsError
+pub fn map_error(error: impl Into<ApiError>) -> StorageError {
+    match error.into() {
         ApiError::NotSignedIn => StorageError::Unauthorized,
         ApiError::Http { status: 404, .. } => StorageError::NotFound,
         ApiError::Http {
@@ -221,13 +226,14 @@ fn invalid_response(field: &str) -> StorageError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use masamune_whisker_workers::AuthProvider;
+    use masamune_whisker_functions::{Auth, RestApiFunctionsAdapter, RuntimeFunctionsAdapter};
     use wiremock::matchers::{body_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn adapter(server: &MockServer) -> CloudflareStorageAdapter {
-        let workers = Workers::new(server.uri()).with_auth(AuthProvider::fixed("t"));
-        CloudflareStorageAdapter::new(workers, "https://files.example.com/")
+        let functions =
+            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t")));
+        CloudflareStorageAdapter::new(functions, "https://files.example.com/")
     }
 
     #[tokio::test]
@@ -330,6 +336,33 @@ mod tests {
             Err(StorageError::InvalidArgument(
                 "the storage path is empty".into()
             ))
+        );
+    }
+
+    #[tokio::test]
+    async fn works_with_any_functions_adapter() {
+        // A callable-style backend: action name + JSON body, errors as structured failures.
+        let functions = Functions::new(RuntimeFunctionsAdapter::new(|request| async move {
+            assert_eq!(request.action, "storage_cloudflare");
+            assert_eq!(request.path, None);
+            let body = request.body.unwrap();
+            match body["operation"].as_str() {
+                Some("get") => Ok(json!({"binary": "aGk=", "meta": {"contentType": "text/plain"}})),
+                _ => Err(masamune_whisker_functions::CallableFailure::Remote {
+                    http_status: 403,
+                    status: "PERMISSION_DENIED".into(),
+                    message: "denied".into(),
+                    details: Value::Null,
+                }
+                .into()),
+            }
+        }));
+        let storage = CloudflareStorageAdapter::new(functions, "https://files.example.com");
+        let file = storage.download("a.txt", None).await.unwrap();
+        assert_eq!(file.bytes.as_deref(), Some(&b"hi"[..]));
+        assert_eq!(
+            storage.delete("a.txt").await,
+            Err(StorageError::Unauthorized)
         );
     }
 }

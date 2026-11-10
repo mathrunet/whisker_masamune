@@ -15,7 +15,11 @@ homepage = "https://github.com/mathrunet/whisker_masamune"
 authors = ["mathru (https://mathru.net)"]
 
 [workspace.dependencies]
+masamune-whisker-auth = { path = "packages/masamune-whisker-auth", version = "0.2.1" }
+masamune-whisker-auth-firebase = { path = "packages/masamune-whisker-auth-firebase", version = "0.2.1" }
 masamune-whisker-functions = { path = "packages/masamune-whisker-functions", version = "0.2.1" }
+masamune-whisker-functions-cloudflare = { path = "packages/masamune-whisker-functions-cloudflare", version = "0.2.1" }
+masamune-whisker-functions-firebase = { path = "packages/masamune-whisker-functions-firebase", version = "0.2.1" }
 masamune-whisker-logger = { path = "packages/masamune-whisker-logger", version = "0.2.1" }
 masamune-whisker-logger-firebase = { path = "packages/masamune-whisker-logger-firebase", version = "0.2.1" }
 whisker-image = "0.14"
@@ -47,7 +51,6 @@ serde_yaml = "0.9"
 base64 = "0.22"
 masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.2.1" }
 masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.2.1" }
-masamune-whisker-workers = { path = "packages/masamune-whisker-workers", version = "0.2.1" }
 masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.2.1" }
 masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.2.1" }
 masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.2.1" }
@@ -62,6 +65,7 @@ masamune-whisker-firebase-firestore-db = { path = "packages/masamune-whisker-fir
 masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.2.1" }
 masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.2.1" }
 masamune-whisker-storage = { path = "packages/masamune-whisker-storage", version = "0.2.1" }
+masamune-whisker-storage-cloudflare = { path = "packages/masamune-whisker-storage-cloudflare", version = "0.2.1" }
 masamune-whisker-view-capture = { path = "packages/masamune-whisker-view-capture", version = "0.2.1" }
 masamune-whisker-billing = { path = "packages/masamune-whisker-billing", version = "0.2.1" }
 masamune-whisker-image-picker = { path = "packages/masamune-whisker-image-picker", version = "0.2.1" }

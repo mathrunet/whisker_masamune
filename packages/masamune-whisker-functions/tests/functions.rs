@@ -69,7 +69,7 @@ async fn rest_contract_and_non_send_auth() {
     let calls = Rc::new(Cell::new(0));
     let observed = calls.clone();
     let adapter = RestApiFunctionsAdapter::new(format!("{}/api", server.uri())).with_auth(
-        AuthProvider::new(move |_| {
+        Auth::from_fn(move |_| {
             observed.set(observed.get() + 1);
             async { Ok(Some("fresh".into())) }
         }),
@@ -135,7 +135,7 @@ async fn http_decode_empty_and_deadline_errors() {
         Err(FunctionsError::Api(ApiError::Timeout))
     );
     let adapter = adapter
-        .with_auth(AuthProvider::new(|_| async {
+        .with_auth(Auth::from_fn(|_| async {
             tokio::time::sleep(Duration::from_secs(1)).await;
             Ok(None)
         }))
@@ -143,5 +143,56 @@ async fn http_decode_empty_and_deadline_errors() {
     assert_eq!(
         adapter.send(FunctionRequest::new("never-sent")).await,
         Err(FunctionsError::Api(ApiError::Timeout))
+    );
+}
+
+#[tokio::test]
+async fn posts_json_with_bearer_token_and_encoded_segments() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/delete_user"))
+        .and(header("authorization", "Bearer t"))
+        .and(body_json(json!({"userId": "u"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/turso/database/u%201/user"))
+        .and(query_param("where", "[1]"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": []})))
+        .mount(&server)
+        .await;
+    let functions = Functions::new(
+        RestApiFunctionsAdapter::new(format!("{}/", server.uri())).with_auth(Auth::fixed("t")),
+    );
+    let value = functions
+        .send(FunctionRequest::new("/delete_user").with_body(json!({"userId": "u"})))
+        .await
+        .unwrap();
+    assert_eq!(value, json!({"ok": true}));
+    let request = FunctionRequest::new("turso")
+        .with_segments(&["turso", "database", "u 1", "user"])
+        .with_method(Method::GET)
+        .with_query("where", "[1]");
+    assert_eq!(request.path.as_deref(), Some("turso/database/u%201/user"));
+    assert_eq!(functions.send(request).await.unwrap(), json!({"data": []}));
+}
+
+#[test]
+fn flattens_errors_for_backend_crates() {
+    let remote = FunctionsError::from(CallableFailure::Remote {
+        http_status: 404,
+        status: "NOT_FOUND".into(),
+        message: "missing".into(),
+        details: Value::Null,
+    });
+    assert!(ApiError::from(remote).is_not_found());
+    assert_eq!(
+        ApiError::from(FunctionsError::from(AuthError::NotSignedIn)),
+        ApiError::NotSignedIn
+    );
+    assert_eq!(
+        ApiError::from(FunctionsError::Configuration("x".into())),
+        ApiError::Other("x".into())
     );
 }

@@ -2,34 +2,34 @@
 
 Firebase HTTPS callable adapter for `masamune-whisker-functions`, modeled after
 `katana_functions_firebase/lib/adapter/firebase_functions_adapter.dart`.
-It reuses `masamune-whisker-workers::CallableClient` and needs no native SDK when
+It owns the callable transport (`CallableClient`) and needs no native SDK when
 custom token providers are used.
 
 ```rust
-use masamune_whisker_functions::{AuthProvider, Functions};
+use masamune_whisker_functions::{Auth, Functions};
 use masamune_whisker_functions_firebase::FirebaseFunctionsAdapter;
 
 let functions = Functions::new(
     FirebaseFunctionsAdapter::new("project-id", "asia-northeast1")
-        .with_auth(AuthProvider::new(|_force_refresh| async {
+        .with_auth(Auth::from_fn(|_force_refresh| async {
             Ok(Some("example-id-token".to_owned()))
         }))
-        .with_app_check(AuthProvider::new(|_force_refresh| async {
+        .with_app_check(Auth::from_fn(|_force_refresh| async {
             Ok(Some("example-app-check-token".to_owned()))
         }))
 );
 ```
 
 Enable the `firebase` Cargo feature for `.with_firebase_providers()`, which uses
-the current Firebase Auth user and native App Check. Activate App Check in the
+the current Firebase Auth user (`masamune-whisker-auth-firebase`) and native App
+Check (`firebase_app_check_auth()`). Activate App Check in the
 app's boot task first. That setup currently follows the existing modules' native
 platform support (App Check has Android support). Limited-use App Check tokens
 are not implemented. Never embed service-account credentials in a client app.
 
 Constructors default to unauthenticated calls without App Check; select providers
 explicitly. `with_app_check` requires a nonempty token: provider failure prevents
-dispatch. The existing feature-gated `workers::Callable` also uses this transport
-and now propagates App Check acquisition failure instead of logging and proceeding.
+dispatch.
 
 For a local emulator use:
 

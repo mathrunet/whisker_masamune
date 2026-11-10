@@ -17,7 +17,7 @@ async fn routes_edge_and_region_with_shared_auth() {
             .await;
     }
     let adapter = CloudflareFunctionsAdapter::new(format!("{}/api/", edge.uri()))
-        .with_auth(AuthProvider::fixed("t"))
+        .with_auth(Auth::fixed("t"))
         .with_region_endpoint(format!("{}/api", region.uri()));
     for worker in [None, Some("region")] {
         let mut request = FunctionRequest::new("action");
@@ -38,11 +38,10 @@ async fn routes_edge_and_region_with_shared_auth() {
 
 #[tokio::test]
 async fn rejects_missing_region_before_auth_or_network() {
-    let adapter = CloudflareFunctionsAdapter::new("http://127.0.0.1:1").with_auth(
-        AuthProvider::new(|_| async {
+    let adapter =
+        CloudflareFunctionsAdapter::new("http://127.0.0.1:1").with_auth(Auth::from_fn(|_| async {
             panic!("invalid route must not acquire a token");
-        }),
-    );
+        }));
     let mut request = FunctionRequest::new("action");
     request.worker_type = Some("region".into());
     assert!(matches!(

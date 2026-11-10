@@ -47,8 +47,19 @@ pub trait AiDebugTransport {
     ) -> LocalBoxFuture<'static, Result<Map<String, Value>, AiDebugError>>;
 }
 
-/// reqwest through `masamune_whisker_workers::client()`.
+/// reqwest with a shared client (connect timeout 10 s, overall timeout 30 s).
 pub struct HttpTransport;
+
+fn client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("http client")
+    })
+}
 
 impl AiDebugTransport for HttpTransport {
     fn post(
@@ -58,7 +69,7 @@ impl AiDebugTransport for HttpTransport {
         body: Value,
     ) -> LocalBoxFuture<'static, Result<Map<String, Value>, AiDebugError>> {
         async move {
-            let mut request = masamune_whisker_workers::client().post(&url).json(&body);
+            let mut request = client().post(&url).json(&body);
             for (name, value) in headers {
                 request = request.header(name, value);
             }

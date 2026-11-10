@@ -1,0 +1,17 @@
+[package]
+name = "masamune-whisker-auth"
+description = "Authentication adapter interface and access tokens for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }

@@ -37,17 +37,18 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 
 | Crate | Description |
 |---|---|
-| `masamune-whisker-workers` | HTTP client for Masamune Cloudflare Workers and Firebase callable functions |
-| `masamune-whisker-functions` | [Typed server actions, JSON REST and runtime adapters](packages/masamune-whisker-functions/README.md) |
+| `masamune-whisker-auth` | [`AuthAdapter` interface and `Auth` token handle](packages/masamune-whisker-auth/README.md) |
+| `masamune-whisker-auth-firebase` | [Firebase Authentication `AuthAdapter` (ID tokens, UID)](packages/masamune-whisker-auth-firebase/README.md) |
+| `masamune-whisker-functions` | [Typed server actions, the shared HTTP foundation (`ApiError`, retry), JSON REST and runtime adapters](packages/masamune-whisker-functions/README.md) |
 | `masamune-whisker-functions-cloudflare` | [Cloudflare Functions adapter with edge/region routing](packages/masamune-whisker-functions-cloudflare/README.md) |
 | `masamune-whisker-functions-firebase` | [Firebase callable Functions adapter with Auth and App Check](packages/masamune-whisker-functions-firebase/README.md) |
 | `masamune-whisker-model` | Query types, REST database client, on-device libsql cache and `CachedStore` |
-| `masamune-whisker-turso` | Turso through the Masamune worker, with the libsql cache |
-| `masamune-whisker-tidb` | TiDB through the Masamune worker (counts, vector search, bulk writes), with the libsql cache |
+| `masamune-whisker-turso` | Turso through the Masamune worker (any `FunctionsAdapter`), with the libsql cache |
+| `masamune-whisker-tidb` | TiDB through the Masamune worker (any `FunctionsAdapter`; counts, vector search, bulk writes), with the libsql cache |
 | `masamune-whisker-firestore` | Firestore reads/listeners with cache policies and UI signals |
 | `masamune-whisker-storage` | `StorageAdapter` trait (upload, download, delete, public and download URLs), file types and an in-memory adapter |
 | `masamune-whisker-storage-firebase` | Cloud Storage for Firebase as a `StorageAdapter` (needs `whisker-firebase-storage` in the app's `[patch.crates-io]`) |
-| `masamune-whisker-storage-cloudflare` | Cloudflare R2 through the Masamune storage worker as a `StorageAdapter` |
+| `masamune-whisker-storage-cloudflare` | Cloudflare R2 through the Masamune storage worker (any `FunctionsAdapter`) as a `StorageAdapter` |
 | `masamune-whisker-appearance` | App-wide Material theme (`ThemeConfig`: palettes, typography, shapes, spacing, elevation), light/dark/system modes and app-wide rebuilds |
 | `masamune-whisker-localize` | Everything about languages: system languages (Android, iOS, Web), system or pinned language saved across launches, typed strings in Rust (`localize!`) and the localize YAML generator (feature `build`) |
 | `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |

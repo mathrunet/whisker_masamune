@@ -4,13 +4,13 @@ Cloudflare Workers adapter for `masamune-whisker-functions`, modeled after
 `masamune_functions_cloudflare/lib/adapter/cloudflare_functions_adapter.dart`.
 
 ```rust
-use masamune_whisker_functions::{AuthProvider, Functions};
+use masamune_whisker_functions::{Auth, Functions};
 use masamune_whisker_functions_cloudflare::CloudflareFunctionsAdapter;
 
 let functions = Functions::new(
     CloudflareFunctionsAdapter::new("https://edge.example.com")
         .with_region_endpoint("https://region.example.com")
-        .with_auth(AuthProvider::new(|_force_refresh| async {
+        .with_auth(Auth::from_fn(|_force_refresh| async {
             // Fetch the current user's ID/access token from the app's auth service.
             Ok(Some("example-token".to_owned()))
         }))
@@ -23,8 +23,10 @@ worker types fail before acquiring tokens or sending HTTP. Configure both endpoi
 from the app's existing flavor constants at boot (`option_env!("<APP>_FLAVOR")`);
 the package does not choose production implicitly.
 
-With the `firebase-auth` feature, use `.with_auth(AuthProvider::firebase())` for
-Firebase ID tokens. The backend must verify the token. Authentication is opt-in;
+For Firebase ID tokens, pass `masamune_whisker_auth_firebase::firebase_auth()`
+(or any other `AuthAdapter`) to `.with_auth`. This crate depends only on the
+`masamune-whisker-auth` interface, never on an auth implementation. The backend
+must verify the token. Authentication is opt-in;
 without a provider the adapter sends no managed Authorization header.
 
 Method defaults to POST. Set GET/PUT/PATCH/DELETE explicitly as needed. Action

@@ -10,12 +10,7 @@ authors.workspace = true
 publish = false
 include = ["Cargo.toml", "README.md", "src/**"]
 
-[features]
-default = []
-firebase-auth = ["masamune-whisker-workers/firebase-auth"]
-
 [dependencies]
-masamune-whisker-workers.workspace = true
 masamune-whisker-functions.workspace = true
 serde.workspace = true
 serde_json.workspace = true

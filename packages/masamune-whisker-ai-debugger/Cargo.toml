@@ -28,7 +28,6 @@ whisker-image.workspace = true
 whisker-local-store.workspace = true
 whisker-safe-area.workspace = true
 masamune-whisker-logger.workspace = true
-masamune-whisker-workers.workspace = true
 masamune-whisker-view-capture.workspace = true
 masamune-whisker-device-info.workspace = true
 masamune-whisker-billing = { workspace = true, optional = true }

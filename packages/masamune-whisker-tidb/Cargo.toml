@@ -1,6 +1,6 @@
 [package]
 name = "masamune-whisker-tidb"
-description = "TiDB databases through the Masamune Cloudflare worker, with an on-device libsql cache, for Whisker apps"
+description = "TiDB databases through the Masamune worker (any FunctionsAdapter), with an on-device libsql cache, for Whisker apps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,7 +16,7 @@ crate-type = ["rlib"]
 [dependencies]
 serde_json.workspace = true
 log.workspace = true
-masamune-whisker-workers.workspace = true
+masamune-whisker-functions.workspace = true
 masamune-whisker-model.workspace = true
 
 [dev-dependencies]

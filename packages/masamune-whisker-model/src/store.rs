@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use futures_util::future::{LocalBoxFuture, Shared};
-use masamune_whisker_workers::{ApiError, ApiResult, with_timeout};
+use masamune_whisker_functions::{ApiError, ApiResult, with_timeout};
 
 use crate::cache::{CacheError, ModelCache, now_ms};
 use crate::query::{Query, Row};

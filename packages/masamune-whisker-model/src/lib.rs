@@ -2,7 +2,7 @@
 //!
 //! - [`query`]: backend-neutral filters, ordering and limits (Masamune wire format).
 //! - [`cache`]: on-device document cache backed by a local libsql database.
-//! - [`rest`]: client of the Masamune Cloudflare database workers.
+//! - [`rest`]: client of the Masamune database workers through a `FunctionsAdapter`.
 //! - [`store`]: remote store + cache with deadlines, sessions and cache filters.
 //!
 //! `CachedStore::load` / `query` run inside a `masamune_whisker_logger::start_trace` named
@@ -19,6 +19,7 @@ pub mod store;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cache::{CacheError, CacheResult, CachedDocument, ModelCache, now_ms};
+pub use masamune_whisker_functions::{ApiError, ApiResult, RetryPolicy, retry, with_timeout};
 pub use query::{Filter, FilterKind, Order, Query, Row};
 pub use rest::{RestDatabase, data_rows, normalize_prefix};
 #[cfg(not(target_arch = "wasm32"))]
