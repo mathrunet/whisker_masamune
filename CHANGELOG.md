@@ -8,6 +8,10 @@
   the installed settings.
 - `masamune-whisker-local-notification`: added `LocalNotificationMasamuneAdapter`, which
   configures the channel while the app prepares and re-arms the saved schedules after startup.
+- `masamune-whisker-billing`: added `BillingMasamuneAdapter` with the app's product ids;
+  `load_products` (run after startup by the adapter) fills `products()` in the configured order.
+  On Android, calls made while the store connection is being set up now wait for it instead of
+  failing with `billing setup failed`.
 - `masamune-whisker-appearance`: `ThemeConfig` is now the app-wide theme, like Masamune's
   `AppThemeData`.
   - `Palette` adds `tertiary`, the `*_container` colors, `on_error`, `on_warning`, `success`,

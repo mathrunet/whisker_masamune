@@ -137,6 +137,7 @@ fn app() -> Element {
     logger::init();
     MasamuneAdapters::new()
         .adapter(LocalNotificationMasamuneAdapter::new(NotificationConfig { /* … */ }))
+        .adapter(BillingMasamuneAdapter::new(["monthly", "yearly"]))
         .install();
     render! { Root }
 }

@@ -27,6 +27,9 @@ import rs.whisker.runtime.WhiskerPromise
 class BillingModule : Module() {
     private var client: BillingClient? = null
     private val details = mutableMapOf<String, ProductDetails>()
+    // Calls waiting for the connection in progress; startConnection again while connecting fails.
+    private val connecting = Any()
+    private var waiting: MutableList<Pair<WhiskerPromise, () -> Unit>>? = null
 
     private val listener = PurchasesUpdatedListener { result, purchases ->
         sendEvent(
@@ -172,6 +175,13 @@ class BillingModule : Module() {
             Bridge.reject(promise, "no context")
             return
         }
+        synchronized(connecting) {
+            waiting?.let {
+                it.add(promise to then)
+                return
+            }
+            waiting = mutableListOf(promise to then)
+        }
         val created = current ?: BillingClient.newBuilder(context)
             .setListener(listener)
             .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
@@ -179,10 +189,12 @@ class BillingModule : Module() {
         client = created
         created.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
+                val callers = synchronized(connecting) { waiting.orEmpty().also { waiting = null } }
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                    then()
+                    callers.forEach { (_, next) -> next() }
                 } else {
-                    Bridge.reject(promise, "billing setup failed: ${result.responseCode} ${result.debugMessage}")
+                    val message = "billing setup failed: ${result.responseCode} ${result.debugMessage}"
+                    callers.forEach { (waiter, _) -> Bridge.reject(waiter, message) }
                 }
             }
 

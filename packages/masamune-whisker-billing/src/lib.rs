@@ -22,12 +22,17 @@
 //! Unfinished purchases are refunded by Google Play after three days; on iOS they are delivered again
 //! through [`on_purchases`] on every launch until finished.
 //!
+//! [`BillingMasamuneAdapter`] in the app's `MasamuneAdapters` holds the product ids and loads them
+//! after startup into [`products`].
+//!
 //! In development, [`debug_force_purchase`] / [`debug_force_unpurchase`] simulate a purchase without
 //! the store (used by `masamune-whisker-ai-debugger`). Forced purchases carry
 //! [`DEBUG_PURCHASE_TOKEN`] as their token.
 
+mod adapter;
 mod debug;
 
+pub use adapter::{BillingMasamuneAdapter, load_products, products};
 pub use debug::{
     DEBUG_PURCHASE_TOKEN, debug_force_purchase, debug_force_unpurchase, debug_is_purchased,
     debug_purchases,

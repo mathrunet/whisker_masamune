@@ -19,6 +19,7 @@ ios = { manifest = "Package.swift" }
 
 [dependencies]
 whisker.workspace = true
+masamune-whisker-adapter.workspace = true
 masamune-whisker-bridge.workspace = true
 serde.workspace = true
 serde_json.workspace = true
