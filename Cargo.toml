@@ -1,0 +1,22 @@
+# whisker_masamune: native modules and app foundations for Whisker (https://whisker.rs) apps.
+[workspace]
+members = ["packages/*"]
+# The whisker-router fix is consumed by apps through `[patch.crates-io]` (see patches/whisker-router/PATCHES.md).
+exclude = ["patches/whisker-router"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/mathrunet/whisker_masamune"
+homepage = "https://github.com/mathrunet/whisker_masamune"
+authors = ["mathru (https://mathru.net)"]
+
+[workspace.dependencies]
+whisker = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+futures-channel = "0.3"
+futures-util = "0.3"
+masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.1.0" }

@@ -1,0 +1,24 @@
+[package]
+name = "masamune-whisker-firebase-app-check"
+description = "Firebase App Check activation and token retrieval for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "android/**", "build.gradle.kts"]
+
+[lib]
+crate-type = ["rlib"]
+
+# Android is implemented today. iOS (Package.swift) and Web keep the same Rust API.
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-bridge.workspace = true
+serde.workspace = true
+serde_json.workspace = true

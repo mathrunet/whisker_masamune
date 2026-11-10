@@ -1,0 +1,17 @@
+name: Release
+
+# Publishing to crates.io is disabled until every crate drops `publish = false`
+# and CARGO_REGISTRY_TOKEN is configured. Git tags (vX.Y.Z) are what apps depend on today.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    if: ${{ vars.CRATES_IO_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish --workspace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

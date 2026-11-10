@@ -1,0 +1,2410 @@
+//! Reactive-layer tests for the render module.
+//!
+//! These cover the parts that do **not** need a device / renderer: the
+//! [`RouterHandle`] verbs mutate the state signal correctly (and
+//! `current` / `slice_at` / `selected_at` derive from it), the
+//! [`RouteRegistry`] resolves ids, and the `state_at` slice walk picks
+//! the right active child. The visual transition + gesture + actual
+//! mount/swap behaviour is verified on-device.
+
+mod android_back;
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use whisker::css::ToCss;
+use whisker::runtime::reactive::Owner;
+
+use crate::core::{
+    CompiledTree, NodePath, RouteDef, RouteInstance, RouteState, RouteTree, SwitchDef,
+};
+use crate::render::handle::{RouterHandle, state_at};
+use crate::render::node::mount_node;
+use crate::render::registry::RouteRegistry;
+use crate::render::transition::RouteTransition;
+
+/// Run `f` under a fresh runtime + a live owner (so `computed` reads have
+/// somewhere to allocate), then tear it down.
+fn with_runtime<F: FnOnce() -> T, T>(f: F) -> T {
+    let runtime =
+        whisker::runtime::RuntimeContext::new(whisker::runtime::RuntimeWakeHandle::new(|| {}));
+    runtime.enter(|| {
+        let owner = Owner::new(None);
+        let out = owner.with(f);
+        owner.dispose();
+        out
+    })
+}
+
+/// Drain the reactive queue so persistent `computed`s created *before* a
+/// navigation re-run and observe the new state. In the app this happens
+/// once per frame in the driver's tick; tests drive it by hand.
+fn flush() {
+    whisker::runtime::reactive::flush();
+}
+
+/// A registry whose render closures are never invoked in these tests
+/// (invoking one would create elements and need a renderer). We only
+/// assert id resolution + transition lookup.
+fn registry() -> RouteRegistry {
+    RouteRegistry::new()
+        .route("home", |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        })
+        .route_with("detail", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        })
+}
+
+/// root Stack { Route("", home)  Route("detail/:id", detail) }
+fn simple_handle() -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Stack(vec![
+        RouteTree::route("", "home"),
+        RouteTree::route("detail/:id", "detail"),
+    ]));
+    RouterHandle::new((tree, registry()))
+}
+
+/// root Stack { Switch(tabs) { (home){Stack{home, detail}}
+///                             (search){Stack{list, detail}} } }
+fn tabbed_handle() -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Stack(vec![RouteTree::Switch(
+        SwitchDef::new("tabs", 0),
+        vec![
+            RouteTree::route_with(
+                RouteDef::new("(home)", "home_group"),
+                vec![RouteTree::Stack(vec![
+                    RouteTree::route("", "home"),
+                    RouteTree::route("detail/:id", "detail"),
+                ])],
+            ),
+            RouteTree::route_with(
+                RouteDef::new("(search)", "search_group"),
+                vec![RouteTree::Stack(vec![
+                    RouteTree::route("list", "list"),
+                    RouteTree::route("detail/:id", "detail"),
+                ])],
+            ),
+        ],
+    )]));
+    RouterHandle::new((tree, registry()))
+}
+
+#[test]
+fn registry_resolves_ids_and_transitions() {
+    with_runtime(|| {
+        let h = simple_handle();
+        assert!(h.registry().contains("home"));
+        assert!(h.registry().contains("detail"));
+        assert!(!h.registry().contains("missing"));
+        assert!(h.render_fn("home").is_some());
+        assert!(h.render_fn("missing").is_none());
+        // detail is registered Slide; home defaults to the platform
+        // default; unknown falls back to the platform default.
+        assert_eq!(h.transition("detail").name(), "slide");
+        assert_eq!(
+            h.transition("home").name(),
+            RouteTransition::default().name()
+        );
+    });
+}
+
+#[test]
+fn navigate_pushes_and_current_tracks_signal() {
+    with_runtime(|| {
+        let h = simple_handle();
+        let current = h.current();
+        assert_eq!(current.get().path, NodePath(vec![0]));
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        assert_eq!(current.get().path, NodePath(vec![1]));
+
+        assert!(h.back().is_ok());
+        flush();
+        assert_eq!(current.get().path, NodePath(vec![0]));
+        assert_eq!(h.back(), Err(crate::core::NavError::NothingToPop));
+    });
+}
+
+#[test]
+fn navigate_url_params_land_on_signal() {
+    with_runtime(|| {
+        let h = simple_handle();
+        // URL navigation is the param channel: `:id` binds from the path.
+        h.navigate("/detail/7").unwrap();
+        let inst = h.current().get();
+        assert_eq!(inst.params.get("id").map(String::as_str), Some("7"));
+    });
+}
+
+#[test]
+fn replace_swaps_top_same_depth() {
+    with_runtime(|| {
+        let h = simple_handle();
+        h.navigate("/detail/1").unwrap();
+        h.replace("/detail/1").unwrap();
+        // Still depth 2 (home + detail), still on detail.
+        assert_eq!(h.current().get().path, NodePath(vec![1]));
+        let RouteState::Stack(s) = h.state().get() else {
+            panic!("root is a stack")
+        };
+        assert_eq!(s.history.len(), 2);
+    });
+}
+
+#[test]
+fn pop_to_returns_to_target() {
+    with_runtime(|| {
+        let h = simple_handle();
+        h.navigate("/detail/1").unwrap();
+        h.navigate("/detail/1").unwrap();
+        h.pop_to("/").unwrap();
+        assert_eq!(h.current().get().path, NodePath(vec![0]));
+    });
+}
+
+#[test]
+fn reset_clears_stack_to_target() {
+    with_runtime(|| {
+        let h = simple_handle();
+        h.navigate("/detail/1").unwrap();
+        h.navigate("/detail/1").unwrap();
+        h.reset("/").unwrap();
+        let RouteState::Stack(s) = h.state().get() else {
+            panic!("root is a stack")
+        };
+        assert_eq!(s.history.len(), 1);
+        assert_eq!(h.current().get().path, NodePath(vec![0]));
+    });
+}
+
+/// `Route(layout) { Stack { home, detail/:id } }` — a layout Route (a
+/// `Route` with children, like `routes! { Route(component: X) { … } }`) above
+/// the active stack.
+fn layout_wrapped_handle() -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::route_with(
+        RouteDef::new("", "layout"),
+        vec![RouteTree::Stack(vec![
+            RouteTree::route("", "home"),
+            RouteTree::route("detail/:id", "detail"),
+        ])],
+    ));
+    RouterHandle::new((tree, registry()))
+}
+
+fn layout_stack_history_len(h: &RouterHandle) -> usize {
+    let RouteState::Route(r) = h.state().get() else {
+        panic!("root is a layout route")
+    };
+    let RouteState::Stack(s) = &r.children[0] else {
+        panic!("layout child is a stack")
+    };
+    s.history.len()
+}
+
+/// `replace` / `reset` (and `pop_to`) must work when a layout
+/// Route sits above the active stack. `active_stack_mut` returned `None` for
+/// any `Route`, so it disagreed with `deepest_active_stack_path` and the
+/// `.expect("stack exists")` panicked — surfaced by the tabbed router example
+/// (tap Replace / Reset → "panic in event handler for `tap`; event dropped").
+#[test]
+fn stack_ops_work_under_a_layout_route() {
+    with_runtime(|| {
+        let h = layout_wrapped_handle();
+        h.navigate("/detail/1").unwrap();
+        flush();
+
+        // replace: swaps the top in place (no panic), depth unchanged.
+        h.replace("/detail/2").unwrap();
+        assert_eq!(
+            h.current().get().params.get("id").map(String::as_str),
+            Some("2"),
+        );
+        assert_eq!(layout_stack_history_len(&h), 2, "replace keeps depth");
+
+        // reset: collapses the stack to a single entry (no panic).
+        h.reset("/detail/5").unwrap();
+        assert_eq!(
+            h.current().get().params.get("id").map(String::as_str),
+            Some("5"),
+        );
+        assert_eq!(layout_stack_history_len(&h), 1, "reset collapses to one");
+    });
+}
+
+#[test]
+fn group_navigation_switches_tab_and_keeps_history() {
+    with_runtime(|| {
+        let h = tabbed_handle();
+        let switch_path = NodePath(vec![0]);
+        let selected = h.selected_at(switch_path.clone());
+        assert_eq!(selected.get(), Some(0));
+
+        h.navigate("/detail/1").unwrap();
+        h.navigate("/(search)").unwrap();
+        flush();
+        assert_eq!(selected.get(), Some(1));
+        // Tab 1 shows its own Home (list), depth 1.
+        assert_eq!(
+            h.current().get().path,
+            // tab 1 = branch index 1 under the switch; its stack's first
+            // child (list) is path [0,1,0].
+            NodePath(vec![0, 1, 0, 0])
+        );
+
+        // Switch back to tab 0 — its pushed detail is retained.
+        h.navigate("/(home)").unwrap();
+        flush();
+        assert_eq!(selected.get(), Some(0));
+        // Back in tab 0 on the detail we pushed (path [0,0,1]).
+        assert_eq!(h.current().get().path, NodePath(vec![0, 0, 0, 1]));
+    });
+}
+
+#[test]
+fn slice_only_changes_for_touched_tab() {
+    with_runtime(|| {
+        let h = tabbed_handle();
+        let tab_a = NodePath(vec![0, 0, 0]); // tab 0's stack
+        let tab_b = NodePath(vec![0, 1, 0]); // tab 1's stack
+        let slice_a = h.slice_at(tab_a);
+        let slice_b = h.slice_at(tab_b);
+
+        let before_b = slice_b.get();
+        let before_a = slice_a.get();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+
+        // Tab A's slice changed; tab B's did NOT — the memoised computed
+        // is what keeps tab B from re-rendering.
+        assert_ne!(slice_a.get(), before_a);
+        assert_eq!(slice_b.get(), before_b);
+    });
+}
+
+#[test]
+fn state_at_walks_to_active_child() {
+    with_runtime(|| {
+        let h = tabbed_handle();
+        h.navigate("/detail/1").unwrap();
+        let root = h.state().get();
+
+        // Root is the stack; [0] is the switch.
+        assert!(matches!(
+            state_at(&root, &NodePath(vec![0])),
+            Some(RouteState::Switch(_))
+        ));
+        // [0,0] is the group; [0,0,0] is tab 0's stack.
+        assert!(matches!(
+            state_at(&root, &NodePath(vec![0, 0, 0])),
+            Some(RouteState::Stack(_))
+        ));
+        // [0,0,0,1] is the pushed detail leaf.
+        assert!(matches!(
+            state_at(&root, &NodePath(vec![0, 0, 0, 1])),
+            Some(RouteState::Route(_))
+        ));
+    });
+}
+
+/// Per-id render-invocation counts. Render fns return a phantom (no
+/// renderer needed) and bump their id's counter, so a test can assert how
+/// many times each screen was mounted.
+type Counts = Rc<RefCell<HashMap<&'static str, usize>>>;
+
+fn counting_tabbed_handle(counts: Counts) -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Switch(
+        SwitchDef::new("tabs", 0),
+        vec![
+            RouteTree::Stack(vec![
+                RouteTree::route("", "home"),
+                RouteTree::route("detail/:id", "detail"),
+            ]),
+            RouteTree::Stack(vec![
+                RouteTree::route("list", "list"),
+                RouteTree::route("detail/:id", "detail"),
+            ]),
+        ],
+    ));
+    let mk = |id: &'static str, counts: Counts| {
+        move |_: &RouteInstance| {
+            *counts.borrow_mut().entry(id).or_insert(0) += 1;
+            whisker::runtime::view::create_phantom_element()
+        }
+    };
+    let registry = RouteRegistry::new()
+        .route("home", mk("home", counts.clone()))
+        .route("list", mk("list", counts.clone()))
+        .route_with(
+            "detail",
+            RouteTransition::none(),
+            mk("detail", counts.clone()),
+        );
+    RouterHandle::new((tree, registry))
+}
+
+#[test]
+fn tree_is_drawn_once_no_double_mount() {
+    with_runtime(|| {
+        let counts: Counts = Rc::new(RefCell::new(HashMap::new()));
+        let h = counting_tabbed_handle(counts.clone());
+
+        // Draw the whole tree once from the root (the single Outlet path).
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        // Home (the selected tab's leaf) mounts exactly once; the list
+        // tab's `list` also mounts once (Switch keeps all branches alive),
+        // but neither mounts twice.
+        let c = counts.borrow();
+        assert_eq!(c.get("home").copied(), Some(1), "home mounted once");
+        assert_eq!(c.get("list").copied(), Some(1), "list mounted once");
+        assert_eq!(c.get("detail").copied(), None);
+    });
+}
+
+#[test]
+fn navigate_mounts_new_leaf_exactly_once() {
+    with_runtime(|| {
+        let counts: Counts = Rc::new(RefCell::new(HashMap::new()));
+        let h = counting_tabbed_handle(counts.clone());
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+
+        // detail mounted once; home was NOT re-mounted by the push.
+        let c = counts.borrow();
+        assert_eq!(c.get("detail").copied(), Some(1), "detail mounted once");
+        assert_eq!(c.get("home").copied(), Some(1), "home not re-mounted");
+    });
+}
+
+/// root Stack { Switch(tabs) { Stack{home, detail}  Stack{list, detail} }
+///              Route("modal", modal) } — tabs that a modal can cover.
+fn counting_stacked_tabs_handle(counts: Counts) -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Stack(vec![
+        RouteTree::Switch(
+            SwitchDef::new("tabs", 0),
+            vec![
+                RouteTree::Stack(vec![
+                    RouteTree::route("", "home"),
+                    RouteTree::route("detail/:id", "detail"),
+                ]),
+                RouteTree::Stack(vec![
+                    RouteTree::route("list", "list"),
+                    RouteTree::route("detail/:id", "detail"),
+                ]),
+            ],
+        ),
+        RouteTree::route("modal", "modal"),
+    ]));
+    let mk = |id: &'static str, counts: Counts| {
+        move |_: &RouteInstance| {
+            *counts.borrow_mut().entry(id).or_insert(0) += 1;
+            whisker::runtime::view::create_phantom_element()
+        }
+    };
+    let registry = RouteRegistry::new()
+        .route("home", mk("home", counts.clone()))
+        .route("list", mk("list", counts.clone()))
+        .route_with(
+            "detail",
+            RouteTransition::none(),
+            mk("detail", counts.clone()),
+        )
+        .route_with(
+            "modal",
+            RouteTransition::none(),
+            mk("modal", counts.clone()),
+        );
+    RouterHandle::new((tree, registry))
+}
+
+/// Switching tabs inside a stacked tab container only changes the Switch's
+/// selection. The outer Stack must not treat that nested change as a
+/// `replace` and remount the whole container (every tab, plus any tab bar
+/// layout) with the leaf's transition.
+#[test]
+fn tab_switch_inside_stack_keeps_tabs_mounted() {
+    with_runtime(|| {
+        let counts: Counts = Rc::new(RefCell::new(HashMap::new()));
+        let h = counting_stacked_tabs_handle(counts.clone());
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/list").unwrap();
+        flush();
+        h.navigate("/").unwrap();
+        flush();
+        h.navigate("/list").unwrap();
+        flush();
+
+        {
+            let c = counts.borrow();
+            assert_eq!(c.get("home").copied(), Some(1), "home not re-mounted");
+            assert_eq!(c.get("list").copied(), Some(1), "list not re-mounted");
+        }
+
+        // A modal pushed over the tabs and popped again leaves them mounted.
+        h.navigate("/modal").unwrap();
+        flush();
+        h.back().unwrap();
+        flush();
+
+        let c = counts.borrow();
+        assert_eq!(c.get("modal").copied(), Some(1), "modal mounted once");
+        assert_eq!(c.get("home").copied(), Some(1), "home not re-mounted");
+        assert_eq!(c.get("list").copied(), Some(1), "list not re-mounted");
+    });
+}
+
+/// A single root Stack with mount-counting leaves (`home` at `""`, `detail`
+/// at `detail/:id`).
+fn counting_simple_handle(counts: Counts) -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Stack(vec![
+        RouteTree::route("", "home"),
+        RouteTree::route("detail/:id", "detail"),
+    ]));
+    let mk = |id: &'static str, counts: Counts| {
+        move |_: &RouteInstance| {
+            *counts.borrow_mut().entry(id).or_insert(0) += 1;
+            whisker::runtime::view::create_phantom_element()
+        }
+    };
+    let registry = RouteRegistry::new()
+        .route("home", mk("home", counts.clone()))
+        .route_with(
+            "detail",
+            RouteTransition::none(),
+            mk("detail", counts.clone()),
+        );
+    RouterHandle::new((tree, registry))
+}
+
+/// When `reset` replaces the whole history with a route that differs from the
+/// surviving index-0 wrapper, the reconcile must dispose the stale survivor
+/// and mount the new route — not re-show the old screen. Wrappers are keyed by
+/// history index, so a naive shrink would keep the cleared screen mounted and
+/// leak its native views.
+#[test]
+fn reset_to_different_route_reinstantiates_revealed_top() {
+    with_runtime(|| {
+        let counts: Counts = Rc::new(RefCell::new(HashMap::new()));
+        let h = counting_simple_handle(counts.clone());
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        assert_eq!(counts.borrow().get("home").copied(), Some(1));
+
+        // Push detail → history [home, detail/1].
+        h.navigate("/detail/1").unwrap();
+        flush();
+        assert_eq!(counts.borrow().get("detail").copied(), Some(1));
+
+        // Reset to a route DIFFERENT from index 0 (home) → history [detail/2].
+        // The shrink reveals the index-0 survivor (home), which no longer
+        // matches the history (detail/2), so it must be swapped.
+        h.reset("/detail/2").unwrap();
+        flush();
+
+        let RouteState::Stack(s) = h.state().get() else {
+            panic!("root is a stack")
+        };
+        assert_eq!(s.history.len(), 1, "reset collapses to a single entry");
+
+        // The revealed top is a NEW detail Leaf (mounted for /2), so detail
+        // mounted twice total.
+        assert_eq!(
+            counts.borrow().get("detail").copied(),
+            Some(2),
+            "reset must re-instantiate the revealed top when its route changed"
+        );
+    });
+}
+
+/// A single-stack handle with Slide routes so a push/pop runs a real
+/// transition we can step to completion.
+fn slide_stack_handle() -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::Stack(vec![
+        RouteTree::route("", "home"),
+        RouteTree::route("detail/:id", "detail"),
+    ]));
+    let registry = RouteRegistry::new()
+        .route_with("home", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        })
+        .route_with("detail", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        });
+    RouterHandle::new((tree, registry))
+}
+
+/// `Route(layout) { Stack { Home(slide), detail/:id(slide) } }` — the same
+/// layout-Route-above-a-stack shape as the tabbed example, with slide
+/// transitions so animation is observable.
+fn layout_slide_handle() -> RouterHandle {
+    let tree = CompiledTree::new(RouteTree::route_with(
+        RouteDef::new("", "layout"),
+        vec![RouteTree::Stack(vec![
+            RouteTree::route("", "home"),
+            RouteTree::route("detail/:id", "detail"),
+        ])],
+    ));
+    let registry = RouteRegistry::new()
+        .route_with("home", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        })
+        .route_with("detail", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        });
+    RouterHandle::new((tree, registry))
+}
+
+/// Advance animation frames + flush until nothing is animating (or a
+/// budget is hit), driving any in-flight push/pop/settle to completion.
+fn settle_animations() {
+    let mut t = 0.0_f64;
+    for _ in 0..2000 {
+        let still = whisker_animation::__step_for_tests(t);
+        flush();
+        if !still {
+            break;
+        }
+        t += 16.0;
+    }
+}
+
+#[test]
+fn push_pauses_the_covered_under_once_the_slide_finishes() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        let under_owner = h
+            .active_stack_bridge()
+            .and_then(|b| b.under_content_owner)
+            .expect("under owner present after push");
+        assert!(
+            under_owner.is_paused(),
+            "the covered under must be frozen after the push settles — an \
+             unfrozen under keeps its back-handler registrations active"
+        );
+
+        // Popping revives it: the revealed screen must not stay paused.
+        assert!(h.back().is_ok());
+        flush();
+        settle_animations();
+        assert!(
+            !under_owner.is_paused(),
+            "the pop's survivor must be resumed"
+        );
+    });
+}
+
+#[test]
+fn can_pop_is_derivable_from_state_before_any_reconcile() {
+    // The platform enabled effect computes can-pop from the state
+    // signal; the gesture bridges update one reconcile later and must
+    // not be its source.
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        let can_pop = |h: &RouterHandle| {
+            h.state().get_untracked().active_chain().iter().any(
+                |node| matches!(node, crate::core::RouteState::Stack(s) if s.history.len() > 1),
+            )
+        };
+        assert!(!can_pop(&h), "root: nothing to pop");
+        h.navigate("/detail/1").unwrap();
+        assert!(
+            can_pop(&h),
+            "immediately after the state write, before any flush/reconcile"
+        );
+        assert!(h.back().is_ok());
+        assert!(!can_pop(&h), "back at root");
+    });
+}
+
+#[test]
+fn pop_settles_survivor_to_active_pose() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        // Push detail, let the slide-in finish.
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        // Pop back to home; let the coordinated slide-out + reveal finish.
+        assert!(h.back().is_ok());
+        flush();
+        settle_animations();
+
+        // The bridge's top is now the revealed Home. Its pose binding must
+        // resolve to the ACTIVE pose — Role::Top at progress 1.0, which is
+        // translateX(0%): no parallax residue left from the push.
+        let bridge = h
+            .active_stack_bridge_for_test(&NodePath::root())
+            .expect("a stack bridge is published");
+        let top = bridge.top_pose.expect("top has a pose binding");
+        let role = top.role.get();
+        let progress = top.ctrl.get().value().get();
+        let pose = RouteTransition::slide().pose(crate::render::transition::PoseContext::new(
+            role,
+            progress,
+            crate::render::transition::Direction::Push,
+        ));
+        assert_eq!(
+            pose.transform.to_css_string(),
+            "translateX(0%)",
+            "survivor settled to active 0% pose; role={role:?} progress={progress}"
+        );
+    });
+}
+
+#[test]
+fn push_settles_top_to_full_progress() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        // After the push settles, the top (Detail) must be at progress 1.0
+        // — the precondition that makes a later `back()` reverse animate a
+        // full 1 → 0 slide-out instead of instant-finishing.
+        let bridge = h
+            .active_stack_bridge_for_test(&NodePath::root())
+            .expect("bridge");
+        let detail_ctrl = bridge.top_ctrl.clone().expect("detail ctrl");
+        assert_eq!(
+            detail_ctrl.value().get_untracked(),
+            1.0,
+            "top settles at progress 1.0 after push"
+        );
+    });
+}
+
+/// `replace` must slide the new screen in (drive 0 → 1) using the route
+/// transition, not snap it to its final pose.
+#[test]
+fn replace_animates_the_new_top_in() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        // Push detail/1 and let it settle (top at progress 1.0).
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        // Replace the top (detail/1 → detail/2, same depth).
+        h.replace("/detail/2").unwrap();
+        flush();
+        let top_ctrl = h
+            .active_stack_bridge_for_test(&NodePath::root())
+            .and_then(|b| b.top_ctrl)
+            .expect("new top ctrl");
+
+        // Step a few frames WITHOUT settling: the new top's progress must
+        // traverse intermediate values (a visible slide-in), not be pinned at
+        // 1.0 from the first frame.
+        let mut t = 1000.0;
+        let mut traj = Vec::new();
+        for _ in 0..6 {
+            whisker_animation::__step_for_tests(t);
+            flush();
+            traj.push(top_ctrl.value().get_untracked());
+            t += 16.0;
+        }
+        assert!(
+            traj.iter().any(|&p| p > 0.05 && p < 0.95),
+            "replace should animate the new top in, not snap; traj={traj:?}"
+        );
+
+        // …and it must still settle fully present.
+        settle_animations();
+        assert_eq!(
+            top_ctrl.value().get_untracked(),
+            1.0,
+            "replaced top settles at progress 1.0"
+        );
+    });
+}
+
+/// After a `replace`, a `back` must still animate the revealed survivor (the
+/// screen below) sliding in from covered → rest — not snap it in. Regression
+/// for the "Home doesn't animate on back after replace" report.
+#[test]
+fn back_after_replace_animates_the_revealed_survivor() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        h.replace("/detail/2").unwrap();
+        flush();
+        settle_animations();
+
+        // The survivor (home) below the replaced top.
+        let under = h
+            .active_stack_bridge_for_test(&NodePath::root())
+            .and_then(|b| b.under_pose)
+            .expect("home is the under after replace");
+
+        // Back: the survivor must be coupled to the leaving controller and
+        // slide in through intermediate frames.
+        assert!(h.back().is_ok());
+        flush();
+        let mut t = 1000.0;
+        let mut traj = Vec::new();
+        for _ in 0..6 {
+            whisker_animation::__step_for_tests(t);
+            flush();
+            traj.push(under.ctrl.get().value().get_untracked());
+            t += 16.0;
+        }
+        assert!(
+            traj.iter().any(|&p| p > 0.05 && p < 0.95),
+            "the revealed survivor must animate in on back-after-replace; traj={traj:?}"
+        );
+    });
+}
+
+/// Same as above but with a layout Route above the Stack (the tabbed example's
+/// shape). Reproduces the "Home doesn't animate on back after replace" report.
+#[test]
+fn back_after_replace_animates_under_a_layout_route() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = layout_slide_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        h.replace("/detail/2").unwrap();
+        flush();
+        settle_animations();
+
+        let under = h
+            .active_stack_bridge()
+            .and_then(|b| b.under_pose)
+            .expect("home is the under after replace");
+
+        assert!(h.back().is_ok());
+        flush();
+        let mut t = 1000.0;
+        let mut traj = Vec::new();
+        for _ in 0..6 {
+            whisker_animation::__step_for_tests(t);
+            flush();
+            traj.push(under.ctrl.get().value().get_untracked());
+            t += 16.0;
+        }
+        assert!(
+            traj.iter().any(|&p| p > 0.05 && p < 0.95),
+            "survivor must animate in on back-after-replace under a layout route; traj={traj:?}"
+        );
+    });
+}
+
+/// An interactive swipe-back keeps buried route content paused while its
+/// independent presentation binding follows the finger. Resuming the whole
+/// subtree would let a repeated static route (`detail/:id`) adopt the current
+/// top entry's params during the preview.
+#[test]
+fn swipe_back_animates_under_presentation_without_resuming_its_content() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = layout_slide_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        h.replace("/detail/2").unwrap();
+        flush();
+        settle_animations();
+
+        let bridge = h.active_stack_bridge().expect("bridge after replace");
+        let under_owner = bridge
+            .under_content_owner
+            .expect("under content owner present after replace");
+
+        // The replace settle freezes (pauses) the buried under.
+        assert!(
+            under_owner.is_paused(),
+            "precondition: the under is paused after a replace"
+        );
+
+        // Starting a swipe-back re-points only presentation. Content remains
+        // frozen, while the under binding follows the top controller.
+        let active = crate::render::platform_navigation::begin(
+            &h,
+            crate::render::transition::SwipeEdge::Left,
+        )
+        .expect("swipe-back begins (stack can pop)");
+        crate::render::platform_navigation::scrub(&active, 0.4);
+        assert!(
+            under_owner.is_paused(),
+            "swipe-back must not resume routed content before navigation commits"
+        );
+        let top_value = active.top_ctrl.expect("top ctrl").value().get_untracked();
+        let under = active.under_pose.expect("under pose");
+        assert_eq!(
+            under.role.get_untracked(),
+            crate::render::transition::Role::Under
+        );
+        assert_eq!(
+            under.ctrl.get_untracked().value().get_untracked(),
+            top_value,
+            "under presentation follows the scrubbed top controller",
+        );
+    });
+}
+
+#[test]
+fn pop_animates_outgoing_top_through_intermediate_frames() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        let detail_ctrl = h
+            .active_stack_bridge_for_test(&NodePath::root())
+            .and_then(|b| b.top_ctrl)
+            .expect("detail ctrl");
+
+        // Pop, then step a few frames WITHOUT fully settling and record the
+        // outgoing top's progress trajectory: it must descend through
+        // intermediate values (a visible slide-out), not instant-finish at
+        // 0 on the first frame.
+        assert!(h.back().is_ok());
+        flush();
+        let mut t = 1000.0;
+        let mut traj = Vec::new();
+        for _ in 0..6 {
+            whisker_animation::__step_for_tests(t);
+            flush();
+            traj.push(detail_ctrl.value().get_untracked());
+            t += 16.0;
+        }
+        assert!(
+            traj.iter().any(|&p| p > 0.05 && p < 0.95),
+            "outgoing top should traverse intermediate reverse frames (visible \
+             slide-out), not pop instantly; traj={traj:?}"
+        );
+    });
+}
+
+#[test]
+fn popped_leaf_content_survives_until_exit_animation_finishes() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        // Detail's render fn registers an `on_cleanup` bumping a counter,
+        // so we can observe exactly WHEN its content subtree is disposed.
+        let cleanups = Rc::new(RefCell::new(0usize));
+        let tree = CompiledTree::new(RouteTree::Stack(vec![
+            RouteTree::route("", "home"),
+            RouteTree::route("detail/:id", "detail"),
+        ]));
+        let registry = {
+            let cleanups = cleanups.clone();
+            RouteRegistry::new()
+                .route_with("home", RouteTransition::slide(), |_: &RouteInstance| {
+                    whisker::runtime::view::create_phantom_element()
+                })
+                .route_with(
+                    "detail",
+                    RouteTransition::slide(),
+                    move |_: &RouteInstance| {
+                        let cleanups = cleanups.clone();
+                        whisker::on_cleanup(move || *cleanups.borrow_mut() += 1);
+                        whisker::runtime::view::create_phantom_element()
+                    },
+                )
+        };
+        let h = RouterHandle::new((tree, registry));
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+        assert_eq!(*cleanups.borrow(), 0, "detail content alive after push");
+
+        // Pop. Immediately after `back()` + flush — BEFORE the exit
+        // animation finishes — the detail content must STILL be mounted, or
+        // the sliding-out screen blanks.
+        assert!(h.back().is_ok());
+        flush();
+        whisker_animation::__step_for_tests(1000.0);
+        flush();
+        whisker_animation::__step_for_tests(1016.0);
+        flush();
+        assert_eq!(
+            *cleanups.borrow(),
+            0,
+            "detail content must survive the exit animation (not torn down on \
+             RouteState removal)"
+        );
+
+        // Once the exit animation finishes, run_pop disposes the popped
+        // wrapper's owner, cascading to the detail content.
+        settle_animations();
+        assert_eq!(
+            *cleanups.borrow(),
+            1,
+            "detail content disposed exactly once, on exit-animation finish"
+        );
+    });
+}
+
+// The native module delivery can't run headless, but the mapping Android's
+// internal platform driver performs — `backProgressed{progress}`
+// -> scrub the top controller, `backInvoked` -> commit -> `back()` — is
+// the shared `begin`/`scrub`/`settle` logic, which IS testable.
+
+use crate::render::platform_navigation::{back_progress, begin, scrub, settle};
+use crate::render::transition::SwipeEdge;
+use whisker::platform_module::WhiskerValue;
+
+#[test]
+fn back_progress_reads_payload() {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert("progress".to_string(), WhiskerValue::Float(0.42));
+    m.insert("swipeEdge".to_string(), WhiskerValue::Int(0));
+    assert!((back_progress(&WhiskerValue::Map(m)) - 0.42).abs() < 1e-6);
+    // Int progress coerces; out-of-range clamps; wrong shape → 0.
+    let mut mi = std::collections::BTreeMap::new();
+    mi.insert("progress".to_string(), WhiskerValue::Int(1));
+    assert_eq!(back_progress(&WhiskerValue::Map(mi)), 1.0);
+    assert_eq!(back_progress(&WhiskerValue::Null), 0.0);
+}
+
+#[test]
+fn predictive_back_progress_scrubs_top_controller() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        // backStarted → begin(): grabs the active stack's bridge. On the
+        // host build (the iOS/desktop slide-back path) it uses the route's
+        // slide pose and does NOT drive the Material backdrop dim (that is
+        // Android predictive-back only).
+        let bridge = begin(&h, SwipeEdge::Left).expect("a poppable Slide stack yields a bridge");
+        let ctrl = bridge.top_ctrl.clone().expect("top ctrl");
+        let dim_drive = bridge.dim_drive.expect("dim drive published");
+        assert!(
+            dim_drive.get_untracked().is_none(),
+            "host (slide-back) does not drive the Material dim"
+        );
+
+        // backProgressed{progress} → scrub: controller = 1 - progress.
+        scrub(&bridge, back_progress(&progress_payload(0.0)));
+        assert_eq!(ctrl.value().get_untracked(), 1.0, "progress 0 → present");
+        scrub(&bridge, back_progress(&progress_payload(0.5)));
+        assert_eq!(ctrl.value().get_untracked(), 0.5, "progress .5 → half away");
+        scrub(&bridge, back_progress(&progress_payload(1.0)));
+        assert_eq!(ctrl.value().get_untracked(), 0.0, "progress 1 → fully away");
+    });
+}
+
+#[test]
+fn predictive_back_invoke_commits_pop() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+        assert_eq!(h.current().get().path, NodePath(vec![1]), "on detail");
+
+        // backStarted + a partial drag, then backInvoked (commit).
+        let bridge = begin(&h, SwipeEdge::Left).expect("bridge");
+        scrub(&bridge, 0.6);
+        settle(&h, &bridge, /* commit = */ true, None);
+        // The commit's on_finish(true) fires `back()` once the reverse
+        // settles — drive the animation to completion.
+        settle_animations();
+
+        assert_eq!(h.current().get().path, NodePath(vec![0]), "popped to home");
+    });
+}
+
+#[test]
+fn settle_commit_animates_from_current_value_without_jumping_back() {
+    // A *partial* release commits by animating from the current value to 0
+    // — it must NOT jump backward (toward 1) first.
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        let bridge = begin(&h, SwipeEdge::Left).expect("bridge");
+        let ctrl = bridge.top_ctrl.clone().expect("ctrl");
+        // Deep-but-not-complete swipe: back_progress 0.95 → value 0.05.
+        scrub(&bridge, 0.95);
+        let start = ctrl.value().get_untracked();
+        assert!((start - 0.05).abs() < 1e-3, "value tracks the drag");
+
+        settle(&h, &bridge, /* commit = */ true, None);
+        // The value must never exceed the release point — no backward jump.
+        let after_settle = ctrl.value().get_untracked();
+        assert!(
+            after_settle <= start + 1e-3,
+            "settle must not push back toward 1; start={start} after={after_settle}"
+        );
+        // One mid-animation frame: still ≤ the start (heads toward 0, never
+        // above). Don't over-step — once the short run finishes, `back()`
+        // disposes the controller.
+        whisker_animation::__step_for_tests(1008.0);
+        flush();
+        let mid = ctrl.value().get_untracked();
+        assert!(
+            mid <= start + 1e-3,
+            "monotone toward 0, never above start; mid={mid}"
+        );
+
+        settle_animations();
+        assert_eq!(h.current().get().path, NodePath(vec![0]), "commits the pop");
+    });
+}
+
+#[test]
+fn settle_full_drag_commits_immediately() {
+    // A full drag (value already ≈ 0) commits with no extra animation —
+    // the dismiss is already visually complete; it just pops.
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        let bridge = begin(&h, SwipeEdge::Left).expect("bridge");
+        scrub(&bridge, 1.0); // value ≈ 0
+        settle(&h, &bridge, /* commit = */ true, None);
+        settle_animations();
+        assert_eq!(h.current().get().path, NodePath(vec![0]), "commits the pop");
+    });
+}
+
+#[test]
+fn predictive_back_cancel_restores_top() {
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let h = slide_stack_handle();
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        let bridge = begin(&h, SwipeEdge::Left).expect("bridge");
+        let ctrl = bridge.top_ctrl.clone().expect("top ctrl");
+        scrub(&bridge, 0.4);
+        settle(&h, &bridge, /* commit = */ false, None);
+        settle_animations();
+
+        assert_eq!(ctrl.value().get_untracked(), 1.0, "top restored to present");
+        assert_eq!(h.current().get().path, NodePath(vec![1]), "still on detail");
+    });
+}
+
+/// Verify that predictive-back works for a **grouped tabbed** tree (the
+/// example-app shape: Route-with-children wrapping a Switch with group
+/// routes). This is the exact scenario that failed on the real device.
+#[test]
+fn predictive_back_works_with_grouped_tabs() {
+    use crate::core::{RouteDef, RouteTree};
+    with_runtime(|| {
+        whisker_animation::__reset_for_tests();
+        let tree = CompiledTree::new(RouteTree::route_with(
+            RouteDef {
+                id: "tabs_layout".into(),
+                segment: None,
+                params: vec![],
+                component: Some("tabs_layout".into()),
+                is_group: false,
+            },
+            vec![RouteTree::Switch(
+                SwitchDef::new("tabs", 0),
+                vec![
+                    RouteTree::route_with(
+                        RouteDef {
+                            id: "(home)".into(),
+                            segment: Some("(home)".into()),
+                            params: vec![],
+                            component: None,
+                            is_group: true,
+                        },
+                        vec![RouteTree::Stack(vec![
+                            RouteTree::route("", "home"),
+                            RouteTree::route("detail/:id", "detail"),
+                        ])],
+                    ),
+                    RouteTree::route_with(
+                        RouteDef {
+                            id: "(search)".into(),
+                            segment: Some("(search)".into()),
+                            params: vec![],
+                            component: None,
+                            is_group: true,
+                        },
+                        vec![RouteTree::Stack(vec![
+                            RouteTree::route("list", "list"),
+                            RouteTree::route("detail/:id", "detail"),
+                        ])],
+                    ),
+                ],
+            )],
+        ));
+        let reg = RouteRegistry::new()
+            .route_with("home", RouteTransition::slide(), |_: &RouteInstance| {
+                whisker::runtime::view::create_phantom_element()
+            })
+            .route_with("detail", RouteTransition::slide(), |_: &RouteInstance| {
+                whisker::runtime::view::create_phantom_element()
+            })
+            .route_with("list", RouteTransition::slide(), |_: &RouteInstance| {
+                whisker::runtime::view::create_phantom_element()
+            })
+            .route_with(
+                "tabs_layout",
+                RouteTransition::default(),
+                |_: &RouteInstance| whisker::runtime::view::create_phantom_element(),
+            );
+        let h = RouterHandle::new((tree, reg));
+        let _slot = mount_node(&h, NodePath::root());
+        flush();
+
+        h.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+
+        assert_eq!(
+            h.current().get().path,
+            NodePath(vec![0, 0, 0, 1]),
+            "should be on detail in home tab"
+        );
+
+        let bridge = begin(&h, SwipeEdge::Left);
+        assert!(
+            bridge.is_some(),
+            "begin() must return a bridge (stack has >1 entry)"
+        );
+
+        let bridge = bridge.unwrap();
+        assert!(bridge.can_back, "can_back must be true");
+
+        scrub(&bridge, 0.5);
+        settle(&h, &bridge, true, None);
+        settle_animations();
+
+        assert_eq!(
+            h.current().get().path,
+            NodePath(vec![0, 0, 0, 0]),
+            "commits the pop to home"
+        );
+    });
+}
+
+fn progress_payload(p: f64) -> WhiskerValue {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert("progress".to_string(), WhiskerValue::Float(p));
+    WhiskerValue::Map(m)
+}
+
+#[test]
+fn back_edge_decodes_payload() {
+    use crate::render::transition::SwipeEdge;
+    let mk = |edge: i64| {
+        let mut m = std::collections::BTreeMap::new();
+        m.insert("swipeEdge".to_string(), WhiskerValue::Int(edge));
+        WhiskerValue::Map(m)
+    };
+    assert_eq!(SwipeEdge::from_android(0), SwipeEdge::Left);
+    assert_eq!(SwipeEdge::from_android(1), SwipeEdge::Right);
+    // Unknown / missing → Left default.
+    assert_eq!(SwipeEdge::from_android(7), SwipeEdge::Left);
+    assert_eq!(
+        crate::render::platform_navigation::back_progress(&mk(1)),
+        0.0
+    ); // no progress key
+}
+
+#[test]
+fn predictive_pose_material_shape() {
+    use crate::render::transition::{Role, SwipeEdge, predictive_pose, set_device_corner_radius};
+
+    // Pin a known device radius so the animated rounding is deterministic.
+    set_device_corner_radius(40.0);
+
+    // Two phases share the controller timeline:
+    //  value 1.0 = present, 0.5 = preview max, 0.0 = committed/dismissed.
+
+    // At rest (value 1.0): identity, square.
+    let rest = predictive_pose(Role::Top, 1.0, SwipeEdge::Left);
+    let rest_transform = rest.transform.to_css_string();
+    assert!(
+        rest_transform.contains("scale(1, 1)"),
+        "scale 1 at rest: {rest:?}"
+    );
+    assert_eq!(rest.radius_px, 0.0, "square at rest");
+
+    // Preview max (value 0.5): top shrunk to 0.9 (shared-element card),
+    // rounded to the device radius, shifted toward the swipe edge.
+    let preview = predictive_pose(Role::Top, 0.5, SwipeEdge::Left);
+    let preview_transform = preview.transform.to_css_string();
+    assert!(
+        preview_transform.contains("scale(0.9, 0.9)"),
+        "shrinks to 0.9 at preview max: {preview:?}"
+    );
+    assert!(
+        (preview.radius_px - 40.0).abs() < 1e-3,
+        "rounds to the device radius at preview max: {preview:?}"
+    );
+    assert!(
+        preview_transform.contains("translateX(6%)"),
+        "left-edge swipe shifts the card right: {preview:?}"
+    );
+    // Right-edge swipe shifts the card the other way (negative translateX).
+    let preview_right = predictive_pose(Role::Top, 0.5, SwipeEdge::Right);
+    assert!(
+        preview_right
+            .transform
+            .to_css_string()
+            .contains("translateX(-6%)"),
+        "right-edge swipe shifts the card left: {preview_right:?}"
+    );
+    // The shrink is DECELERATED (more apparent early): at value 0.75 the
+    // preview is already well past linear (radius > the linear 20px).
+    let mid = predictive_pose(Role::Top, 0.75, SwipeEdge::Left);
+    assert!(
+        mid.radius_px > 20.0 && mid.radius_px < 40.0,
+        "decelerated radius is front-loaded (>linear 20, <max 40): {mid:?}"
+    );
+
+    // Committed (value 0.0): the top fades out as it leaves.
+    let committed = predictive_pose(Role::Top, 0.0, SwipeEdge::Left);
+    assert_eq!(
+        committed.opacity, 0.0,
+        "top fades out on commit: {committed:?}"
+    );
+
+    // Under (entering) scales together with the top Card (down to 0.9) and
+    // peeks from the left during the drag, then slides in to fully present
+    // and grows back to full size on commit.
+    let under_preview = predictive_pose(Role::Under, 0.5, SwipeEdge::Left);
+    let under_preview_transform = under_preview.transform.to_css_string();
+    assert!(
+        under_preview_transform.contains("scale(0.9, 0.9)"),
+        "under scales with the card to 0.9 at preview: {under_preview:?}"
+    );
+    assert!(
+        under_preview_transform.contains("translateX(-60%)"),
+        "under peeks from the left: {under_preview:?}"
+    );
+    // Mid-drag (value 0.75) the under screen is held at the SAME -60% peek —
+    // it only scales while the finger is down, it does not slide.
+    let under_mid = predictive_pose(Role::Under, 0.75, SwipeEdge::Left);
+    assert!(
+        under_mid
+            .transform
+            .to_css_string()
+            .contains("translateX(-60%)"),
+        "under is fixed at the peek mid-drag (scale only, no slide): {under_mid:?}"
+    );
+    let under_committed = predictive_pose(Role::Under, 0.0, SwipeEdge::Left);
+    let under_committed_transform = under_committed.transform.to_css_string();
+    assert!(
+        under_committed_transform.contains("translateX(0%)"),
+        "under slides to present on commit: {under_committed:?}"
+    );
+    assert!(
+        under_committed_transform.contains("scale(1, 1)"),
+        "under grows back to full size on commit: {under_committed:?}"
+    );
+    assert!(
+        under_committed.radius_px < 1e-3,
+        "under un-rounds when present: {under_committed:?}"
+    );
+
+    // Restore the default so test ordering can't leak the global.
+    set_device_corner_radius(24.0);
+}
+
+#[test]
+fn screen_corner_radius_follows_device() {
+    use crate::render::transition::{
+        max_corner_radius, screen_corner_radius, set_device_corner_radius,
+    };
+
+    // The screen clip is the device display radius (24dp until set).
+    set_device_corner_radius(24.0);
+    assert!((max_corner_radius() - 24.0).abs() < 1e-3);
+    assert!((screen_corner_radius() - 24.0).abs() < 1e-3);
+
+    // A real device radius flows through to the screen clip.
+    set_device_corner_radius(52.0);
+    assert!((screen_corner_radius() - 52.0).abs() < 1e-3);
+
+    // Restore so test ordering can't leak the global.
+    set_device_corner_radius(24.0);
+}
+
+#[test]
+fn registry_merge_keeps_first_and_folds_new_ids() {
+    use crate::core::RouteTree;
+    use crate::render::registry::RouteFragment;
+
+    // A parent registry that already owns `detail` (with a slide).
+    let base = RouteRegistry::new()
+        .route("home", |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        })
+        .route_with("detail", RouteTransition::slide(), |_: &RouteInstance| {
+            whisker::runtime::view::create_phantom_element()
+        });
+
+    // A spreadable fragment that re-declares `detail` (fade) and adds `post`.
+    let frag = RouteFragment::new(
+        vec![
+            RouteTree::route("detail/:id", "detail"),
+            RouteTree::route("post/:id", "post"),
+        ],
+        RouteRegistry::new()
+            .route_with("detail", RouteTransition::fade(), |_: &RouteInstance| {
+                whisker::runtime::view::create_phantom_element()
+            })
+            .route("post", |_: &RouteInstance| {
+                whisker::runtime::view::create_phantom_element()
+            }),
+    );
+
+    let merged = base.merge(frag.registry());
+
+    // First declaration wins: the parent's `detail` (slide) is kept, not the
+    // fragment's fade.
+    assert_eq!(merged.transition("detail").name(), "slide");
+    // A new id from the fragment is folded in.
+    assert!(merged.contains("post"));
+    assert!(merged.contains("home"));
+    // The fragment exposes its roots for splicing at each `..` site.
+    assert_eq!(frag.roots().len(), 2);
+}
+
+#[test]
+fn predictive_dim_constant_during_drag_then_fades_on_commit() {
+    use crate::render::transition::{PB_MAX_DIM, predictive_dim};
+
+    // Across the whole drag (value 1.0 → 0.5) the scrim is held CONSTANT at
+    // PB_MAX_DIM — it does not deepen as the finger drags further.
+    for v in [1.0_f32, 0.9, 0.75, 0.6, 0.5] {
+        assert!(
+            (predictive_dim(v) - PB_MAX_DIM).abs() < 1e-3,
+            "dim is constant at PB_MAX_DIM during the drag (value {v})"
+        );
+    }
+    // Then it fades back out over the commit (value 0.5 → 0): the revealed
+    // previous screen ends at full brightness, not darkened.
+    assert!(
+        predictive_dim(0.25) < predictive_dim(0.5),
+        "dim starts fading once the finger releases (commit settle)"
+    );
+    assert!(
+        predictive_dim(0.0) < 1e-3,
+        "dim is gone once the back has committed (previous screen present)"
+    );
+}
+
+#[test]
+fn one_transition_poses_all_four_directional_slots() {
+    use crate::render::transition::{
+        Direction, Pose, PoseContext, PoseMode, Role, RouteTransition, Transition, pose_for,
+    };
+
+    use whisker::css::TransformFn;
+    use whisker::css::ext::percent;
+
+    // A single asymmetric transition that tags each (role × direction) case —
+    // the four Jetpack-Compose slots expressed by ONE `Transition`.
+    struct Asym;
+    impl Transition for Asym {
+        fn config(&self) -> whisker::AnimConfig {
+            whisker::AnimConfig::ease_out(1)
+        }
+        fn pose(&self, ctx: PoseContext) -> Pose {
+            let slot = match (ctx.role, ctx.direction) {
+                (Role::Top, Direction::Push) => 1.0,
+                (Role::Under, Direction::Push) => 2.0,
+                (Role::Top, Direction::Pop) => 3.0,
+                (Role::Under, Direction::Pop) => 4.0,
+            };
+            Pose::new(TransformFn::TranslateX(percent(slot).into()), 1.0)
+        }
+    }
+
+    let t = RouteTransition::custom(Asym);
+    let push = PoseMode::Transition(t.clone(), Direction::Push);
+    let pop = PoseMode::Transition(t, Direction::Pop);
+
+    assert_eq!(
+        pose_for(&push, Role::Top, 0.5).transform.to_css_string(),
+        "translateX(1%)"
+    );
+    assert_eq!(
+        pose_for(&push, Role::Under, 0.5).transform.to_css_string(),
+        "translateX(2%)"
+    );
+    assert_eq!(
+        pose_for(&pop, Role::Top, 0.5).transform.to_css_string(),
+        "translateX(3%)"
+    );
+    assert_eq!(
+        pose_for(&pop, Role::Under, 0.5).transform.to_css_string(),
+        "translateX(4%)"
+    );
+}
+
+// Renderer-level reproduction of the `replace` content-attach path.
+//
+// The tests above run without a renderer, so they never exercise the
+// real native op sequence. This block installs a recording renderer that
+// mints real element ids and models `insert_child_before` the way a native Host
+// does — a positioned insert whose
+// reference node MUST already be a live child of the parent, else the
+// insert is dropped. That drop is exactly the on-device "next chapter is
+// blank after a `replace`" symptom, so it lets us reproduce it in-process.
+mod replace_repro {
+    use super::*;
+    use std::collections::BTreeMap;
+    use whisker::ElementTag;
+    use whisker::runtime::value::WhiskerValue;
+    use whisker::runtime::view::{BindType, DynRenderer, Element, with_installed_renderer};
+
+    #[derive(Default)]
+    struct Inner {
+        defer_frames: bool,
+        frame_callbacks: Vec<Box<dyn FnOnce(u64)>>,
+        next_id: u32,
+        children: HashMap<Element, Vec<Element>>,
+        attrs: HashMap<Element, BTreeMap<String, String>>,
+        /// Last layout/presentation values set on each element. Switch keeps
+        /// every branch in layout while suppressing paint and input for
+        /// inactive branches.
+        display: HashMap<Element, String>,
+        visibility: HashMap<Element, String>,
+        opacity: HashMap<Element, f32>,
+        pointer_events: HashMap<Element, String>,
+        ops: Vec<String>,
+        /// A positioned insert whose reference wasn't a live child — the
+        /// on-device silent drop. Non-empty = the bug is reproduced.
+        violations: Vec<String>,
+    }
+
+    #[derive(Clone, Default)]
+    struct Rec(Rc<RefCell<Inner>>);
+
+    impl Rec {
+        fn detach(inner: &mut Inner, child: Element) {
+            for kids in inner.children.values_mut() {
+                kids.retain(|c| *c != child);
+            }
+        }
+        /// Is `el` reachable from `root` through the recorded real tree?
+        fn reachable(&self, root: Element, el: Element) -> bool {
+            let inner = self.0.borrow();
+            let mut stack = vec![root];
+            while let Some(n) = stack.pop() {
+                if n == el {
+                    return true;
+                }
+                if let Some(kids) = inner.children.get(&n) {
+                    stack.extend(kids.iter().copied());
+                }
+            }
+            false
+        }
+        /// The real element whose recorded `cid` attribute equals `id`.
+        fn by_cid(&self, id: &str) -> Option<Element> {
+            let inner = self.0.borrow();
+            inner
+                .attrs
+                .iter()
+                .find(|(_, a)| a.get("cid").map(String::as_str) == Some(id))
+                .map(|(e, _)| *e)
+        }
+        /// How many live real elements currently carry `cid == id`.
+        fn count_cid(&self, id: &str) -> usize {
+            let inner = self.0.borrow();
+            inner
+                .attrs
+                .iter()
+                .filter(|(_, a)| a.get("cid").map(String::as_str) == Some(id))
+                .count()
+        }
+        /// The direct child of `root` whose subtree contains `target`.
+        fn direct_child_ancestor(&self, root: Element, target: Element) -> Option<Element> {
+            let inner = self.0.borrow();
+            fn contains(inner: &Inner, node: Element, target: Element) -> bool {
+                node == target
+                    || inner.children.get(&node).is_some_and(|kids| {
+                        kids.iter().any(|child| contains(inner, *child, target))
+                    })
+            }
+            inner
+                .children
+                .get(&root)?
+                .iter()
+                .copied()
+                .find(|child| contains(&inner, *child, target))
+        }
+        fn path_elements(&self, root: Element, el: Element) -> Option<Vec<Element>> {
+            let inner = self.0.borrow();
+            fn dfs(inner: &Inner, node: Element, target: Element, acc: &mut Vec<Element>) -> bool {
+                acc.push(node);
+                if node == target {
+                    return true;
+                }
+                if let Some(kids) = inner.children.get(&node) {
+                    for k in kids {
+                        if dfs(inner, *k, target, acc) {
+                            return true;
+                        }
+                    }
+                }
+                acc.pop();
+                false
+            }
+            let mut path = Vec::new();
+            if !dfs(&inner, root, el, &mut path) {
+                return None;
+            }
+            Some(path)
+        }
+
+        fn path_displays(&self, root: Element, el: Element) -> Option<Vec<Option<String>>> {
+            let path = self.path_elements(root, el)?;
+            let inner = self.0.borrow();
+            Some(path.iter().map(|e| inner.display.get(e).cloned()).collect())
+        }
+
+        fn path_visibilities(&self, root: Element, el: Element) -> Option<Vec<Option<String>>> {
+            let path = self.path_elements(root, el)?;
+            let inner = self.0.borrow();
+            Some(
+                path.iter()
+                    .map(|e| inner.visibility.get(e).cloned())
+                    .collect(),
+            )
+        }
+
+        fn path_pointer_events(&self, root: Element, el: Element) -> Option<Vec<Option<String>>> {
+            let path = self.path_elements(root, el)?;
+            let inner = self.0.borrow();
+            Some(
+                path.iter()
+                    .map(|e| inner.pointer_events.get(e).cloned())
+                    .collect(),
+            )
+        }
+
+        fn path_opacities(&self, root: Element, el: Element) -> Option<Vec<Option<f32>>> {
+            let path = self.path_elements(root, el)?;
+            let inner = self.0.borrow();
+            Some(path.iter().map(|e| inner.opacity.get(e).copied()).collect())
+        }
+    }
+
+    impl DynRenderer for Rec {
+        fn on_next_frame_applied(&self, _handle: Element, callback: Box<dyn FnOnce(u64)>) -> bool {
+            let mut inner = self.0.borrow_mut();
+            if !inner.defer_frames {
+                return false;
+            }
+            inner.frame_callbacks.push(callback);
+            true
+        }
+
+        fn create_element(&self, _tag: ElementTag) -> Element {
+            let mut inner = self.0.borrow_mut();
+            inner.next_id += 1;
+            Element::from_raw(inner.next_id)
+        }
+        fn create_element_by_name(&self, _tag: &str) -> Element {
+            self.create_element(ElementTag::View)
+        }
+        fn release_element(&self, handle: Element) {
+            let mut inner = self.0.borrow_mut();
+            Self::detach(&mut inner, handle);
+            inner.children.remove(&handle);
+            inner.attrs.remove(&handle);
+        }
+        fn set_attribute(&self, handle: Element, key: &str, value: &str) {
+            let mut inner = self.0.borrow_mut();
+            inner
+                .ops
+                .push(format!("attr {} {}={}", handle.id(), key, value));
+            inner
+                .attrs
+                .entry(handle)
+                .or_default()
+                .insert(key.to_string(), value.to_string());
+        }
+        fn set_specified_style(
+            &self,
+            handle: Element,
+            style: &whisker_style::SpecifiedStyle,
+        ) -> bool {
+            use whisker_style::{
+                DisplayValue, PointerEventsValue, StyleProperty, StyleValue, VisibilityValue,
+            };
+
+            let display = style.resolved().iter().find_map(|declaration| {
+                if declaration.property() != StyleProperty::Display {
+                    return None;
+                }
+                match declaration.value() {
+                    StyleValue::Display(DisplayValue::Flex) => Some("flex".to_string()),
+                    StyleValue::Display(DisplayValue::None) => Some("none".to_string()),
+                    _ => None,
+                }
+            });
+            if let Some(d) = display {
+                let mut inner = self.0.borrow_mut();
+                inner
+                    .ops
+                    .push(format!("style {} display={}", handle.id(), d));
+                inner.display.insert(handle, d);
+            }
+
+            let visibility = style.resolved().iter().find_map(|declaration| {
+                if declaration.property() != StyleProperty::Visibility {
+                    return None;
+                }
+                match declaration.value() {
+                    StyleValue::Visibility(VisibilityValue::Visible) => Some("visible".to_string()),
+                    StyleValue::Visibility(VisibilityValue::Hidden) => Some("hidden".to_string()),
+                    _ => None,
+                }
+            });
+            if let Some(value) = visibility {
+                let mut inner = self.0.borrow_mut();
+                inner
+                    .ops
+                    .push(format!("style {} visibility={}", handle.id(), value));
+                inner.visibility.insert(handle, value);
+            }
+
+            let opacity = style.resolved().iter().find_map(|declaration| {
+                if declaration.property() != StyleProperty::Opacity {
+                    return None;
+                }
+                match declaration.value() {
+                    StyleValue::Number(value) => Some(value.get()),
+                    _ => None,
+                }
+            });
+            if let Some(value) = opacity {
+                let mut inner = self.0.borrow_mut();
+                inner
+                    .ops
+                    .push(format!("style {} opacity={}", handle.id(), value));
+                inner.opacity.insert(handle, value);
+            }
+
+            let pointer_events = style.resolved().iter().find_map(|declaration| {
+                if declaration.property() != StyleProperty::PointerEvents {
+                    return None;
+                }
+                match declaration.value() {
+                    StyleValue::PointerEvents(PointerEventsValue::Auto) => Some("auto".to_string()),
+                    StyleValue::PointerEvents(PointerEventsValue::None) => Some("none".to_string()),
+                    _ => None,
+                }
+            });
+            if let Some(value) = pointer_events {
+                let mut inner = self.0.borrow_mut();
+                inner
+                    .ops
+                    .push(format!("style {} pointer-events={}", handle.id(), value));
+                inner.pointer_events.insert(handle, value);
+            }
+            true
+        }
+        fn append_child(&self, parent: Element, child: Element) {
+            let mut inner = self.0.borrow_mut();
+            inner
+                .ops
+                .push(format!("append {}->{}", parent.id(), child.id()));
+            Self::detach(&mut inner, child);
+            inner.children.entry(parent).or_default().push(child);
+        }
+        fn remove_child(&self, parent: Element, child: Element) {
+            let mut inner = self.0.borrow_mut();
+            inner
+                .ops
+                .push(format!("remove {}->{}", parent.id(), child.id()));
+            if let Some(kids) = inner.children.get_mut(&parent) {
+                kids.retain(|c| *c != child);
+            }
+        }
+        fn supports_insert_before(&self) -> bool {
+            true
+        }
+        fn insert_child_before(&self, parent: Element, child: Element, reference: Option<Element>) {
+            let mut inner = self.0.borrow_mut();
+            inner.ops.push(format!(
+                "insert {}->{} before {:?}",
+                parent.id(),
+                child.id(),
+                reference.map(|r| r.id())
+            ));
+            Self::detach(&mut inner, child);
+            match reference {
+                None => {
+                    inner.children.entry(parent).or_default().push(child);
+                }
+                Some(r) => {
+                    let kids = inner.children.entry(parent).or_default();
+                    match kids.iter().position(|c| *c == r) {
+                        Some(pos) => kids.insert(pos, child),
+                        None => {
+                            // a native Host drops an insert whose reference isn't a
+                            // live child — the child never enters the tree.
+                            inner.violations.push(format!(
+                                "insert {}->{} before dead ref {}",
+                                parent.id(),
+                                child.id(),
+                                r.id()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        fn set_event_listener(
+            &self,
+            _handle: Element,
+            _event_name: &str,
+            _bind_type: BindType,
+            _callback: Box<dyn Fn(WhiskerValue) + 'static>,
+        ) {
+        }
+        fn set_root(&self, _page: Element) {}
+        fn flush(&self) {}
+    }
+
+    /// Root Stack { Route("", home)  Route("detail/:id", detail) } whose
+    /// leaves render a REAL `view` tagged with the route param `id` as a
+    /// `cid` attribute, so the recorder can locate each screen's content.
+    fn real_leaf_handle() -> RouterHandle {
+        real_leaf_handle_with_transition(RouteTransition::slide())
+    }
+
+    fn real_leaf_handle_with_transition(transition: RouteTransition) -> RouterHandle {
+        let tree = CompiledTree::new(RouteTree::Stack(vec![
+            RouteTree::route("", "home"),
+            RouteTree::route("detail/:id", "detail"),
+        ]));
+        let mk = |id: &'static str| {
+            move |inst: &RouteInstance| {
+                let el = whisker::runtime::view::create_element(ElementTag::View);
+                let cid = inst
+                    .params
+                    .get("id")
+                    .cloned()
+                    .unwrap_or_else(|| id.to_string());
+                whisker::runtime::view::set_attribute(el, "cid", &cid);
+                el
+            }
+        };
+        let registry = RouteRegistry::new().route("home", mk("home")).route_with(
+            "detail",
+            transition,
+            mk("detail"),
+        );
+        RouterHandle::new((tree, registry))
+    }
+
+    fn accept_frame(rec: &Rec) {
+        let callbacks = std::mem::take(&mut rec.0.borrow_mut().frame_callbacks);
+        for callback in callbacks {
+            callback(1);
+        }
+    }
+
+    #[test]
+    fn push_clock_starts_after_initial_frame_is_applied() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            rec.0.borrow_mut().defer_frames = true;
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let _root = mount_node(&h, NodePath::root());
+                h.push("/detail/1").unwrap();
+                flush();
+                let bridge = h.active_stack_bridge().unwrap();
+                let ctrl = bridge.top_ctrl.clone().unwrap();
+                assert!(!ctrl.is_animating());
+                assert_eq!(ctrl.value().get_untracked(), 0.0);
+                assert_eq!(
+                    bridge
+                        .under_pose
+                        .as_ref()
+                        .unwrap()
+                        .ctrl
+                        .get_untracked()
+                        .value()
+                        .get_untracked(),
+                    0.0
+                );
+                assert!(
+                    crate::render::platform_navigation::begin(
+                        &h,
+                        crate::render::transition::SwipeEdge::Left
+                    )
+                    .is_none()
+                );
+                whisker_animation::__step_for_tests(100.0);
+                // Simulate an expensive mount/Host application. The 67 ms
+                // gap must not become elapsed animation time.
+                accept_frame(&rec);
+                assert!(ctrl.is_animating());
+                whisker_animation::__step_for_tests(167.0);
+                assert_eq!(ctrl.value().get_untracked(), 0.0);
+                whisker_animation::__step_for_tests(183.0);
+                assert!(ctrl.value().get_untracked() > 0.0);
+                assert!(ctrl.value().get_untracked() < 0.5);
+            });
+        });
+    }
+
+    #[test]
+    fn back_before_push_acknowledgement_does_not_restart_push() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            rec.0.borrow_mut().defer_frames = true;
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let _root = mount_node(&h, NodePath::root());
+                h.push("/detail/1").unwrap();
+                flush();
+                let ctrl = h.active_stack_bridge().unwrap().top_ctrl.unwrap();
+                h.back().unwrap();
+                flush();
+                accept_frame(&rec);
+                whisker_animation::__step_for_tests(100.0);
+                // Reverse from zero finishes immediately and disposes the
+                // cancelled card; the acknowledgement must not run forward.
+                assert_eq!(rec.count_cid("1"), 0);
+                assert!(!ctrl.is_animating());
+                assert_eq!(h.current().get_untracked().path, NodePath(vec![0]));
+            });
+        });
+    }
+
+    #[test]
+    fn second_push_invalidates_the_first_pending_start() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            rec.0.borrow_mut().defer_frames = true;
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let _root = mount_node(&h, NodePath::root());
+                h.push("/detail/1").unwrap();
+                flush();
+                let first = h.active_stack_bridge().unwrap().top_ctrl.unwrap();
+                h.push("/detail/2").unwrap();
+                flush();
+                let second = h.active_stack_bridge().unwrap().top_ctrl.unwrap();
+                accept_frame(&rec);
+                assert!(!first.is_animating());
+                assert!(second.is_animating());
+                whisker_animation::__step_for_tests(100.0);
+                assert_eq!(second.value().get_untracked(), 0.0);
+                whisker_animation::__step_for_tests(1_000.0);
+                assert_eq!(rec.count_cid("1"), 1);
+                assert_eq!(rec.count_cid("2"), 1);
+            });
+        });
+    }
+
+    #[test]
+    fn instant_push_does_not_wait_for_a_frame_acknowledgement() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            rec.0.borrow_mut().defer_frames = true;
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle_with_transition(RouteTransition::none());
+                let _root = mount_node(&h, NodePath::root());
+                h.push("/detail/1").unwrap();
+                flush();
+                assert!(rec.0.borrow().frame_callbacks.is_empty());
+                let ctrl = h.active_stack_bridge().unwrap().top_ctrl.unwrap();
+                assert_eq!(ctrl.value().get_untracked(), 1.0);
+                assert!(!ctrl.is_animating());
+            });
+        });
+    }
+
+    #[test]
+    fn instant_back_removes_the_popped_screen_and_accepts_the_next_push() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle_with_transition(RouteTransition::none());
+                let slot = mount_node(&h, NodePath::root());
+                flush();
+
+                h.push("/detail/1").unwrap();
+                flush();
+                h.push("/detail/2").unwrap();
+                flush();
+                let detail_2 = rec.by_cid("2").expect("detail/2 mounted");
+
+                h.back().unwrap();
+                flush();
+
+                let detail_1 = rec.by_cid("1").expect("detail/1 remains mounted");
+                assert!(rec.reachable(slot, detail_1), "detail/1 is revealed");
+                assert!(
+                    !rec.reachable(slot, detail_2),
+                    "the instant pop must detach detail/2"
+                );
+
+                h.push("/detail/3").unwrap();
+                flush();
+                let detail_3 = rec.by_cid("3").expect("detail/3 mounted");
+                assert!(
+                    rec.reachable(slot, detail_3),
+                    "navigation must remain live after an instant pop"
+                );
+            });
+        });
+    }
+
+    #[test]
+    fn replace_attaches_new_leaf_content_to_the_real_tree() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let slot = mount_node(&h, NodePath::root());
+                flush();
+
+                // Push detail/1 over Home (group -> reader).
+                h.navigate("/detail/1").unwrap();
+                flush();
+                let c1 = rec.by_cid("1").expect("detail/1 content created");
+                assert!(
+                    rec.reachable(slot, c1),
+                    "detail/1 content must be attached after push"
+                );
+
+                // Replace detail/1 with detail/2 (reader chapter switch).
+                h.replace("/detail/2").unwrap();
+                flush();
+
+                let c2 = rec.by_cid("2").expect("detail/2 content created");
+                let inner = rec.0.borrow();
+                assert!(
+                    inner.violations.is_empty(),
+                    "positioned insert dropped a child (blank chapter): {:?}\nops:\n{}",
+                    inner.violations,
+                    inner.ops.join("\n")
+                );
+                drop(inner);
+                assert!(
+                    rec.reachable(slot, c2),
+                    "detail/2 content must be attached to the real tree after replace\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+            });
+        });
+    }
+
+    /// On a `replace`, the OUTGOING Screen (kept mounted as the
+    /// slide-out `Under`) must be FROZEN showing its own route. It shares the
+    /// leaf's static path with the incoming wrapper, so when `replace` swaps
+    /// the top instance the outgoing leaf's `instance` computed also flips to
+    /// the new route and re-mounts it — mounting the new screen TWICE (once in
+    /// the disposing under-wrapper, once in the incoming top). That double
+    /// mount is what blanks the next chapter on-device: the two instances
+    /// fight over shared reader state / native `<list>` handles, and disposing
+    /// the under-wrapper on finish tears down state the survivor still needs.
+    ///
+    /// A `pop` is immune (the popped entry leaves `history`, so its slice goes
+    /// `None` and the leaf no-ops); only `replace` hits the `Some(new)` path.
+    #[test]
+    fn replace_does_not_remount_outgoing_leaf_to_new_route() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let _slot = mount_node(&h, NodePath::root());
+                flush();
+
+                h.navigate("/detail/1").unwrap();
+                flush();
+                assert_eq!(rec.count_cid("1"), 1, "detail/1 mounted once after push");
+
+                h.replace("/detail/2").unwrap();
+                flush();
+
+                // The incoming wrapper mounts detail/2 exactly once. The
+                // outgoing wrapper must KEEP detail/1 (frozen), not re-mount
+                // detail/2 into itself.
+                assert_eq!(
+                    rec.count_cid("2"),
+                    1,
+                    "detail/2 must mount exactly once, not also in the outgoing under-wrapper\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+                assert_eq!(
+                    rec.count_cid("1"),
+                    1,
+                    "the outgoing under-wrapper stays frozen on detail/1 until disposed"
+                );
+            });
+        });
+    }
+
+    #[test]
+    fn predictive_back_keeps_the_revealed_route_instance_frozen_during_preview() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let _slot = mount_node(&h, NodePath::root());
+                flush();
+
+                h.navigate("/detail/1").unwrap();
+                flush();
+                settle_animations();
+                h.navigate("/detail/2").unwrap();
+                flush();
+                settle_animations();
+
+                let bridge = begin(&h, SwipeEdge::Left).expect("detail/2 can reveal detail/1");
+                scrub(&bridge, 0.4);
+                flush();
+
+                assert_eq!(
+                    rec.count_cid("1"),
+                    1,
+                    "the revealed under screen must keep its own route params during preview",
+                );
+                assert_eq!(
+                    rec.count_cid("2"),
+                    1,
+                    "the current route must not be mounted into both wrappers",
+                );
+
+                settle(&h, &bridge, /* commit = */ false, None);
+                settle_animations();
+            });
+        });
+    }
+
+    #[test]
+    fn consecutive_predictive_backs_keep_the_dim_behind_the_current_top() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = real_leaf_handle();
+                let slot = mount_node(&h, NodePath::root());
+                flush();
+
+                h.navigate("/detail/1").unwrap();
+                flush();
+                settle_animations();
+                h.navigate("/detail/2").unwrap();
+                flush();
+                settle_animations();
+
+                let first = begin(&h, SwipeEdge::Left).expect("detail/2 can reveal detail/1");
+                scrub(&first, 0.4);
+                settle(&h, &first, /* commit = */ true, None);
+                settle_animations();
+
+                let second = begin(&h, SwipeEdge::Left).expect("detail/1 can reveal home");
+                scrub(&second, 0.4);
+                flush();
+
+                let home = rec.by_cid("home").expect("home remains mounted");
+                let detail = rec.by_cid("1").expect("detail/1 is current");
+                let home_wrapper = rec
+                    .direct_child_ancestor(slot, home)
+                    .expect("home stack wrapper");
+                let detail_wrapper = rec
+                    .direct_child_ancestor(slot, detail)
+                    .expect("detail stack wrapper");
+                let children = rec.0.borrow().children[&slot].clone();
+                let dim = children
+                    .iter()
+                    .copied()
+                    .find(|child| *child != home_wrapper && *child != detail_wrapper)
+                    .expect("stack backdrop dim");
+                let dim_index = children.iter().position(|child| *child == dim).unwrap();
+                let detail_index = children
+                    .iter()
+                    .position(|child| *child == detail_wrapper)
+                    .unwrap();
+                assert!(
+                    dim_index < detail_index,
+                    "the dim must paint below the current top; child order={children:?}",
+                );
+
+                settle(&h, &second, /* commit = */ false, None);
+                settle_animations();
+            });
+        });
+    }
+
+    /// Two-tab `Switch`; the NON-first branch's leaf renders a
+    /// `create_element_by_name` element (standing in for a
+    /// `module_element` / `whisker-svg` `SvgRenderer`, i.e. what
+    /// `whisker-icons::Icon` mounts), tagged `cid=native-b` and given a
+    /// `display-list` attr (a stand-in for the native prop).
+    fn switch_with_native_second_branch() -> RouterHandle {
+        let tree = CompiledTree::new(RouteTree::Switch(
+            SwitchDef::new("tabs", 0),
+            vec![
+                RouteTree::Stack(vec![RouteTree::route("", "a")]),
+                RouteTree::Stack(vec![RouteTree::route("b", "b")]),
+            ],
+        ));
+        let mk_a = move |_: &RouteInstance| {
+            let el = whisker::runtime::view::create_element(ElementTag::View);
+            whisker::runtime::view::set_attribute(el, "cid", "native-a");
+            el
+        };
+        let mk_b = move |_: &RouteInstance| {
+            // A named (module_element) element, like `whisker-svg:Svg`.
+            let el = whisker::runtime::view::create_element_by_name("whisker-svg:Svg");
+            whisker::runtime::view::set_attribute(el, "cid", "native-b");
+            // The prop the native view needs to paint — dispatched here,
+            // at mount, exactly as `apply_attr` does for a real Svg.
+            whisker::runtime::view::set_attribute(el, "display-list", "AAAA");
+            el
+        };
+        let registry = RouteRegistry::new().route("a", mk_a).route("b", mk_b);
+        RouterHandle::new((tree, registry))
+    }
+
+    /// A native leaf in an inactive Switch branch is eager-mounted with its
+    /// props and retains its layout, but neither paints nor accepts pointer
+    /// input until its branch becomes active.
+    #[test]
+    fn inactive_switch_branch_keeps_layout_without_paint_or_pointer_input() {
+        with_runtime(|| {
+            let rec = Rec::default();
+            with_installed_renderer(Box::new(rec.clone()), || {
+                let h = switch_with_native_second_branch();
+                let root = mount_node(&h, NodePath::root());
+                flush();
+
+                // (1) The non-first branch's native leaf is created AND
+                // attributed at mount — props are dispatched, Rust-side.
+                let native_b = rec
+                    .by_cid("native-b")
+                    .expect("non-first branch's native leaf must be created at mount");
+                {
+                    let inner = rec.0.borrow();
+                    let attrs = inner.attrs.get(&native_b).expect("has attrs");
+                    assert_eq!(
+                        attrs.get("display-list").map(String::as_str),
+                        Some("AAAA"),
+                        "the native leaf's prop must be dispatched at mount, even hidden"
+                    );
+                }
+                assert!(
+                    rec.reachable(root, native_b),
+                    "native leaf must be attached to the real tree"
+                );
+
+                // (2) The inactive branch remains in layout. Its wrapper must
+                // never collapse the native subtree with `display:none`.
+                let displays = rec
+                    .path_displays(root, native_b)
+                    .expect("native leaf reachable from root");
+                assert!(
+                    displays.iter().all(|d| d.as_deref() != Some("none")),
+                    "inactive branch must remain in layout\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+
+                let visibilities = rec
+                    .path_visibilities(root, native_b)
+                    .expect("native leaf reachable from root");
+                assert!(
+                    visibilities.iter().any(|v| v.as_deref() == Some("hidden")),
+                    "inactive branch must be hidden from paint\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+
+                let opacities = rec
+                    .path_opacities(root, native_b)
+                    .expect("native leaf reachable from root");
+                assert!(
+                    opacities.contains(&Some(0.0)),
+                    "inactive branch must suppress descendant paint\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+
+                let pointer_events = rec
+                    .path_pointer_events(root, native_b)
+                    .expect("native leaf reachable from root");
+                assert!(
+                    pointer_events.iter().any(|v| v.as_deref() == Some("none")),
+                    "inactive branch must reject pointer input\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+
+                // Selecting the branch restores paint and input without any
+                // 0→real layout transition.
+                h.navigate("/b").unwrap();
+                flush();
+                let displays = rec
+                    .path_displays(root, native_b)
+                    .expect("native leaf still reachable after group navigation");
+                assert!(
+                    displays.iter().all(|d| d.as_deref() != Some("none")),
+                    "after navigating to branch b, no ancestor of its leaf stays display:none\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+                let visibilities = rec
+                    .path_visibilities(root, native_b)
+                    .expect("native leaf still reachable after group navigation");
+                assert!(
+                    visibilities.iter().all(|v| v.as_deref() != Some("hidden")),
+                    "selected branch must be paint-visible\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+                let opacities = rec
+                    .path_opacities(root, native_b)
+                    .expect("native leaf still reachable after group navigation");
+                assert!(
+                    opacities.iter().all(|value| *value != Some(0.0)),
+                    "selected branch must restore descendant paint\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+                let pointer_events = rec
+                    .path_pointer_events(root, native_b)
+                    .expect("native leaf still reachable after group navigation");
+                assert!(
+                    pointer_events.iter().all(|v| v.as_deref() != Some("none")),
+                    "selected branch must accept pointer input\nops:\n{}",
+                    rec.0.borrow().ops.join("\n")
+                );
+            });
+        });
+    }
+}
+
+#[test]
+fn navigation_after_focused_form_disposal_reaches_home() {
+    with_runtime(|| {
+        let router = simple_handle();
+        router.navigate("/detail/form").unwrap();
+        let form = Owner::new(None);
+        let input = form.with(whisker::ElementRef::new);
+        input.__bind(whisker::runtime::view::Element::from_raw(42));
+        form.with(|| whisker::on_cleanup(move || input.__unbind()));
+        whisker::focus::note_focused(input);
+
+        router.navigate("/detail/connections").unwrap();
+        form.dispose();
+        router.navigate("/").unwrap();
+
+        assert_eq!(router.state().get().current().location.pathname, "/");
+        assert_eq!(whisker::focus::focused_element(), None);
+    });
+}
+
+#[test]
+fn router_drop_disposes_detached_state_owner() {
+    with_runtime(|| {
+        let router = simple_handle();
+        let state = router.state();
+        drop(router);
+        assert!(
+            state.is_disposed(),
+            "last RouterHandle drop must release its state owner"
+        );
+    });
+}
+
+#[test]
+fn stack_unmount_removes_registered_gesture_bridge() {
+    with_runtime(|| {
+        let router = slide_stack_handle();
+        let screen = Owner::new(None);
+        screen.with(|| mount_node(&router, NodePath::root()));
+        router.navigate("/detail/1").unwrap();
+        flush();
+        settle_animations();
+        let bridge = router.active_stack_bridge().unwrap();
+        screen.dispose();
+        assert!(router.active_stack_bridge().is_none());
+        crate::render::platform_navigation::scrub(&bridge, 0.5);
+        crate::render::platform_navigation::settle(&router, &bridge, true, None);
+        assert_eq!(
+            router.state().get().current().location.pathname,
+            "/detail/1"
+        );
+    });
+}
