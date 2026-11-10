@@ -1,4 +1,4 @@
-//! Firebase Remote Config。値はすべて文字列で返す（数値・真偽値は呼び出し側で変換する）。
+//! Firebase Remote Config. All values are returned as strings (callers convert numbers and booleans).
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -11,7 +11,7 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "FirebaseRemoteConfig")
 }
 
-/// 取得して有効化し、全キーの値を返す。取得に失敗した場合はキャッシュ済みか既定の値を返す。
+/// Fetches and activates, then returns the values of all keys. If the fetch fails, returns the cached or default values.
 pub async fn fetch_and_activate(
     fetch_timeout: Duration,
     minimum_fetch_interval: Duration,
@@ -27,7 +27,7 @@ pub async fn fetch_and_activate(
         .await
 }
 
-/// 有効になっている値（取得はしない）。
+/// The currently active values (does not fetch).
 pub fn values() -> NativeResult<BTreeMap<String, String>> {
     module().call("values", &json!({}))
 }

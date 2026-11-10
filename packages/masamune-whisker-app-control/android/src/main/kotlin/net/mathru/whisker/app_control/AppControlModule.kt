@@ -1,4 +1,4 @@
-// URL を外部アプリ（ブラウザ・ストア）で開く、アプリを閉じる。
+// Opens URLs in external apps (browser, store) and closes the app.
 
 package net.mathru.whisker.app_control
 
@@ -17,7 +17,7 @@ class AppControlModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("AppControl")
 
-        // openUrl({ url }) -> 開けたか（対応するアプリが無ければ false）
+        // openUrl({ url }) -> whether it was opened (false if no app can handle it)
         Function("openUrl") { args ->
             try {
                 val json = Bridge.args(args)
@@ -32,7 +32,7 @@ class AppControlModule : Module() {
             }
         }
 
-        // setOrientation({ lock }) — 画面の向きを固定する（"unspecified" で解除）。
+        // setOrientation({ lock }) — locks the screen orientation ("unspecified" unlocks it).
         Function("setOrientation") { args ->
             try {
                 val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")
@@ -50,8 +50,8 @@ class AppControlModule : Module() {
             }
         }
 
-        // setSystemBarsStyle({ lightStatusBar, lightNavigationBar }) — ステータスバー・ナビゲーションバーの
-        // アイコンを暗い色（明るい背景用）にするか。
+        // setSystemBarsStyle({ lightStatusBar, lightNavigationBar }) — whether the status bar and navigation bar
+        // use dark icons (for light backgrounds).
         Function("setSystemBarsStyle") { args ->
             try {
                 val json = Bridge.args(args)
@@ -67,7 +67,7 @@ class AppControlModule : Module() {
             }
         }
 
-        // setWindowBackground({ argb }) — ウィンドウの背景色（起動直後や画面の切れ目に見える色）。
+        // setWindowBackground({ argb }) — window background color (visible right after launch and at screen edges).
         Function("setWindowBackground") { args ->
             try {
                 val argb = Bridge.args(args).getLong("argb").toInt()
@@ -79,7 +79,7 @@ class AppControlModule : Module() {
             }
         }
 
-        // exitApp() — アプリを閉じる。
+        // exitApp() — closes the app.
         Function("exitApp") { _ ->
             appContext.currentActivity?.finishAndRemoveTask()
             Bridge.ok(true)

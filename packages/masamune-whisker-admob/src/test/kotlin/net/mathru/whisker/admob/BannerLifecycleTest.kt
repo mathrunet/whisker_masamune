@@ -1,6 +1,6 @@
 package net.mathru.whisker.admob
 
-/** 追加のテスト依存を使わず、JVM上で実行するライフサイクル回帰テスト。 */
+/** Lifecycle regression tests that run on the JVM without extra test dependencies. */
 fun main() {
     val state = BannerLifecycle()
     check(state.configure("test-ad-unit", 360))
@@ -30,7 +30,7 @@ fun main() {
     state.attach()
     token = checkNotNull(state.beginLoad())
     check(state.loaded(token))
-    // SDKの自動refreshが成功表示後に失敗しても再試行できる。
+    // Retries still work when the SDK's auto-refresh fails after a successful display.
     check(state.failed(token) == 5_000L)
     check(state.failed(token) == null)
     check(state.configure(widthDp = 320))

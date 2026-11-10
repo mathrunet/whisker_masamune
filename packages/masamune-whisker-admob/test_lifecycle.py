@@ -1,4 +1,4 @@
-"""依存を追加せず、Android buildの既存Kotlin compiler cacheで回帰テストを実行する。"""
+"""Runs regression tests with the existing Kotlin compiler cache from the Android build, without adding dependencies."""
 
 import os
 from pathlib import Path
@@ -23,12 +23,12 @@ def main():
     for group, artifact, version in coordinates:
         matches = list((cache / group / artifact / version).glob("*/*.jar"))
         if not matches:
-            raise SystemExit(f"Kotlin cacheがありません。既存のAndroid build環境を準備してください: {artifact}:{version}")
+            raise SystemExit(f"Kotlin cache not found. Set up the existing Android build environment: {artifact}:{version}")
         jars.append(str(matches[0]))
     java_home = os.environ.get("JAVA_HOME")
     java = str(Path(java_home) / "bin/java") if java_home else shutil.which("java")
     if not java:
-        raise SystemExit("JAVA_HOMEを既存のAndroid build用JDKに設定してください。")
+        raise SystemExit("Set JAVA_HOME to the JDK used by the existing Android build.")
     root = Path(__file__).resolve().parent
     sources = [root / "android/src/main/kotlin/net/mathru/whisker/admob/BannerLifecycle.kt",
                root / "src/test/kotlin/net/mathru/whisker/admob/BannerLifecycleTest.kt"]

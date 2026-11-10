@@ -1,4 +1,4 @@
-//! OS 標準の日付・時刻選択ダイアログ。
+//! Native OS date and time picker dialogs.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -22,7 +22,7 @@ pub struct PickedTime {
     pub minute: u32,
 }
 
-/// 日付ダイアログ。`initial` は (年, 月 1〜12, 日)。`min_ms`・`max_ms` は UTC ミリ秒。キャンセルなら `None`。
+/// Date dialog. `initial` is (year, month 1-12, day). `min_ms` and `max_ms` are UTC milliseconds. Returns `None` if cancelled.
 pub async fn pick_date(
     initial: (i32, u32, u32),
     min_ms: Option<i64>,
@@ -38,7 +38,7 @@ pub async fn pick_date(
     module().call_async("pickDate", &args).await
 }
 
-/// 時刻ダイアログ（端末の 12/24 時間表示に従う）。キャンセルなら `None`。
+/// Time dialog (follows the device's 12/24-hour setting). Returns `None` if cancelled.
 pub async fn pick_time(hour: u32, minute: u32) -> NativeResult<Option<PickedTime>> {
     module()
         .call_async("pickTime", &json!({ "hour": hour, "minute": minute }))

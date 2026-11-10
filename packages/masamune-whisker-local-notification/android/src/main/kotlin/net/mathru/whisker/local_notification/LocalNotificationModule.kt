@@ -1,5 +1,5 @@
-// 毎日決まった時刻のローカル通知（AlarmManager）。予約内容とチャンネル設定は SharedPreferences に保存し、
-// 端末の再起動・アプリの更新後に入れ直す。
+// Daily local notifications at a fixed time (AlarmManager). Schedules and channel settings are saved in SharedPreferences
+// and re-armed after device reboots and app updates.
 
 package net.mathru.whisker.local_notification
 
@@ -64,7 +64,7 @@ internal object LocalNotifications {
         }
     }
 
-    /** アプリ全体とチャンネルの両方で通知が許可されているか。 */
+    /** Whether notifications are allowed for both the app and the channel. */
     fun authorized(context: Context): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -114,7 +114,7 @@ internal object LocalNotifications {
         context.getSystemService(AlarmManager::class.java).cancel(pendingIntent(context, id))
     }
 
-    /** 次にその時刻になる日時（今日の時刻が過ぎていれば明日）。 */
+    /** The next occurrence of the time (tomorrow if today's time has already passed). */
     fun nextOccurrence(hour: Int, minute: Int): Long {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, hour)
@@ -127,7 +127,7 @@ internal object LocalNotifications {
         return calendar.timeInMillis
     }
 
-    /** 保存済みの予約から次のアラームを入れる。 */
+    /** Sets the next alarm from the saved schedule. */
     fun arm(context: Context, id: String) {
         val schedule = load(context, id) ?: return
         val at = nextOccurrence(schedule.getInt("hour"), schedule.getInt("minute"))
@@ -141,7 +141,7 @@ internal object LocalNotifications {
         }
     }
 
-    /** 小さいアイコン。configure の smallIcon（whisker-asset の URI かファイルパス）、無ければアプリのアイコン。 */
+    /** The small icon: configure's smallIcon (a whisker-asset URI or file path), or the app icon if unset. */
     private fun smallIcon(context: Context): IconCompat {
         val path = config(context).optString("smallIcon")
         if (path.isNotBlank()) {
@@ -152,7 +152,7 @@ internal object LocalNotifications {
                     BitmapFactory.decodeFile(File(path.removePrefix("file://")).absolutePath)
                 }
                 if (bitmap != null) {
-                    // ステータスバーのアイコンは 24dp。
+                    // Status bar icons are 24dp.
                     val size = (24 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
                     return IconCompat.createWithBitmap(Bitmap.createScaledBitmap(bitmap, size, size, true))
                 }
@@ -184,7 +184,7 @@ internal object LocalNotifications {
     }
 }
 
-/** 予約時刻に通知を出し、翌日の分を入れ直す。 */
+/** Posts the notification at the scheduled time and re-arms it for the next day. */
 class DailyNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra("id") ?: return
@@ -193,7 +193,7 @@ class DailyNotificationReceiver : BroadcastReceiver() {
     }
 }
 
-/** 再起動・アプリ更新・時刻変更のあとに予約を入れ直す。 */
+/** Re-arms schedules after a reboot, app update, or time change. */
 class DailyNotificationBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         LocalNotifications.all(context).keys.forEach { LocalNotifications.arm(context, it) }
@@ -207,7 +207,7 @@ class LocalNotificationModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("LocalNotification")
 
-        // configure({ channelId, channelName, channelDescription, smallIcon }) — 通知チャンネルと小さいアイコン。
+        // configure({ channelId, channelName, channelDescription, smallIcon }) — notification channel and small icon.
         Function("configure") { args ->
             try {
                 val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
@@ -224,7 +224,7 @@ class LocalNotificationModule : Module() {
             Bridge.ok(if (context != null && LocalNotifications.authorized(context)) "authorized" else "denied")
         }
 
-        // requestPermission() -> 許可されたか
+        // requestPermission() -> whether permission was granted
         AsyncFunction("requestPermission") { _, promise ->
             val activity = appContext.currentActivity
             val context = WhiskerApplication.appContext
@@ -255,7 +255,7 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // scheduleDaily({ id, hour, minute, title, text }) -> 次の通知の時刻（ms）
+        // scheduleDaily({ id, hour, minute, title, text }) -> next fire time (ms)
         Function("scheduleDaily") { args ->
             try {
                 val json = Bridge.args(args)
@@ -270,14 +270,14 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // schedule({ id }) -> 保存済みの予約（無ければ null）
+        // schedule({ id }) -> saved schedule (null if missing)
         Function("schedule") { args ->
             val context = WhiskerApplication.appContext
             val id = Bridge.args(args).optString("id")
             Bridge.ok(context?.let { LocalNotifications.load(it, id) })
         }
 
-        // rearm() — 保存済みの予約を全て入れ直す（起動時）。
+        // rearm() — re-arms all saved schedules (at startup).
         Function("rearm") { _ ->
             val context = WhiskerApplication.appContext
             if (context != null) {
@@ -298,7 +298,7 @@ class LocalNotificationModule : Module() {
             Bridge.ok(true)
         }
 
-        // openSettings() — このアプリの通知設定画面を開く。
+        // openSettings() — opens this app's notification settings screen.
         Function("openSettings") { _ ->
             try {
                 val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")

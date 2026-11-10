@@ -1,7 +1,7 @@
-// OS の共有シートでファイルとテキストを送る。
+// Shares files and text via the OS share sheet.
 //
-// 渡されたファイルはこのモジュール専用のキャッシュへコピーしてから、専用の FileProvider で共有する
-// （どのディレクトリのファイルでも共有でき、他のライブラリの FileProvider と衝突しない）。
+// Given files are copied into this module's dedicated cache and shared through a dedicated FileProvider
+// (files from any directory can be shared without conflicting with other libraries' FileProviders).
 
 package net.mathru.whisker.share
 
@@ -13,7 +13,7 @@ import rs.whisker.runtime.ModuleDefinition
 import rs.whisker.runtime.WhiskerModule
 import java.io.File
 
-/** マニフェストでの重複を避けるための専用クラス。 */
+/** Dedicated class to avoid duplicate entries in the manifest. */
 class ShareFileProvider : FileProvider()
 
 @WhiskerModule
@@ -21,7 +21,7 @@ class ShareModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("Share")
 
-        // shareFile({ path, mimeType, subject, text }) — OS の共有シートを開く。
+        // shareFile({ path, mimeType, subject, text }) — opens the OS share sheet.
         Function("shareFile") { args ->
             try {
                 val json = Bridge.args(args)
@@ -33,7 +33,7 @@ class ShareModule : Module() {
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = json.optString("mimeType", "application/octet-stream")
                     putExtra(Intent.EXTRA_STREAM, uri)
-                    // 画像と文章を同時に共有するときも、共有シートから画像を読み取れるようにする。
+                    // Allow the share sheet to read the image even when sharing an image together with text.
                     clipData = ClipData.newUri(activity.contentResolver, source.name, uri)
                     json.optString("subject").takeIf { it.isNotBlank() }?.let { putExtra(Intent.EXTRA_TITLE, it) }
                     json.optString("subject").takeIf { it.isNotBlank() }?.let { putExtra(Intent.EXTRA_SUBJECT, it) }
@@ -47,7 +47,7 @@ class ShareModule : Module() {
             }
         }
 
-        // shareText({ text, subject }) — テキストだけを共有する。
+        // shareText({ text, subject }) — shares text only.
         Function("shareText") { args ->
             try {
                 val json = Bridge.args(args)

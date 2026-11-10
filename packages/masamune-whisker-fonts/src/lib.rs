@@ -1,6 +1,6 @@
-//! 同梱フォントを `font_family("名前")` で使えるように登録する。
+//! Registers bundled fonts so they can be used with `font_family("Name")`.
 //!
-//! フォントファイルはアプリが whisker-asset で同梱し、`whisker_asset::resolve` したパスを渡す。
+//! The app bundles font files with whisker-asset and passes paths obtained from `whisker_asset::resolve`.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -10,14 +10,14 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "Fonts")
 }
 
-/// 1 つのフォントファイルと、そのファイルを割り当てるウェイト（100〜900）。
+/// A single font file and the weights (100-900) assigned to it.
 #[derive(Debug, Clone, Serialize)]
 pub struct FontFile {
     pub path: String,
     pub weights: Vec<u16>,
 }
 
-/// ファミリー名と、そのファミリーを構成するファイル。
+/// A family name and the files that make up the family.
 #[derive(Debug, Clone, Serialize)]
 pub struct FontFamily {
     pub family: String,
@@ -41,9 +41,9 @@ impl FontFamily {
     }
 }
 
-/// フォントを登録し、登録できたファミリー名を返す。登録済みのファミリーは読み直さない。
+/// Registers fonts and returns the names of the families that were registered. Already registered families are not reloaded.
 ///
-/// 最初の Text を計測する前（`app()` の先頭）で呼ぶ。
+/// Call this before the first Text is measured (at the start of `app()`).
 pub fn register(families: &[FontFamily]) -> NativeResult<Vec<String>> {
     module().call("register", &serde_json::json!({ "families": families }))
 }

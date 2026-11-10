@@ -1,7 +1,7 @@
-//! 子要素ごと画面を PNG 画像に保存する要素。
+//! Element that saves the screen, including its children, as a PNG image.
 //!
-//! `ElementRef::command("capture", {fileName, heightDp?})` でキャッシュに保存し、
-//! `captured`（`{path}` か `{error}`）が届く。`heightDp` を渡すと上から切り取る。
+//! `ElementRef::command("capture", {fileName, heightDp?})` saves it to the cache,
+//! then `captured` (`{path}` or `{error}`) is delivered. Passing `heightDp` crops from the top.
 
 use whisker::event::CustomEvent;
 
@@ -9,7 +9,7 @@ use whisker::event::CustomEvent;
 #[whisker::module_element(name = "masamune-whisker-view-capture:Capture", measurement = None, commands = [("capture", Map)])]
 pub fn view_capture(style: Style, on_captured: CustomEvent, children: Children) {}
 
-/// 生成される Host 起動処理（Web・desktop）から参照される要素スキーマ。
+/// Element schema referenced by the generated Host bootstrap code (Web, desktop).
 #[doc(hidden)]
 pub fn __whisker_element_module_definition() -> whisker::ElementModuleDefinition {
     whisker::ElementModuleDefinition::new(

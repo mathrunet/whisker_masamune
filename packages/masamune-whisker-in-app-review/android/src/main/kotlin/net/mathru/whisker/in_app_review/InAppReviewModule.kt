@@ -1,4 +1,4 @@
-// アプリ内レビュー（Google Play In-App Review）。使えなければストアのページを開く。
+// In-app review (Google Play In-App Review). Opens the store page if unavailable.
 
 package net.mathru.whisker.in_app_review
 
@@ -15,7 +15,7 @@ class InAppReviewModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("InAppReview")
 
-        // requestReview({ storeUrl }) -> アプリ内で依頼できたら true、ストアを開いたら false
+        // requestReview({ storeUrl }) -> true if requested in-app, false if the store was opened
         AsyncFunction("requestReview") { args, promise ->
             val activity = appContext.currentActivity
             if (activity == null) {

@@ -1,5 +1,5 @@
-// 子要素ごと画面を PNG 画像にする入れ物。コマンド capture({ fileName, heightDp? }) でキャッシュに保存し、
-// captured イベント（{ path } か { error }）を送る。
+// Container that renders the screen, including its children, as a PNG image. The capture({ fileName, heightDp? }) command saves it to the cache
+// and emits a captured event ({ path } or { error }).
 
 package net.mathru.whisker.view_capture
 
@@ -40,8 +40,8 @@ class CaptureView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         val requestedHeightDp = map["heightDp"]?.asDouble()
         post {
             try {
-                // Whisker は背景と子要素をネイティブ部品の親 HostNode に配置する。
-                // この CaptureView 自体を描くと、空の FrameLayout だけが撮影される。
+                // Whisker places the background and children in the native component's parent HostNode.
+                // Drawing this CaptureView itself would capture only an empty FrameLayout.
                 val target = parent as? WhiskerContainerView
                     ?: throw IllegalStateException("capture host is not attached")
                 check(target.isLaidOut && target.width > 0 && target.height > 0) {

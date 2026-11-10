@@ -1,9 +1,9 @@
-// 同梱フォントを whisker の Text から名前で使えるようにする。
+// Makes bundled fonts available by name from whisker's Text.
 //
-// whisker の Android Host は `Typeface.create(familyName, NORMAL)` でフォントを解決する
-// （rs.whisker.runtime.resolveWhiskerTypeface）。これはシステムフォント表
-// `Typeface.sSystemFontMap` を引くだけなので、起動時にフォントをこの表へ登録すれば
-// `font_family("名前")` で描画・計測の両方に使われる。
+// whisker's Android Host resolves fonts with `Typeface.create(familyName, NORMAL)`
+// (rs.whisker.runtime.resolveWhiskerTypeface). This only looks up the system font table
+// `Typeface.sSystemFontMap`, so fonts registered in this table at startup are used by
+// `font_family("Name")` for both rendering and measurement.
 
 package net.mathru.whisker.fonts
 
@@ -27,7 +27,7 @@ class FontsModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("Fonts")
 
-        // register({ families: [{ family, files: [{ path, weights }] }] }) -> 登録できたファミリー名の配列
+        // register({ families: [{ family, files: [{ path, weights }] }] }) -> array of registered family names
         Function("register") { args ->
             try {
                 Bridge.ok(Fonts.register(Bridge.args(args)))
@@ -99,7 +99,7 @@ internal object Fonts {
             val family = builder?.build() ?: return null
             return Typeface.CustomFallbackBuilder(family).build()
         }
-        // API 28 以下は 1 ファイルだけ使う（標準ウェイト 400 を含むファイルを優先）。
+        // API 28 and below use only one file (preferring the file that includes the regular weight 400).
         val path = files.firstOrNull { 400 in it.second }?.first ?: files.first().first
         return if (path.startsWith(ASSET_PREFIX)) {
             Typeface.createFromAsset(context.assets, path.removePrefix(ASSET_PREFIX))
@@ -108,7 +108,7 @@ internal object Fonts {
         }
     }
 
-    /** whisker-asset の URI（`file:///android_asset/…`）かファイルパスを読む。 */
+    /** Reads a whisker-asset URI (`file:///android_asset/…`) or a file path. */
     private fun read(context: Context, path: String): ByteBuffer {
         val bytes = if (path.startsWith(ASSET_PREFIX)) {
             context.assets.open(path.removePrefix(ASSET_PREFIX)).use { it.readBytes() }
@@ -128,7 +128,7 @@ internal object Fonts {
         val current = field.get(null) as Map<String, Typeface>
         if (current is MutableMap<String, Typeface>) {
             try {
-                // 変更できる Map かを確かめる（読み取り専用なら差し替える）。
+                // Check whether the Map is mutable (replace it if it is read-only).
                 current.putAll(emptyMap())
                 return current
             } catch (_: UnsupportedOperationException) {

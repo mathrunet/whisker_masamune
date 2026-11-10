@@ -1,5 +1,5 @@
-// Google サインイン。Flutter 版（masamune_auth_google_firebase）と同じく、Firebase Auth の OAuthProvider（Web 画面）でサインインする。
-// 匿名ユーザーへの紐付け（link）も同じ画面で行う。
+// Google sign-in. Like the Flutter version (masamune_auth_google_firebase), signs in with Firebase Auth's OAuthProvider (web screen).
+// Linking to an anonymous user (link) uses the same screen.
 
 package net.mathru.whisker.google_sign_in
 
@@ -18,7 +18,7 @@ class GoogleSignInModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("GoogleSignIn")
 
-        // signIn({ scopes? }) -> { uid, isNewUser } / キャンセル時は "cancelled" で reject
+        // signIn({ scopes? }) -> { uid, isNewUser } / rejects with "cancelled" on cancel
         AsyncFunction("signIn") { args, promise ->
             val activity: Activity? = appContext.currentActivity
             if (activity == null) {
@@ -30,8 +30,8 @@ class GoogleSignInModule : Module() {
             complete(task, promise)
         }
 
-        // link({ scopes? }) -> { uid, isNewUser } — 今のユーザーに Google を紐付ける。
-        // 別ユーザーとして登録済みなら "already-registered"、キャンセル時は "cancelled" で reject。
+        // link({ scopes? }) -> { uid, isNewUser } — links Google to the current user.
+        // Rejects with "already-registered" if the account belongs to another user, or "cancelled" on cancel.
         AsyncFunction("link") { args, promise ->
             val activity: Activity? = appContext.currentActivity
             val user = FirebaseAuth.getInstance().currentUser

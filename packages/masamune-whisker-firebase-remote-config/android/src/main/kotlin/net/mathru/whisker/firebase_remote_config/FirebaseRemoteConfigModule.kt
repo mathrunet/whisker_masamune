@@ -1,4 +1,4 @@
-// Firebase Remote Config。取得して有効化し、全キーの値を文字列で返す。
+// Firebase Remote Config. Fetches and activates, then returns the values of all keys as strings.
 
 package net.mathru.whisker.firebase_remote_config
 
@@ -15,7 +15,7 @@ class FirebaseRemoteConfigModule : Module() {
         Name("FirebaseRemoteConfig")
 
         // fetchAndActivate({ fetchTimeoutSeconds, minimumFetchIntervalSeconds }) -> { key: stringValue }
-        // 取得に失敗しても、キャッシュ済みか既定の値を返す。
+        // Even if the fetch fails, returns the cached or default values.
         AsyncFunction("fetchAndActivate") { args, promise ->
             try {
                 val json = Bridge.args(args)
@@ -37,7 +37,7 @@ class FirebaseRemoteConfigModule : Module() {
             }
         }
 
-        // values() -> 有効になっている値（取得はしない）
+        // values() -> currently active values (does not fetch)
         Function("values") { _ ->
             try {
                 Bridge.ok(FirebaseRemoteConfig.getInstance().all.mapValues { it.value.asString() })

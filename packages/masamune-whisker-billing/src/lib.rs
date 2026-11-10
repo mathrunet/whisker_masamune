@@ -1,4 +1,4 @@
-//! アプリ内課金（Google Play Billing。定期購読の商品取得・購入・購入履歴・承認）。
+//! In-app purchases (Google Play Billing: subscription product lookup, purchase, purchase history and acknowledgement).
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
@@ -61,7 +61,7 @@ pub struct Purchase {
     pub purchase_token: String,
     #[serde(default)]
     pub order_id: Option<String>,
-    /// 0: 不明, 1: 購入済み, 2: 保留中。
+    /// 0: unknown, 1: purchased, 2: pending.
     #[serde(default)]
     pub purchase_state: i64,
     #[serde(default)]
@@ -79,7 +79,7 @@ pub struct PurchasesUpdate {
     pub purchases: Vec<Purchase>,
 }
 
-/// BillingClient のレスポンスコード。
+/// BillingClient response codes.
 pub const OK: i64 = 0;
 pub const USER_CANCELED: i64 = 1;
 pub const ITEM_ALREADY_OWNED: i64 = 7;
@@ -94,7 +94,7 @@ pub async fn query_products(ids: &[&str]) -> NativeResult<Vec<ProductDetails>> {
         .await
 }
 
-/// 購入画面を出す。結果は `on_purchases` に届く。戻り値は起動結果のレスポンスコード。
+/// Shows the purchase screen. The result is delivered to `on_purchases`. Returns the launch response code.
 pub async fn purchase(
     product_id: &str,
     offer_token: Option<&str>,
@@ -122,7 +122,7 @@ pub async fn acknowledge(purchase_token: &str) -> NativeResult<i64> {
         .await
 }
 
-/// 購入結果の通知を受け取る。
+/// Receives purchase result notifications.
 pub fn on_purchases(handler: impl Fn(PurchasesUpdate) + 'static) -> Subscription {
     module().subscribe("purchases", handler)
 }

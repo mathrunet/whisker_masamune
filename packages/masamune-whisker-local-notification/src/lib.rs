@@ -1,7 +1,7 @@
-//! 毎日決まった時刻のローカル通知。
+//! Daily local notifications at a fixed time.
 //!
-//! 予約は Host 側に保存され、端末の再起動・アプリの更新後も入れ直される。
-//! 最初に [`configure`] で通知チャンネルと小さいアイコンを設定する。
+//! Schedules are persisted on the host and re-armed after device reboots and app updates.
+//! Call [`configure`] first to set the notification channel and small icon.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -12,17 +12,17 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "LocalNotification")
 }
 
-/// 通知チャンネルと見た目の設定。
+/// Notification channel and appearance settings.
 #[derive(Debug, Clone, Default)]
 pub struct NotificationConfig<'a> {
     pub channel_id: &'a str,
     pub channel_name: &'a str,
     pub channel_description: &'a str,
-    /// 小さいアイコン（`whisker_asset::resolve` したパス）。`None` ならアプリのアイコン。
+    /// Small icon (a path resolved with `whisker_asset::resolve`). `None` uses the app icon.
     pub small_icon: Option<String>,
 }
 
-/// 保存済みの予約。
+/// A saved schedule.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Schedule {
     pub id: String,
@@ -34,7 +34,7 @@ pub struct Schedule {
     pub text: String,
 }
 
-/// 通知チャンネルと小さいアイコンを設定する（起動時に 1 回）。
+/// Sets the notification channel and small icon (once at startup).
 pub fn configure(config: &NotificationConfig<'_>) -> NativeResult<bool> {
     module().call(
         "configure",
@@ -47,19 +47,19 @@ pub fn configure(config: &NotificationConfig<'_>) -> NativeResult<bool> {
     )
 }
 
-/// 通知が許可されているか（アプリ全体とチャンネル）。
+/// Whether notifications are allowed (for both the app and the channel).
 pub fn authorized() -> bool {
     module()
         .call::<_, String>("status", &json!({}))
         .is_ok_and(|s| s == "authorized")
 }
 
-/// 通知の許可を求める。許可されたら `true`。
+/// Requests notification permission. Returns `true` if granted.
 pub async fn request_permission() -> NativeResult<bool> {
     module().call_async("requestPermission", &json!({})).await
 }
 
-/// 毎日 `hour:minute` の通知を予約する（同じ ID は置き換え）。次の通知の時刻（UTC ミリ秒）を返す。
+/// Schedules a daily notification at `hour:minute` (replacing any with the same ID). Returns the next fire time (UTC milliseconds).
 pub fn schedule_daily(
     id: &str,
     hour: u32,
@@ -73,12 +73,12 @@ pub fn schedule_daily(
     )
 }
 
-/// 保存済みの予約。
+/// Returns the saved schedule.
 pub fn schedule(id: &str) -> NativeResult<Option<Schedule>> {
     module().call("schedule", &json!({ "id": id }))
 }
 
-/// 保存済みの予約をすべて入れ直す（起動時）。
+/// Re-arms all saved schedules (at startup).
 pub fn rearm() -> NativeResult<bool> {
     module().call("rearm", &json!({}))
 }
@@ -91,7 +91,7 @@ pub fn cancel_all() -> NativeResult<bool> {
     module().call("cancelAll", &json!({}))
 }
 
-/// このアプリの通知設定画面を開く。
+/// Opens this app's notification settings screen.
 pub fn open_settings() -> NativeResult<bool> {
     module().call("openSettings", &json!({}))
 }

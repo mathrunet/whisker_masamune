@@ -1,4 +1,4 @@
-// masamune-whisker-apple-sign-in の Android 実装。whisker-build がアプリの settings.gradle.kts にサブプロジェクトとして組み込む。
+// Android implementation of masamune-whisker-apple-sign-in. whisker-build includes it in the app's settings.gradle.kts as a subproject.
 
 plugins {
     id("com.android.library")
@@ -20,7 +20,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        // Firebase / Play Services の新しい SDK は Kotlin 2.3 のメタデータを含むため。
+        // Newer Firebase / Play Services SDKs ship Kotlin 2.3 metadata.
         freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 

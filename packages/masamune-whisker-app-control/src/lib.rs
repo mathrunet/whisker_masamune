@@ -1,4 +1,4 @@
-//! URL を外部アプリ（ブラウザ・ストア）で開く、アプリを閉じる。
+//! Opens URLs in external apps (browser, store) and closes the app.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -8,12 +8,12 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "AppControl")
 }
 
-/// URL を外部アプリで開く。対応するアプリが無ければ `false`。
+/// Opens a URL in an external app. Returns `false` if no app can handle it.
 pub fn open_url(url: &str) -> NativeResult<bool> {
     module().call("openUrl", &json!({ "url": url }))
 }
 
-/// アプリを閉じる。
+/// Closes the app.
 pub fn exit_app() -> NativeResult<bool> {
     module().call("exitApp", &json!({}))
 }

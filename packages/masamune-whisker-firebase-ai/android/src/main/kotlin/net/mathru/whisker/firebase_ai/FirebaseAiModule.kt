@@ -1,7 +1,7 @@
-// Firebase AI Logic（Gemini Developer API）。生成・逐次生成・関数呼び出しの 1 往復を行う。
+// Firebase AI Logic (Gemini Developer API). Performs one round trip of generation, streaming, or function calling.
 //
-// 会話の履歴と関数の実行は呼び出し側（Rust）が持ち、ここは 1 回のリクエストを SDK で送るだけにする。
-// リクエスト・レスポンスは Gemini の REST に近い JSON で受け渡す。
+// The caller (Rust) owns the conversation history and function execution; this module only sends a single request through the SDK.
+// Requests and responses are passed as JSON close to the Gemini REST API.
 //
 // request: {
 //   model, systemInstruction?: string,
@@ -14,7 +14,7 @@
 //     | { functionResponse: { name, response, id? } }
 // Schema: { type: "string" | "integer" | "number" | "boolean" | "array" | "object", description?, nullable?,
 //           enum?, items?, properties?, optionalProperties? }
-// App Check が有効なら SDK がトークンを自動で付ける。
+// When App Check is enabled, the SDK attaches the token automatically.
 
 package net.mathru.whisker.firebase_ai
 
@@ -71,8 +71,8 @@ class FirebaseAiModule : Module() {
             }
         }
 
-        // stream({ requestId, request }) — 断片ごとに "chunk"（{ requestId, parts, usage, finishReason }）、
-        // 最後に { requestId, done: true }、失敗は { requestId, error } を送る。
+        // stream({ requestId, request }) — sends a "chunk" event ({ requestId, parts, usage, finishReason }) per chunk,
+        // then { requestId, done: true } at the end, or { requestId, error } on failure.
         Function("stream") { args ->
             try {
                 val json = Bridge.args(args)

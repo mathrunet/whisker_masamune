@@ -1,8 +1,8 @@
-//! Firebase AI Logic（Gemini Developer API）。
+//! Firebase AI Logic (Gemini Developer API).
 //!
-//! 1 回のリクエスト（生成・逐次生成）だけを Host の SDK で送る。会話の履歴・関数の実行・
-//! 関数呼び出しの繰り返しは呼び出し側が持つ。型は Gemini の REST に近い JSON で、
-//! 関数呼び出しの `thought_signature` は受け取った値をそのまま次のリクエストに返す。
+//! Sends a single request (generate or stream) through the host SDK. The caller owns the conversation
+//! history, function execution, and the function-calling loop. Types are JSON close to the Gemini REST API;
+//! pass a function call's `thought_signature` back unchanged in the next request.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -17,7 +17,7 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "FirebaseAi")
 }
 
-/// 会話の 1 発言。`role` は `user` か `model`。
+/// One turn in a conversation. `role` is `user` or `model`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Content {
     pub role: String,
@@ -39,7 +39,7 @@ impl Content {
         }
     }
 
-    /// 本文（思考を除くテキスト）をつなげたもの。
+    /// The concatenated body text (excluding thoughts).
     pub fn text(&self) -> String {
         self.parts
             .iter()
@@ -49,7 +49,7 @@ impl Content {
     }
 }
 
-/// 発言の一部（テキスト・関数呼び出し・関数の結果のどれか 1 つ）。
+/// Part of a turn: exactly one of text, a function call, or a function response.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Part {
@@ -106,7 +106,7 @@ pub struct FunctionResponse {
     pub id: Option<String>,
 }
 
-/// 引数・戻り値の型。
+/// Type of a parameter or return value.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Schema {
@@ -167,7 +167,7 @@ impl Schema {
     }
 }
 
-/// モデルに公開する関数。`parameters` はすべて必須（`optional_parameters` に入れたものを除く）。
+/// A function exposed to the model. All `parameters` are required except those listed in `optional_parameters`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionDeclaration {
@@ -197,7 +197,7 @@ impl FunctionDeclaration {
     }
 }
 
-/// 関数を呼ばせるか。
+/// Whether the model may call functions.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FunctionCallingMode {
@@ -218,11 +218,11 @@ pub struct GenerationConfig {
     pub response_mime_type: Option<String>,
 }
 
-/// 1 回のリクエスト。
+/// A single request.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateRequest {
-    /// モデル名（例: `gemini-3.5-flash-lite`）。
+    /// Model name (e.g. `gemini-3.5-flash-lite`).
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<String>,
@@ -234,7 +234,7 @@ pub struct GenerateRequest {
     pub generation_config: Option<GenerationConfig>,
 }
 
-/// トークン数。
+/// Token counts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Usage {
@@ -244,7 +244,7 @@ pub struct Usage {
     pub candidates_token_count: u64,
 }
 
-/// レスポンス（逐次生成ではその断片）。
+/// A response (or one chunk of it when streaming).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateResponse {
@@ -262,7 +262,7 @@ impl GenerateResponse {
     }
 }
 
-/// 生成する（逐次ではなく、全体が揃ってから返る）。
+/// Generates content (non-streaming; returns once the full response is ready).
 pub async fn generate(request: &GenerateRequest) -> NativeResult<GenerateResponse> {
     module()
         .call_async("generate", &json!({ "request": request }))
@@ -283,9 +283,9 @@ struct ChunkEvent {
 
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
-/// 逐次生成する。断片ごとに `on_chunk` が呼ばれ、最後まで届くと `Ok` で返る。
+/// Generates content as a stream. `on_chunk` is called for each chunk; returns `Ok` once the stream completes.
 ///
-/// 返る前に Future を破棄すると、Host 側の生成も止める。
+/// Dropping the future before it returns also stops generation on the host.
 pub async fn stream(
     request: &GenerateRequest,
     mut on_chunk: impl FnMut(GenerateResponse),
@@ -322,7 +322,7 @@ pub async fn stream(
     Err(NativeError("native module unavailable".into()))
 }
 
-/// 途中で破棄されたら Host 側の生成を止める。
+/// Stops generation on the host if dropped midway.
 struct CancelGuard {
     request_id: String,
     finished: bool,

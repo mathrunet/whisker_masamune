@@ -1,4 +1,4 @@
-//! 端末の言語・画面サイズ・タイムゾーン・アプリのバージョン。
+//! Device language, screen size, time zone, and app version.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
@@ -57,7 +57,7 @@ pub fn info() -> NativeResult<DeviceInfo> {
     module().call("info", &serde_json::json!({}))
 }
 
-/// 画面（アプリのウィンドウ）の大きさ。
+/// Size of the screen (the app window).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScreenMetrics {
@@ -69,7 +69,7 @@ pub struct ScreenMetrics {
     pub density: f64,
 }
 
-/// 画面の大きさの変化（回転・マルチウィンドウ）を受け取る。購読直後にも現在値が届く。
+/// Receives screen size changes (rotation, multi-window). The current value is also delivered right after subscribing.
 pub fn on_metrics_changed(handler: impl Fn(ScreenMetrics) + 'static) -> Subscription {
     module().subscribe("metricsChanged", handler)
 }

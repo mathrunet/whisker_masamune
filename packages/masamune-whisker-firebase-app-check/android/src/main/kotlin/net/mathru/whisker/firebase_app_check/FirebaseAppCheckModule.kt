@@ -1,4 +1,4 @@
-// Firebase App Check。release は Play Integrity、debug ビルドは debug provider を使う。
+// Firebase App Check. Release builds use Play Integrity; debug builds use the debug provider.
 
 package net.mathru.whisker.firebase_app_check
 
@@ -20,7 +20,7 @@ class FirebaseAppCheckModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("FirebaseAppCheck")
 
-        // activate({ debugToken? }) — 2 回目以降は何もしない。
+        // activate({ debugToken? }) — no-op after the first call.
         Function("activate") { args ->
             try {
                 activate(Bridge.args(args).optString("debugToken", ""))
@@ -30,7 +30,7 @@ class FirebaseAppCheckModule : Module() {
             }
         }
 
-        // token({ forceRefresh }) -> トークン文字列
+        // token({ forceRefresh }) -> token string
         AsyncFunction("token") { args, promise ->
             try {
                 val force = Bridge.args(args).optBoolean("forceRefresh", false)
@@ -50,7 +50,7 @@ class FirebaseAppCheckModule : Module() {
         val appCheck = FirebaseAppCheck.getInstance()
         if (debuggable) {
             if (debugToken.isNotBlank()) {
-                // DebugAppCheckProviderFactory は SharedPreferences の固定トークンを使う。
+                // DebugAppCheckProviderFactory uses the fixed token stored in SharedPreferences.
                 context.getSharedPreferences(
                     "com.google.firebase.appcheck.debug.store.${FirebaseApp.getInstance().persistenceKey}",
                     Context.MODE_PRIVATE,

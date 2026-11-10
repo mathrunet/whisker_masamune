@@ -1,10 +1,10 @@
-// Cloud Firestore（既定のデータベース "(default)" と名前付きデータベース）の読み書きと監視。
+// Cloud Firestore reads, writes, and listeners (the default "(default)" database and named databases).
 //
-// クエリは { database, collection, collectionGroup, filters: [{ field, op, value }], orderBy: [{ field, descending }],
-// limit, limitToLast, startAt, startAfter, endAt, endBefore } の JSON。
-// ドキュメントは JSON 化できる値に変換し、ドキュメント ID を "@uid"、パスを "@path" キーに入れて返す。
-// 読み取りでは Timestamp はミリ秒、GeoPoint は { latitude, longitude }、DocumentReference はパス文字列。
-// 書き込み・条件の値はタグ付きオブジェクトで型を指定できる:
+// A query is JSON: { database, collection, collectionGroup, filters: [{ field, op, value }], orderBy: [{ field, descending }],
+// limit, limitToLast, startAt, startAfter, endAt, endBefore }.
+// Documents are converted to JSON-compatible values, with the document ID under "@uid" and the path under "@path".
+// On read, Timestamp becomes milliseconds, GeoPoint becomes { latitude, longitude }, and DocumentReference becomes a path string.
+// Values in writes and filters can specify their type with tagged objects:
 //   { "@timestamp": ms } / { "@geo": { latitude, longitude } } / { "@ref": "path" } /
 //   { "@serverTimestamp": true } / { "@increment": n } / { "@arrayUnion": [...] } / { "@arrayRemove": [...] } /
 //   { "@delete": true }
@@ -43,7 +43,7 @@ class FirebaseFirestoreDbModule : Module() {
         Name("FirebaseFirestoreDb")
         Events("snapshot")
 
-        // configure({ database, persistence, cacheSizeBytes }) — 最初に使う前に呼ぶ（オフライン永続化の設定）。
+        // configure({ database, persistence, cacheSizeBytes }) — call before first use (configures offline persistence).
         Function("configure") { args ->
             try {
                 val json = Bridge.args(args)
@@ -64,7 +64,7 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // get({ query, source }) -> ドキュメントの配列
+        // get({ query, source }) -> array of documents
         AsyncFunction("get") { args, promise ->
             try {
                 val json = Bridge.args(args)
@@ -76,7 +76,7 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // count({ query }) -> 件数（サーバーで数える）
+        // count({ query }) -> number of documents (counted on the server)
         AsyncFunction("count") { args, promise ->
             try {
                 buildQuery(Bridge.args(args).getJSONObject("query")).count().get(AggregateSource.SERVER)
@@ -87,7 +87,7 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // getDoc({ database, path, source }) -> ドキュメント（無ければ null）
+        // getDoc({ database, path, source }) -> document (null if missing)
         AsyncFunction("getDoc") { args, promise ->
             try {
                 val json = Bridge.args(args)
@@ -112,7 +112,7 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // update({ database, path, data }) — 存在しなければ失敗する。
+        // update({ database, path, data }) — fails if the document does not exist.
         AsyncFunction("update") { args, promise ->
             try {
                 val json = Bridge.args(args)
@@ -135,7 +135,7 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // batch({ database, operations: [{ type: "set" | "update" | "delete", path, data, merge }] }) — まとめて書く。
+        // batch({ database, operations: [{ type: "set" | "update" | "delete", path, data, merge }] }) — writes all operations together in one batch.
         AsyncFunction("batch") { args, promise ->
             try {
                 val json = Bridge.args(args)
@@ -161,8 +161,8 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // listen({ listenerId, query }) — 変更のたびに "snapshot" イベントを送る:
-        // { listenerId, documents, changes: [{ type, id, oldIndex, newIndex }], fromCache, hasPendingWrites } か { listenerId, error }
+        // listen({ listenerId, query }) — sends a "snapshot" event on every change:
+        // { listenerId, documents, changes: [{ type, id, oldIndex, newIndex }], fromCache, hasPendingWrites } or { listenerId, error }
         Function("listen") { args ->
             try {
                 val json = Bridge.args(args)
@@ -200,8 +200,8 @@ class FirebaseFirestoreDbModule : Module() {
             }
         }
 
-        // listenDoc({ listenerId, database, path }) — 変更のたびに "snapshot" イベントを送る:
-        // { listenerId, document（無ければ null）, exists, fromCache, hasPendingWrites } か { listenerId, error }
+        // listenDoc({ listenerId, database, path }) — sends a "snapshot" event on every change:
+        // { listenerId, document (null if missing), exists, fromCache, hasPendingWrites } or { listenerId, error }
         Function("listenDoc") { args ->
             try {
                 val json = Bridge.args(args)
@@ -316,7 +316,7 @@ class FirebaseFirestoreDbModule : Module() {
         else -> value
     }
 
-    /** タグ付きオブジェクト（{ "@timestamp": ms } など）を Firestore の型にする。タグでなければ null。 */
+    /** Converts a tagged object (e.g. { "@timestamp": ms }) to a Firestore type. Returns null if it is not a tag. */
     private fun tagged(json: JSONObject): Any? {
         if (json.length() != 1) return null
         val key = json.keys().next()

@@ -1,4 +1,4 @@
-// 画像の選択（写真ライブラリ・カメラ）。長辺を指定サイズ以下に縮小して PNG で保存する。
+// Image picking (photo library or camera). Scales the long side down to the given size and saves it as a PNG.
 
 package net.mathru.whisker.image_picker
 
@@ -20,7 +20,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
-/** マニフェストでの重複を避けるための専用クラス。 */
+/** Dedicated class to avoid duplicate entries in the manifest. */
 class ImagePickerFileProvider : FileProvider()
 
 @WhiskerModule
@@ -31,7 +31,7 @@ class ImagePickerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ImagePicker")
 
-        // pickImage({ source: "gallery" | "camera", maxSize }) -> { path } | null（キャンセル）
+        // pickImage({ source: "gallery" | "camera", maxSize }) -> { path } | null (cancelled)
         AsyncFunction("pickImage") { args, promise ->
             val json = Bridge.args(args)
             val activity = appContext.currentActivity as? ComponentActivity

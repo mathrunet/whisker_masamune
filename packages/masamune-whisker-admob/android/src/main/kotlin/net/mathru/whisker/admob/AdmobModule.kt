@@ -1,4 +1,4 @@
-// AdMob（バナーと全画面広告）。SDK は最初に広告を読み込むときに初期化する（Flutter 版と同じ）。
+// AdMob (banners and interstitial ads). The SDK is initialized when the first ad is loaded (same as the Flutter version).
 
 package net.mathru.whisker.admob
 
@@ -68,7 +68,7 @@ internal object AdmobSdk {
         }
     }
 
-    /** 画面幅に合わせたアンカー型アダプティブバナーの大きさ。 */
+    /** Size of an anchored adaptive banner sized to the screen width. */
     fun bannerSize(context: Context, widthDp: Int): AdSize =
         AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, widthDp)
 }
@@ -78,7 +78,7 @@ class AdmobModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("Admob")
 
-        // bannerHeight({ widthDp }) -> 高さ（dp）
+        // bannerHeight({ widthDp }) -> height (dp)
         Function("bannerHeight") { args ->
             try {
                 val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
@@ -89,7 +89,7 @@ class AdmobModule : Module() {
             }
         }
 
-        // showInterstitial({ adUnitId }) — 読み込んで表示し、閉じたら解決する。
+        // showInterstitial({ adUnitId }) — loads and shows the ad, resolving once it is closed.
         AsyncFunction("showInterstitial") { args, promise ->
             val activity = appContext.currentActivity
             if (activity == null) {
@@ -118,7 +118,7 @@ class AdmobModule : Module() {
                             }
 
                             override fun onAdFailedToLoad(error: LoadAdError) {
-                                // 在庫なし（no fill）は想定内として扱う。
+                                // Treat no fill as an expected outcome.
                                 Bridge.resolve(promise, false)
                             }
                         },

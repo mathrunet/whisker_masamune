@@ -1,31 +1,39 @@
-# whisker-router ローカルパッチ
+# whisker-router local patch
 
-crates.io の `whisker-router 0.14.3`（上流 `packages/whisker-router`、commit `09aa265d`）をコピーし、
-`whisker/Cargo.toml` の `[patch.crates-io]` で差し替えている。上流が同等の修正を出したら、このディレクトリと
-`[patch.crates-io]`・`[workspace] exclude` の記述を削除して crates.io 版に戻す。
+A copy of `whisker-router 0.14.3` from crates.io (upstream `packages/whisker-router`, commit `09aa265d`).
+Apps swap it in through `[patch.crates-io]` in the app's `Cargo.toml`:
 
-## 変更点
+```toml
+[patch.crates-io]
+whisker-router = { git = "https://github.com/mathrunet/whisker_masamune", tag = "..." }
+```
 
-### Stack 内のタブ切替でタブ全体が作り直される（`src/render/node.rs`）
+Once upstream ships an equivalent fix, remove the `[patch.crates-io]` entry (and any related `[workspace] exclude`
+entry) from the app's `Cargo.toml` to go back to the crates.io release.
 
-- 症状：`Stack { Route(layout) { Switch { … } } }` 構成でタブを切り替えると、外側の Stack が「replace」と判定し、
-  ボトムナビを含むレイアウト全体（全タブ）を作り直して、最上位画面の遷移（Android 既定の `slide_fade`）を再生する。
-  タブの状態保持（keep-alive）も失われる。
-- 原因：`reconcile_stack` が `StackWrapper::fingerprint != entry.state` で入れ替えを判定しており、`entry.state` に
-  中の Switch の選択や内側 Stack の履歴まで含まれていた。
-- 修正：`same_entry` を追加し、エントリ自身の識別子（Route は path・params・location、Stack/Switch は path）だけで
-  比べる。`navigation_changed`・`survivor_matches`・`needs_swap` の3か所を置き換えた。
-- 回帰テスト：`src/render/tests.rs` の `tab_switch_inside_stack_keeps_tabs_mounted`。
+## Changes
 
-### その他
+### Switching tabs inside a Stack rebuilds every tab (`src/render/node.rs`)
 
-- `Cargo.toml` の末尾に空の `[workspace]` を追加（このディレクトリ単体で `cargo test` するため）。
-- `Cargo.toml` から `[package.metadata.whisker.module.platforms.web]` を削除。crates.io のパッケージには `web/` が
-  含まれておらず、パス依存にすると whisker CLI がマニフェストの不在をエラーにするため（このアプリは Web をビルドしない）。
+- Symptom: with a `Stack { Route(layout) { Switch { … } } }` layout, switching tabs makes the outer Stack treat it as a
+  "replace", so it rebuilds the whole layout including the bottom navigation (every tab) and replays the top-level
+  screen transition (`slide_fade` by default on Android). Tab state (keep-alive) is lost as well.
+- Cause: `reconcile_stack` decided on a swap with `StackWrapper::fingerprint != entry.state`, and `entry.state` also
+  included the selection of the inner Switch and the history of inner Stacks.
+- Fix: added `same_entry`, which compares only the entry's own identity (path, params and location for a Route; path
+  for a Stack/Switch). It replaces the comparison in three places: `navigation_changed`, `survivor_matches` and
+  `needs_swap`.
+- Regression test: `tab_switch_inside_stack_keeps_tabs_mounted` in `src/render/tests.rs`.
 
-## テスト
+### Other
+
+- Added an empty `[workspace]` at the end of `Cargo.toml` so this directory can run `cargo test` on its own.
+- Removed `[package.metadata.whisker.module.platforms.web]` from `Cargo.toml`. The crates.io package does not include
+  `web/`, and as a path dependency the whisker CLI reports the missing manifest as an error (the web target is not
+  built).
+
+## Tests
 
 ```sh
-cd whisker/patches/whisker-router
-CARGO_TARGET_DIR=../../target/router-test cargo test --lib
+cd patches/whisker-router && cargo test --lib
 ```

@@ -1,4 +1,4 @@
-// 端末の言語・タイムゾーン・アプリ情報を返す。画面サイズは回転・分割画面などで変わるたびにイベントでも通知する。
+// Returns the device language, time zone, and app info. Screen size is also reported via events whenever it changes (rotation, split screen, etc.).
 
 package net.mathru.whisker.device_info
 
@@ -20,13 +20,13 @@ import java.util.TimeZone
 
 @WhiskerModule
 class DeviceInfoModule : Module() {
-    /** 画面サイズの監視。購読が無い間は null。 */
+    /** Screen size observer. `null` while there are no subscribers. */
     private var insetsRegistration: WhiskerInsetsDispatcher.Registration? = null
 
-    /** 構成変更の監視。購読が無い間は null。 */
+    /** Configuration change observer. `null` while there are no subscribers. */
     private var configurationCallbacks: ComponentCallbacks? = null
 
-    /** ダークモード・言語・向きなどの構成変更の監視。購読が無い間は null。 */
+    /** Observer for configuration changes such as dark mode, language, and orientation. `null` while there are no subscribers. */
     private var appearanceCallbacks: ComponentCallbacks? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -35,16 +35,17 @@ class DeviceInfoModule : Module() {
         Name("DeviceInfo")
         Events("metricsChanged", "configurationChanged")
 
-        // 回転・マルチウィンドウは MainActivity の configChanges で作り直さずに受けるため、
-        // 構成変更のたびに今のウィンドウサイズを送る。インセット経由でも送り、購読直後の現在値と
-        // それ以外の構成変更で Activity が作り直された場合も拾う（重複は Rust 側で捨てる）。
+        // Rotation and multi-window are handled via MainActivity's configChanges without recreating the
+        // Activity, so send the current window size on every configuration change. Also send it via insets
+        // to cover the current value right after subscribing and Activity recreation caused by other
+        // configuration changes (duplicates are dropped on the Rust side).
         OnStartObserving("metricsChanged") {
             if (insetsRegistration == null) {
                 insetsRegistration = WhiskerInsetsDispatcher.addListener { _ -> sendMetrics() }
             }
             if (configurationCallbacks == null) {
                 val callbacks = object : ComponentCallbacks {
-                    // ウィンドウの大きさが確定してから読むため、次のメインループで送る。
+                    // Send on the next main loop iteration so the window size is read after it is settled.
                     override fun onConfigurationChanged(newConfig: Configuration) {
                         mainHandler.post { sendMetrics() }
                     }
@@ -65,8 +66,8 @@ class DeviceInfoModule : Module() {
             configurationCallbacks = null
         }
 
-        // ダークモード・言語・向き・文字の大きさの変化。uiMode・locale を configChanges に含めると
-        // Activity が作り直されないため、ここで受けてアプリ側で反映する。購読直後にも現在値を送る。
+        // Changes to dark mode, language, orientation, and font scale. Including uiMode and locale in configChanges
+        // prevents Activity recreation, so receive them here and let the app apply them. The current value is also sent right after subscribing.
         OnStartObserving("configurationChanged") {
             if (appearanceCallbacks == null) {
                 val callbacks = object : ComponentCallbacks {
@@ -110,7 +111,7 @@ class DeviceInfoModule : Module() {
         sendEvent("configurationChanged", Bridge.event(size + configuration(config)))
     }
 
-    /** ダークモード・言語・向き・文字の大きさ。 */
+    /** Dark mode, language, orientation, and font scale. */
     private fun configuration(config: Configuration): Map<String, Any?> {
         val locales = config.locales
         val list = (0 until locales.size()).map { index ->
@@ -168,7 +169,7 @@ class DeviceInfoModule : Module() {
         )
     }
 
-    /** Activity のウィンドウ全体の大きさ（dp）。edge-to-edge のため WhiskerView の大きさと一致する。 */
+    /** Size of the entire Activity window (dp). Matches the WhiskerView size because the app is edge-to-edge. */
     private fun metrics(activity: Activity): Map<String, Any?> {
         val display = activity.resources.displayMetrics
         val density = display.density.takeIf { it > 0f } ?: 1f

@@ -1,5 +1,5 @@
-// Apple でサインイン。Android には OS の仕組みがないため、Firebase Auth の OAuthProvider（Web 画面）でサインインする。
-// 匿名ユーザーへの紐付け（link）も同じ画面で行う。
+// Sign in with Apple. Android has no OS-level support, so this signs in with Firebase Auth's OAuthProvider (web screen).
+// Linking to an anonymous user (link) uses the same screen.
 
 package net.mathru.whisker.apple_sign_in
 
@@ -18,7 +18,7 @@ class AppleSignInModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("AppleSignIn")
 
-        // signIn({ scopes? }) -> { uid, isNewUser } / キャンセル時は "cancelled" で reject
+        // signIn({ scopes? }) -> { uid, isNewUser } / rejects with "cancelled" on cancel
         AsyncFunction("signIn") { args, promise ->
             val activity: Activity? = appContext.currentActivity
             if (activity == null) {
@@ -30,8 +30,8 @@ class AppleSignInModule : Module() {
             complete(task, promise)
         }
 
-        // link({ scopes? }) -> { uid, isNewUser } — 今のユーザーに Apple を紐付ける。
-        // 別ユーザーとして登録済みなら "already-registered"、キャンセル時は "cancelled" で reject。
+        // link({ scopes? }) -> { uid, isNewUser } — links Apple to the current user.
+        // Rejects with "already-registered" if the account belongs to another user, or "cancelled" on cancel.
         AsyncFunction("link") { args, promise ->
             val activity: Activity? = appContext.currentActivity
             val user = FirebaseAuth.getInstance().currentUser

@@ -1,4 +1,4 @@
-//! 写真ライブラリ・カメラから画像を選び、長辺を指定サイズ以下に縮小した PNG として保存する。
+//! Picks an image from the photo library or camera and saves it as a PNG with the long side scaled down to the given size.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -19,7 +19,7 @@ pub struct PickedImage {
     pub height: u32,
 }
 
-/// 画像を選ぶ（`camera` が true ならカメラ）。長辺を `max_size` 以下に縮小した PNG のパス。キャンセルは `None`。
+/// Picks an image (from the camera if `camera` is true). Returns the path of a PNG whose long side is at most `max_size`, or `None` if cancelled.
 pub async fn pick_image(camera: bool, max_size: u32) -> NativeResult<Option<PickedImage>> {
     module()
         .call_async(

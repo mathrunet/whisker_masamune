@@ -1,4 +1,4 @@
-//! Google でサインイン（Firebase Auth の `google.com` プロバイダー）。Flutter 版と同じく Web 画面でサインインする。
+//! Sign in with Google (Firebase Auth `google.com` provider). Like the Flutter version, sign-in runs in a web screen.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -9,7 +9,7 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "GoogleSignIn")
 }
 
-/// サインインの結果。
+/// Result of a sign-in.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoogleSignInResult {
@@ -18,24 +18,24 @@ pub struct GoogleSignInResult {
     pub is_new_user: bool,
 }
 
-/// ユーザーが画面を閉じたか。
+/// Whether the user closed the screen.
 pub fn is_cancelled(error: &NativeError) -> bool {
     error.0 == "cancelled"
 }
 
-/// 別ユーザーとして登録済みのため紐付けられなかったか。
+/// Whether linking failed because the account is already registered to another user.
 pub fn is_already_registered(error: &NativeError) -> bool {
     error.0 == "already-registered"
 }
 
-/// Google でサインインし、Firebase Auth の現在のユーザーにする（scopes は email と profile）。
+/// Signs in with Google and makes it the current Firebase Auth user (scopes: email and profile).
 pub async fn sign_in() -> NativeResult<GoogleSignInResult> {
     module()
         .call_async("signIn", &json!({ "scopes": ["email", "profile"] }))
         .await
 }
 
-/// 今のユーザー（匿名など）に Google を紐付ける。uid とデータはそのまま引き継がれる。
+/// Links Google to the current user (e.g. anonymous). The uid and data are kept.
 pub async fn link() -> NativeResult<GoogleSignInResult> {
     module()
         .call_async("link", &json!({ "scopes": ["email", "profile"] }))

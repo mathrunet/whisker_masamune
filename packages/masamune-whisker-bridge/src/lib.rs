@@ -1,8 +1,8 @@
-//! masamune-whisker-* モジュール共通の受け渡し。
+//! Shared data exchange for the masamune-whisker-* modules.
 //!
-//! 各モジュールの Host 実装（Kotlin・Swift・Web）とは JSON 文字列でやり取りする。
-//! 引数は `[Str(json)]`、結果は `{"value": ...}` の JSON 文字列、失敗は `WhiskerValue::Error`。
-//! イベントのペイロードも JSON 文字列。
+//! Each module talks to its host implementation (Kotlin, Swift, Web) with JSON strings.
+//! Arguments are `[Str(json)]`, results are a `{"value": ...}` JSON string, and failures are `WhiskerValue::Error`.
+//! Event payloads are JSON strings as well.
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -10,7 +10,7 @@ use serde_json::Value;
 use whisker::PlatformModule;
 use whisker::WhiskerValue;
 
-/// ネイティブ呼び出しの失敗。
+/// A failed native call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeError(pub String);
 
@@ -24,16 +24,16 @@ impl std::error::Error for NativeError {}
 
 pub type NativeResult<T> = Result<T, NativeError>;
 
-/// 1 つの Host モジュールへの呼び出し口。
+/// Entry point for calls to a single host module.
 ///
-/// 名前は `<crate 名>:<モジュール名>`（KSP の `whisker.crateName` と Kotlin の `Name(...)`）。
+/// The name is `<crate name>:<module name>` (KSP's `whisker.crateName` and Kotlin's `Name(...)`).
 #[derive(Debug, Clone)]
 pub struct NativeModule {
     name: String,
 }
 
 impl NativeModule {
-    /// `crate_name` には呼び出し側 crate の `env!("CARGO_PKG_NAME")` を渡す。
+    /// Pass the calling crate's `env!("CARGO_PKG_NAME")` as `crate_name`.
     pub fn new(crate_name: &str, module_name: &str) -> Self {
         Self {
             name: format!("{crate_name}:{module_name}"),
@@ -44,7 +44,7 @@ impl NativeModule {
         PlatformModule::named(self.name.clone())
     }
 
-    /// 同期呼び出し（メインスレッドで即座に終わる処理だけに使う）。
+    /// Synchronous call (use only for work that finishes immediately on the main thread).
     pub fn call<A: Serialize, T: DeserializeOwned>(
         &self,
         method: &str,
@@ -54,7 +54,7 @@ impl NativeModule {
         decode_result(self.platform().invoke(method, args))
     }
 
-    /// 非同期呼び出し（Host 側は `AsyncFunction` で promise を解決する）。
+    /// Asynchronous call (the host resolves the promise in an `AsyncFunction`).
     pub async fn call_async<A: Serialize, T: DeserializeOwned>(
         &self,
         method: &str,
@@ -64,7 +64,7 @@ impl NativeModule {
         decode_result(self.platform().invoke_async(method, args).await)
     }
 
-    /// イベントを JSON として受け取る。戻り値を保持している間だけ通知される。
+    /// Receives events as JSON. Events are delivered only while the returned value is held.
     pub fn subscribe<T: DeserializeOwned + 'static>(
         &self,
         event: &str,
@@ -85,7 +85,7 @@ impl NativeModule {
     }
 }
 
-/// イベント購読。破棄すると購読が止まる。
+/// An event subscription. Dropping it stops the subscription.
 pub struct Subscription {
     _inner: Box<dyn std::any::Any>,
 }

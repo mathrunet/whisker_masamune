@@ -1,4 +1,4 @@
-// OS 標準の日付・時刻選択ダイアログ。
+// Native OS date and time picker dialogs.
 
 package net.mathru.whisker.date_picker
 
@@ -15,7 +15,7 @@ class DatePickerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("DatePicker")
 
-        // pickDate({ year, month(1-12), day, minMillis?, maxMillis? }) -> { year, month, day } | null（キャンセル）
+        // pickDate({ year, month(1-12), day, minMillis?, maxMillis? }) -> { year, month, day } | null (cancelled)
         AsyncFunction("pickDate") { args, promise ->
             val activity: Activity? = appContext.currentActivity
             if (activity == null) {

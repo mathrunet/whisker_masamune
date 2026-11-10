@@ -1,4 +1,4 @@
-// masamune-whisker-firebase-ai の Android 実装。whisker-build がアプリの settings.gradle.kts にサブプロジェクトとして組み込む。
+// Android implementation of masamune-whisker-firebase-ai. whisker-build includes it in the app's settings.gradle.kts as a subproject.
 
 plugins {
     id("com.android.library")
@@ -20,7 +20,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        // Firebase / Play Services の新しい SDK は Kotlin 2.3 のメタデータを含むため。
+        // Newer Firebase / Play Services SDKs ship Kotlin 2.3 metadata.
         freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 
@@ -41,7 +41,7 @@ dependencies {
     ksp("rs.whisker:ksp:0.1.21")
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-ai")
-    // firebase-ai の公開 API（関数呼び出しの引数）が使う型。firebase-ai が実行時に使う版と同じにする。
+    // Types used by the firebase-ai public API (function call arguments). Keep the version firebase-ai uses at runtime.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

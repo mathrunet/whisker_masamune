@@ -1,6 +1,6 @@
-//! AdMob（アダプティブバナーと全画面広告）。
+//! AdMob (adaptive banners and interstitial ads).
 //!
-//! App ID はアプリのマニフェスト（`com.google.android.gms.ads.APPLICATION_ID`）に設定する。
+//! Set the App ID in the app manifest (`com.google.android.gms.ads.APPLICATION_ID`).
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -12,21 +12,21 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "Admob")
 }
 
-/// 画面幅に合わせたアンカー型アダプティブバナーの高さ（dp）。
+/// Height (dp) of an anchored adaptive banner sized to the screen width.
 pub fn banner_height(width_dp: i32) -> NativeResult<i64> {
     module().call("bannerHeight", &json!({ "widthDp": width_dp }))
 }
 
-/// 全画面広告を読み込んで表示し、閉じたら返る。表示できたら `true`（在庫なしは `false`）。
+/// Loads and shows an interstitial ad, returning once it is closed. Returns `true` if shown (`false` on no fill).
 pub async fn show_interstitial(ad_unit_id: &str) -> NativeResult<bool> {
     module()
         .call_async("showInterstitial", &json!({ "adUnitId": ad_unit_id }))
         .await
 }
 
-/// バナー広告の要素。`width_dp` の幅で読み込み、`loaded` か `failed`（`{message}`）を送る。
+/// Banner ad element. Loads at a width of `width_dp` and emits `loaded` or `failed` (`{message}`).
 #[doc(hidden)]
-// whisker 0.16 の module_element は属性を文字列で渡すため、幅も文字列で受け渡す。
+// whisker 0.16's module_element passes attributes as strings, so the width is passed as a string too.
 #[whisker::module_element(name = "masamune-whisker-admob:Banner", measurement = None)]
 pub fn ad_banner(
     ad_unit_id: Signal<String>,
@@ -37,7 +37,7 @@ pub fn ad_banner(
 ) {
 }
 
-/// 生成される Host 起動処理（Web・desktop）から参照される要素スキーマ。
+/// Element schema referenced by the generated Host bootstrap code (Web, desktop).
 #[doc(hidden)]
 pub fn __whisker_element_module_definition() -> whisker::ElementModuleDefinition {
     whisker::ElementModuleDefinition::new(

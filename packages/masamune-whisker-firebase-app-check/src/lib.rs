@@ -1,6 +1,6 @@
-//! Firebase App Check。
+//! Firebase App Check.
 //!
-//! release ビルドは端末の証明（Android は Play Integrity）、debug ビルドは debug provider を使う。
+//! Release builds use device attestation (Play Integrity on Android); debug builds use the debug provider.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -10,7 +10,7 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "FirebaseAppCheck")
 }
 
-/// App Check を有効にする。debug ビルドで `debug_token` を渡すと、その固定トークンを使う。
+/// Activates App Check. In debug builds, passing `debug_token` uses that fixed token.
 pub fn activate(debug_token: Option<&str>) -> NativeResult<bool> {
     module().call(
         "activate",
@@ -18,7 +18,7 @@ pub fn activate(debug_token: Option<&str>) -> NativeResult<bool> {
     )
 }
 
-/// App Check トークン（`X-Firebase-AppCheck` ヘッダーに付ける値）。
+/// App Check token (the value for the `X-Firebase-AppCheck` header).
 pub async fn token(force_refresh: bool) -> NativeResult<String> {
     module()
         .call_async("token", &json!({ "forceRefresh": force_refresh }))

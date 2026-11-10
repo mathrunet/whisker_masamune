@@ -1,4 +1,4 @@
-//! Apple でサインイン（Firebase Auth の `apple.com` プロバイダー）。
+//! Sign in with Apple (Firebase Auth `apple.com` provider).
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -9,7 +9,7 @@ fn module() -> NativeModule {
     NativeModule::new(env!("CARGO_PKG_NAME"), "AppleSignIn")
 }
 
-/// サインインの結果。
+/// Result of a sign-in.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppleSignInResult {
@@ -18,24 +18,24 @@ pub struct AppleSignInResult {
     pub is_new_user: bool,
 }
 
-/// ユーザーが画面を閉じたか。
+/// Whether the user closed the screen.
 pub fn is_cancelled(error: &NativeError) -> bool {
     error.0 == "cancelled"
 }
 
-/// 別ユーザーとして登録済みのため紐付けられなかったか。
+/// Whether linking failed because the account is already registered to another user.
 pub fn is_already_registered(error: &NativeError) -> bool {
     error.0 == "already-registered"
 }
 
-/// Apple でサインインし、Firebase Auth の現在のユーザーにする（scopes は email と name）。
+/// Signs in with Apple and makes it the current Firebase Auth user (scopes: email and name).
 pub async fn sign_in() -> NativeResult<AppleSignInResult> {
     module()
         .call_async("signIn", &json!({ "scopes": ["email", "name"] }))
         .await
 }
 
-/// 今のユーザー（匿名など）に Apple を紐付ける。uid とデータはそのまま引き継がれる。
+/// Links Apple to the current user (e.g. anonymous). The uid and data are kept.
 pub async fn link() -> NativeResult<AppleSignInResult> {
     module()
         .call_async("link", &json!({ "scopes": ["email", "name"] }))

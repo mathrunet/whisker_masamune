@@ -1,6 +1,6 @@
 package net.mathru.whisker.admob
 
-/** ネイティブViewの再接続と広告読み込みの世代・再試行を管理する。 */
+/** Manages native View reattachment and ad load generations and retries. */
 internal class BannerLifecycle {
     var adUnitId = ""
         private set

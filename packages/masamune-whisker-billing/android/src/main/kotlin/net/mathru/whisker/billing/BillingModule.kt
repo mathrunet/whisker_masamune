@@ -1,4 +1,4 @@
-// Google Play Billing（定期購読）。購入結果は "purchases" イベントで Rust に返す。
+// Google Play Billing (subscriptions). Purchase results are sent to Rust via the "purchases" event.
 
 package net.mathru.whisker.billing
 
@@ -70,7 +70,7 @@ class BillingModule : Module() {
             }
         }
 
-        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> 起動結果のレスポンスコード
+        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> launch response code
         AsyncFunction("purchase") { args, promise ->
             val json = Bridge.args(args)
             val activity = appContext.currentActivity
@@ -110,7 +110,7 @@ class BillingModule : Module() {
             }
         }
 
-        // queryPurchases() -> 現在の定期購読
+        // queryPurchases() -> current subscriptions
         AsyncFunction("queryPurchases") { _, promise ->
             connect(promise) {
                 client!!.queryPurchasesAsync(
