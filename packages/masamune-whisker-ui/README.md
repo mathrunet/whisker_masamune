@@ -67,12 +67,13 @@ routes! {
 }
 ```
 
-Switching tabs inside a `Stack` needs the `whisker-router` fix shipped in this repository,
-otherwise the whole tab layout is recreated on every switch:
+Switching tabs inside a `Stack` needs the `whisker-router` fix in the
+[mathrunet/whisker](https://github.com/mathrunet/whisker) fork, otherwise the whole tab layout
+is recreated on every switch:
 
 ```toml
 [patch.crates-io]
-whisker-router = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.2.0" }
+whisker-router = { git = "https://github.com/mathrunet/whisker", branch = "main" }
 ```
 
 ## Dialogs and the busy indicator

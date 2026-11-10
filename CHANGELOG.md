@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0
 
 - Added `masamune-whisker-adapter`: `MasamuneAdapter` / `MasamuneAdapters` register plugin
   settings and startup work in one place (Masamune's `masamuneAdapters`). `install` prepares the
@@ -94,9 +94,6 @@
 - Whisker comes from the [mathrunet/whisker](https://github.com/mathrunet/whisker) fork `main`
   through `[patch.crates-io]`; `scripts/whisker-fork.sh` checks the lock and installs the
   matching CLI. Added `scripts/check-ios.sh` and an iOS CI job.
-
-## Unreleased
-
 - Added `masamune-whisker-logger`: flavor-aware `log` output (dev: Debug+, prod: Warn+)
   with `LoggerAdapter`s that receive records, `send` events and `report_error` errors at
   once, plus `ConsoleLoggerAdapter` and `RuntimeLoggerAdapter`.
