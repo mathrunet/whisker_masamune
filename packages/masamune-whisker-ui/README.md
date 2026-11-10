@@ -23,6 +23,9 @@ NavigationRail) will be added under `src/material/`, one file per widget family.
 Apps run edge-to-edge, so the scaffold reserves the safe area and the keyboard itself:
 the body shrinks when the keyboard opens, `bottom_sheet` rises with it, and
 `bottom_navigation_bar` stays behind it. Nested scaffolds do not reserve space twice.
+Safe areas take the color of the bar next to them: `AppBar` paints the top one with its own
+color, and the bottom one is painted with `bottom_navigation_bar_color` (default: the
+`BottomNavigationBar` background) or `bottom_sheet_color` (default: transparent).
 
 ```rust
 render! {

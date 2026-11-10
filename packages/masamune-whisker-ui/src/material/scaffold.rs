@@ -11,6 +11,10 @@
 //! Apps run edge-to-edge, so the OS never resizes the window. The keyboard height already
 //! includes the navigation bar, so the bottom safe area is not added while it is open.
 //!
+//! Safe areas take the color of the bar next to them: `AppBar` paints the top safe area with
+//! its own color, and the bottom safe area is painted with `bottom_navigation_bar_color` or
+//! `bottom_sheet_color`.
+//!
 //! Nested scaffolds (a screen inside a tab) do not reserve space their parent already used.
 
 use std::rc::Rc;
@@ -71,15 +75,24 @@ pub fn use_scaffold_insets() -> ScaffoldInsets {
 
 #[component]
 pub fn scaffold(
-    /// Top bar. The bar reserves the top safe area itself (`AppBar`).
+    /// Top bar. The bar reserves and paints the top safe area itself (`AppBar`).
     #[prop(default = Slot::default())]
     app_bar: Slot,
-    /// Area that rises with the keyboard.
+    /// Area that rises with the keyboard. Reserves the bottom safe area when there is no
+    /// `bottom_navigation_bar`.
     #[prop(default = Slot::default())]
     bottom_sheet: Slot,
+    /// Background of `bottom_sheet` and the safe area below it. Transparent shows
+    /// `background_color`.
+    #[prop(default = Color::rgba(0, 0, 0, 0.0))]
+    bottom_sheet_color: Color,
     /// Area that stays behind the keyboard (tab bars). Reserves the bottom safe area.
     #[prop(default = Slot::default())]
     bottom_navigation_bar: Slot,
+    /// Background of `bottom_navigation_bar` and the safe area below it. Pass the bar's own
+    /// background (the default matches `BottomNavigationBar`).
+    #[prop(default = palette().bar)]
+    bottom_navigation_bar_color: Color,
     /// Layer over the whole screen.
     #[prop(default = Slot::default())]
     overlay: Slot,
@@ -165,11 +178,13 @@ pub fn scaffold(
         column()
             .flex_shrink(0.0)
             .padding_bottom(px(if has_nav { 0.0 } else { free_bottom.get() }))
+            .background_color(bottom_sheet_color)
     });
     let nav_style = computed(move || {
         let nav = column()
             .flex_shrink(0.0)
-            .padding_bottom(px(parent.bottom.get()));
+            .padding_bottom(px(parent.bottom.get()))
+            .background_color(bottom_navigation_bar_color);
         if keyboard_visible.get() {
             nav.display(Display::None)
         } else {

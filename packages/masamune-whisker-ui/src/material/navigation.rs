@@ -31,7 +31,8 @@ impl BottomNavigationBarItem {
     }
 }
 
-/// Row of icon + label destinations. The safe area below it is reserved by [`Scaffold`].
+/// Row of icon + label destinations. The safe area below it is reserved by [`Scaffold`] and
+/// painted with its `bottom_navigation_bar_color` (pass the same color as `background`).
 #[component]
 pub fn bottom_navigation_bar(
     items: Vec<BottomNavigationBarItem>,
@@ -138,7 +139,13 @@ pub const TAB_FADE_MS: u32 = 220;
 /// open. Use it as the component of a `Route` that wraps a `Switch` of tab groups (see the
 /// crate README); the router patch in whisker_masamune keeps the tabs mounted.
 #[component]
-pub fn tab_scaffold(tabs: Vec<TabItem>, #[prop(default = TAB_FADE_MS)] fade_ms: u32) -> Element {
+pub fn tab_scaffold(
+    tabs: Vec<TabItem>,
+    #[prop(default = TAB_FADE_MS)] fade_ms: u32,
+    /// Background of the bar and the safe area below it.
+    #[prop(default = palette().bar)]
+    bar_color: Color,
+) -> Element {
     let nav = use_navigator();
     let pathname = use_pathname();
     let fade = AnimationController::new(AnimConfig::ease_out(fade_ms));
@@ -182,11 +189,11 @@ pub fn tab_scaffold(tabs: Vec<TabItem>, #[prop(default = TAB_FADE_MS)] fade_ms: 
     let bar = move || {
         let items = items.clone();
         render! {
-            BottomNavigationBar(items: items, selected: selected, on_tap: on_tap)
+            BottomNavigationBar(items: items, selected: selected, on_tap: on_tap, background: bar_color)
         }
     };
     render! {
-        Scaffold(safe_area_top: false, bottom_navigation_bar: bar) {
+        Scaffold(safe_area_top: false, bottom_navigation_bar: bar, bottom_navigation_bar_color: bar_color) {
             View(style: body_style) {
                 Outlet {}
             }
