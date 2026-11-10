@@ -26,6 +26,11 @@ chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["time", "rt", "macros"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 whisker-paths = "0.14"
+whisker-firebase = { version = "0.1", default-features = false }
+wiremock = "0.6"
 whisker-local-store = "0.14"
 tempfile = "3"
 masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.1.0" }
+masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.1.0" }
+masamune-whisker-workers = { path = "packages/masamune-whisker-workers", version = "0.1.0" }
+masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.1.0" }
