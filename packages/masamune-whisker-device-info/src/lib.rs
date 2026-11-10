@@ -9,7 +9,7 @@ fn module() -> NativeModule {
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceLocale {
     pub language: String,
@@ -42,6 +42,15 @@ pub struct DeviceInfo {
     pub height_dp: f64,
     #[serde(default)]
     pub density: f64,
+    /// System dark mode is on.
+    #[serde(default)]
+    pub night_mode: bool,
+    /// `"portrait"` or `"landscape"`.
+    #[serde(default)]
+    pub orientation: String,
+    /// System font scale (1.0 = default).
+    #[serde(default)]
+    pub font_scale: f64,
 }
 
 pub fn info() -> NativeResult<DeviceInfo> {
@@ -63,4 +72,33 @@ pub struct ScreenMetrics {
 /// 画面の大きさの変化（回転・マルチウィンドウ）を受け取る。購読直後にも現在値が届く。
 pub fn on_metrics_changed(handler: impl Fn(ScreenMetrics) + 'static) -> Subscription {
     module().subscribe("metricsChanged", handler)
+}
+
+/// Device configuration that can change while the app runs (dark mode, languages, orientation,
+/// font scale and window size).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceConfiguration {
+    #[serde(default)]
+    pub night_mode: bool,
+    #[serde(default)]
+    pub locales: Vec<DeviceLocale>,
+    /// `"portrait"` or `"landscape"`.
+    #[serde(default)]
+    pub orientation: String,
+    #[serde(default)]
+    pub font_scale: f64,
+    #[serde(default)]
+    pub width_dp: f64,
+    #[serde(default)]
+    pub height_dp: f64,
+    #[serde(default)]
+    pub density: f64,
+}
+
+/// Receives configuration changes (dark mode, languages, orientation, font scale). The current
+/// value is delivered right after subscribing. Requires `uiMode|locale` in the activity's
+/// `configChanges`, otherwise Android recreates the activity instead.
+pub fn on_configuration_changed(handler: impl Fn(DeviceConfiguration) + 'static) -> Subscription {
+    module().subscribe("configurationChanged", handler)
 }

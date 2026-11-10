@@ -1004,6 +1004,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-screen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "masamune-whisker-app-control",
+ "masamune-whisker-device-info",
+ "serde",
+ "whisker",
+ "whisker-plugin",
+]
+
+[[package]]
 name = "masamune-whisker-share"
 version = "0.1.0"
 dependencies = [

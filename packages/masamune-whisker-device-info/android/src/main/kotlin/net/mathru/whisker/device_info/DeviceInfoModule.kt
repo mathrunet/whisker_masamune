@@ -26,11 +26,14 @@ class DeviceInfoModule : Module() {
     /** 構成変更の監視。購読が無い間は null。 */
     private var configurationCallbacks: ComponentCallbacks? = null
 
+    /** ダークモード・言語・向きなどの構成変更の監視。購読が無い間は null。 */
+    private var appearanceCallbacks: ComponentCallbacks? = null
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun definition() = ModuleDefinition {
         Name("DeviceInfo")
-        Events("metricsChanged")
+        Events("metricsChanged", "configurationChanged")
 
         // 回転・マルチウィンドウは MainActivity の configChanges で作り直さずに受けるため、
         // 構成変更のたびに今のウィンドウサイズを送る。インセット経由でも送り、購読直後の現在値と
@@ -62,6 +65,30 @@ class DeviceInfoModule : Module() {
             configurationCallbacks = null
         }
 
+        // ダークモード・言語・向き・文字の大きさの変化。uiMode・locale を configChanges に含めると
+        // Activity が作り直されないため、ここで受けてアプリ側で反映する。購読直後にも現在値を送る。
+        OnStartObserving("configurationChanged") {
+            if (appearanceCallbacks == null) {
+                val callbacks = object : ComponentCallbacks {
+                    override fun onConfigurationChanged(newConfig: Configuration) {
+                        mainHandler.post { sendConfiguration(newConfig) }
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onLowMemory() {
+                    }
+                }
+                WhiskerApplication.appContext?.registerComponentCallbacks(callbacks)
+                appearanceCallbacks = callbacks
+            }
+            mainHandler.post { WhiskerApplication.appContext?.resources?.configuration?.let { sendConfiguration(it) } }
+        }
+
+        OnStopObserving("configurationChanged") {
+            appearanceCallbacks?.let { WhiskerApplication.appContext?.unregisterComponentCallbacks(it) }
+            appearanceCallbacks = null
+        }
+
         // info() -> { locales: [{language, country}], timezone, offsetMinutes, packageName, versionName, versionCode, sdkInt, debuggable }
         Function("info") { _ ->
             try {
@@ -75,6 +102,27 @@ class DeviceInfoModule : Module() {
     private fun sendMetrics() {
         val activity = appContext.currentActivity ?: return
         sendEvent("metricsChanged", Bridge.event(metrics(activity)))
+    }
+
+    private fun sendConfiguration(config: Configuration) {
+        val activity = appContext.currentActivity
+        val size = activity?.let { metrics(it) } ?: emptyMap()
+        sendEvent("configurationChanged", Bridge.event(size + configuration(config)))
+    }
+
+    /** ダークモード・言語・向き・文字の大きさ。 */
+    private fun configuration(config: Configuration): Map<String, Any?> {
+        val locales = config.locales
+        val list = (0 until locales.size()).map { index ->
+            val locale: Locale = locales.get(index)
+            mapOf("language" to locale.language, "country" to locale.country)
+        }
+        return mapOf(
+            "nightMode" to ((config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES),
+            "orientation" to if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait",
+            "fontScale" to config.fontScale.toDouble(),
+            "locales" to list,
+        )
     }
 
     private fun info(): Map<String, Any?> {
@@ -107,7 +155,8 @@ class DeviceInfoModule : Module() {
             "heightDp" to (metrics?.let { it.heightPixels / it.density } ?: 0f).toDouble(),
             "density" to (metrics?.density ?: 1f).toDouble(),
         )
-        return size + mapOf(
+        val appearance = context?.resources?.configuration?.let { configuration(it) } ?: emptyMap()
+        return size + appearance + mapOf(
             "locales" to list,
             "timezone" to zone.id,
             "offsetMinutes" to zone.getOffset(System.currentTimeMillis()) / 60000,
