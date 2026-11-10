@@ -29,8 +29,12 @@ whisker-paths = "0.14"
 whisker-firebase = { version = "0.1", default-features = false }
 wiremock = "0.6"
 whisker-local-store = "0.14"
+whisker-status-bar = "0.14"
 tempfile = "3"
 masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.1.0" }
 masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.1.0" }
 masamune-whisker-workers = { path = "packages/masamune-whisker-workers", version = "0.1.0" }
 masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.1.0" }
+masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.1.0" }
+masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.1.0" }
+masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.1.0" }

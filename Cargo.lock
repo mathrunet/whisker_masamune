@@ -827,6 +827,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-appearance"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "whisker",
+ "whisker-local-store",
+]
+
+[[package]]
 name = "masamune-whisker-apple-sign-in"
 version = "0.1.0"
 dependencies = [
@@ -2121,6 +2130,15 @@ dependencies = [
  "taffy",
  "whisker-protocol",
  "whisker-style",
+]
+
+[[package]]
+name = "whisker-local-store"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb2c90ff67b8e1f07e683c494ddb6b316dd933c05b55dbc1844c6052e124f009"
+dependencies = [
+ "whisker",
 ]
 
 [[package]]

@@ -1,0 +1,19 @@
+[package]
+name = "masamune-whisker-appearance"
+description = "Theme palettes, typography, language selection and app-wide rebuilds for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+log.workspace = true
+whisker-local-store.workspace = true
