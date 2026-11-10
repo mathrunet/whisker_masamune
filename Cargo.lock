@@ -1001,6 +1001,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-ui"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "masamune-whisker-appearance",
+ "whisker",
+ "whisker-icons",
+ "whisker-keyboard",
+ "whisker-router",
+ "whisker-safe-area",
+ "whisker-svg",
+]
+
+[[package]]
 name = "masamune-whisker-view-capture"
 version = "0.1.0"
 dependencies = [
@@ -1358,6 +1372,12 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rustc-hash"
@@ -2122,6 +2142,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "whisker-icons"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4096bdb4792b03d00522edd8414f834b225ddd3c52ce899c9f54e8e0bd2de81"
+dependencies = [
+ "whisker",
+ "whisker-svg",
+]
+
+[[package]]
+name = "whisker-keyboard"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a923a4357ed0aca876c8978f698c95602691b51de95aa6afe07757d1a55afa7a"
+dependencies = [
+ "whisker",
+]
+
+[[package]]
 name = "whisker-layout"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2193,6 +2232,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "whisker-router"
+version = "0.14.3"
+dependencies = [
+ "anyhow",
+ "serde",
+ "whisker",
+ "whisker-macros",
+ "whisker-plugin",
+]
+
+[[package]]
 name = "whisker-runtime"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2211,10 +2261,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "whisker-safe-area"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cee2d18ed808b7235ec18b2bd0757c883ed893c3800ba54b376bd84a6b2780d0"
+dependencies = [
+ "whisker",
+]
+
+[[package]]
 name = "whisker-style"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaea22ae107f0fb5e8bfb1ab98a49f275a164d74d5d39e0dae5d71b385a4d822"
+
+[[package]]
+name = "whisker-svg"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70cd8851aee41746544f45a71fa94cc2f12ab67f4a796642c353e8aeb5f6ec50"
+dependencies = [
+ "base64 0.22.1",
+ "roxmltree",
+ "whisker",
+]
 
 [[package]]
 name = "whisker-value"

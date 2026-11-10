@@ -1,0 +1,24 @@
+[package]
+name = "masamune-whisker-ui"
+description = "Material-style widgets for Whisker apps: Scaffold, AppBar, navigation bars, sheets, dialogs and buttons"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+whisker-router.workspace = true
+whisker-icons.workspace = true
+whisker-svg.workspace = true
+whisker-safe-area.workspace = true
+whisker-keyboard.workspace = true
+masamune-whisker-appearance.workspace = true
+log.workspace = true
