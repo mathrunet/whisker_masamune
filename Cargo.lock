@@ -942,6 +942,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-firestore"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "masamune-whisker-firebase-firestore-db",
+ "masamune-whisker-model",
+ "masamune-whisker-workers",
+ "serde_json",
+ "whisker",
+]
+
+[[package]]
 name = "masamune-whisker-fonts"
 version = "0.1.0"
 dependencies = [

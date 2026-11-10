@@ -1,0 +1,22 @@
+[package]
+name = "masamune-whisker-firestore"
+description = "Cloud Firestore reads and real-time listeners with an optional on-device libsql cache for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+serde_json.workspace = true
+log.workspace = true
+masamune-whisker-workers.workspace = true
+masamune-whisker-model.workspace = true
+masamune-whisker-firebase-firestore-db.workspace = true

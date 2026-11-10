@@ -205,6 +205,49 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
         }
     }
 
+    /// Current session number (see [`CachedStore::set_session`]).
+    pub fn session(&self) -> u64 {
+        self.generation.get()
+    }
+
+    /// Writes a row received outside [`CachedStore::load`] (for example from a real-time
+    /// listener) to the cache, or removes it when `row` is `None` or rejected by the filter.
+    /// Ignored when `session` is no longer current.
+    pub async fn write_cache(
+        &self,
+        session: u64,
+        database: &str,
+        table: &str,
+        id: &str,
+        row: Option<&Row>,
+    ) {
+        self.store(session, database, table, id, row).await;
+    }
+
+    /// Fresh cached rows of `table` matching `query`, as `(id, row)` pairs.
+    pub async fn cached_rows(
+        &self,
+        database: &str,
+        table: &str,
+        query: &Query,
+    ) -> Vec<(String, Row)> {
+        let Some(cache) = self.cache else {
+            return Vec::new();
+        };
+        cache
+            .query(
+                &self.options.scope,
+                &Self::collection(database, table),
+                query,
+            )
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|doc| self.fresh(doc.cached_at) && self.cacheable(table, &doc.data))
+            .map(|doc| (doc.id, doc.data))
+            .collect()
+    }
+
     /// Reads one row: from the cache unless `options.reload`, otherwise from the server (and
     /// caches the result).
     pub async fn load(
