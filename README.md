@@ -50,12 +50,16 @@ whisker-router = { git = "https://github.com/mathrunet/whisker_masamune", tag = 
 ### Developing against a local checkout
 
 Point the git dependencies at a local clone with a git-ignored `.cargo/config.toml` in the app
-(the same idea as `pubspec_overrides.yaml` in Flutter):
+(the same idea as `pubspec_overrides.yaml` in Flutter). Paths are relative to the directory
+that contains `.cargo/`:
 
 ```toml
 [patch."https://github.com/mathrunet/whisker_masamune"]
-masamune-whisker-billing = { path = "../../masamune/whisker_masamune/packages/masamune-whisker-billing" }
-whisker-router = { path = "../../masamune/whisker_masamune/patches/whisker-router" }
+masamune-whisker-billing = { path = "../whisker_masamune/packages/masamune-whisker-billing" }
+
+# A git `[patch]` cannot be patched again, so override the crates-io patch directly.
+[patch.crates-io]
+whisker-router = { path = "../whisker_masamune/patches/whisker-router" }
 ```
 
 While the override is active, `Cargo.lock` records the path sources. Remove the override and
