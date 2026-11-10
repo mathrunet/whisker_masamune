@@ -1,0 +1,48 @@
+[package]
+name = "masamune-whisker-ai-debugger"
+description = "Dev-only AI debugger overlay for Whisker apps: send instructions, screenshots, crashes and slow operations to SamuraiAI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+# `AiDebugPurchase::billing`: forced purchases through masamune-whisker-billing.
+billing = ["dep:masamune-whisker-billing"]
+# `AiDebugCamera::image_picker`: debug camera pictures through masamune-whisker-image-picker.
+image-picker = ["dep:masamune-whisker-image-picker"]
+
+[dependencies]
+whisker.workspace = true
+whisker-input.workspace = true
+whisker-image.workspace = true
+whisker-local-store.workspace = true
+whisker-safe-area.workspace = true
+masamune-whisker-logger.workspace = true
+masamune-whisker-workers.workspace = true
+masamune-whisker-view-capture.workspace = true
+masamune-whisker-device-info.workspace = true
+masamune-whisker-billing = { workspace = true, optional = true }
+masamune-whisker-image-picker = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+futures-channel.workspace = true
+reqwest.workspace = true
+base64.workspace = true
+regex.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
+wiremock.workspace = true

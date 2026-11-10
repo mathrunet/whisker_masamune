@@ -1,0 +1,190 @@
+//! Language selection: follow the system or pin one language, persisted across launches.
+//!
+//! The language table comes from the app (registered by [`crate::localize!`] or the YAML
+//! generator as `["en_US", "ja_JP", …]`); the first entry is the fallback. Generated `l()`
+//! functions read [`language_index`].
+
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use whisker_local_store::WhiskerLocalStore;
+
+/// Which language the app uses.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub enum LanguagePref {
+    /// The first system language the app supports.
+    #[default]
+    System,
+    /// A language code such as `"ja"` (or a full tag such as `"ja_JP"`).
+    Fixed(String),
+}
+
+impl LanguagePref {
+    fn encode(&self) -> String {
+        match self {
+            LanguagePref::System => "system".into(),
+            LanguagePref::Fixed(code) => code.clone(),
+        }
+    }
+
+    fn decode(value: &str) -> Self {
+        match value {
+            "" | "system" => LanguagePref::System,
+            code => LanguagePref::Fixed(code.to_owned()),
+        }
+    }
+}
+
+struct State {
+    languages: &'static [&'static str],
+    pref: LanguagePref,
+    system: Vec<String>,
+    storage_key: &'static str,
+}
+
+static STATE: RwLock<State> = RwLock::new(State {
+    languages: &["en_US"],
+    pref: LanguagePref::System,
+    system: Vec::new(),
+    storage_key: "masamune.appearance.language",
+});
+static CURRENT: AtomicUsize = AtomicUsize::new(0);
+
+fn read<R>(f: impl FnOnce(&State) -> R) -> R {
+    f(&STATE.read().unwrap_or_else(|e| e.into_inner()))
+}
+
+fn write<R>(f: impl FnOnce(&mut State) -> R) -> R {
+    f(&mut STATE.write().unwrap_or_else(|e| e.into_inner()))
+}
+
+fn code_of(tag: &str) -> &str {
+    tag.split(['_', '-']).next().unwrap_or(tag)
+}
+
+/// Index of `language` (a code like `"ja"` or a tag like `"ja_JP"`) in `languages`.
+pub fn index_of(languages: &[&str], language: &str) -> Option<usize> {
+    languages
+        .iter()
+        .position(|tag| tag.eq_ignore_ascii_case(language))
+        .or_else(|| {
+            let code = code_of(language);
+            languages
+                .iter()
+                .position(|tag| code_of(tag).eq_ignore_ascii_case(code))
+        })
+}
+
+fn resolve(state: &State) -> usize {
+    match &state.pref {
+        LanguagePref::Fixed(language) => index_of(state.languages, language),
+        LanguagePref::System => state
+            .system
+            .iter()
+            .find_map(|language| index_of(state.languages, language)),
+    }
+    .unwrap_or(0)
+}
+
+fn recompute() -> bool {
+    let index = read(resolve);
+    CURRENT.swap(index, Ordering::Relaxed) != index
+}
+
+/// Registers the supported languages (`["en_US", "ja_JP", …]`, fallback first).
+pub fn register_languages(languages: &'static [&'static str]) {
+    write(|state| state.languages = languages);
+    recompute();
+}
+
+/// Restores the saved preference and applies the system languages (codes or tags, most
+/// preferred first). Call once on the UI thread while preparing the app.
+pub fn init_locale(system_languages: &[String], storage_key: Option<&'static str>) {
+    write(|state| {
+        if let Some(key) = storage_key {
+            state.storage_key = key;
+        }
+        state.system = system_languages.to_vec();
+        state.pref = WhiskerLocalStore::load(state.storage_key.to_owned())
+            .ok()
+            .flatten()
+            .map(|value| LanguagePref::decode(&value))
+            .unwrap_or_default();
+    });
+    recompute();
+}
+
+/// Supported languages.
+pub fn languages() -> &'static [&'static str] {
+    read(|state| state.languages)
+}
+
+/// Index of the current language in [`languages`].
+pub fn language_index() -> usize {
+    CURRENT.load(Ordering::Relaxed)
+}
+
+/// Tag of the current language (`"ja_JP"`).
+pub fn language_tag() -> &'static str {
+    let languages = languages();
+    languages.get(language_index()).copied().unwrap_or("en_US")
+}
+
+/// Code of the current language (`"ja"`).
+pub fn language() -> &'static str {
+    code_of(language_tag())
+}
+
+/// The saved preference.
+pub fn language_pref() -> LanguagePref {
+    read(|state| state.pref.clone())
+}
+
+/// Selects and saves a preference. Returns whether the current language changed
+/// ([`crate::change_language`] also rebuilds the UI).
+pub fn set_language_pref(pref: LanguagePref) -> bool {
+    let key = write(|state| {
+        state.pref = pref.clone();
+        state.storage_key
+    });
+    if let Err(error) = WhiskerLocalStore::save(key.to_owned(), pref.encode()) {
+        log::warn!("language preference save failed: {error}");
+    }
+    recompute()
+}
+
+/// Reports the system languages after a configuration change. Returns whether the current
+/// language changed.
+pub fn set_system_languages(system_languages: &[String]) -> bool {
+    write(|state| state.system = system_languages.to_vec());
+    recompute()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LANGS: [&str; 3] = ["en_US", "ja_JP", "zh_CN"];
+
+    #[test]
+    fn resolves_languages() {
+        assert_eq!(index_of(&LANGS, "ja"), Some(1));
+        assert_eq!(index_of(&LANGS, "zh-Hans"), Some(2));
+        assert_eq!(index_of(&LANGS, "ja_JP"), Some(1));
+        assert_eq!(index_of(&LANGS, "fr"), None);
+        let state = State {
+            languages: &LANGS,
+            pref: LanguagePref::System,
+            system: vec!["fr".into(), "ja".into()],
+            storage_key: "",
+        };
+        assert_eq!(resolve(&state), 1);
+        let state = State {
+            pref: LanguagePref::Fixed("zh".into()),
+            ..state
+        };
+        assert_eq!(resolve(&state), 2);
+        assert_eq!(LanguagePref::decode("system"), LanguagePref::System);
+        assert_eq!(LanguagePref::decode("ja"), LanguagePref::Fixed("ja".into()));
+    }
+}

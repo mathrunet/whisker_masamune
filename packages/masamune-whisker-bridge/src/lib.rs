@@ -90,6 +90,16 @@ pub struct Subscription {
     _inner: Box<dyn std::any::Any>,
 }
 
+impl Subscription {
+    /// Wraps any value whose drop ends a subscription (for example a native subscription
+    /// combined with a Rust-side listener).
+    pub fn new(inner: impl std::any::Any) -> Self {
+        Self {
+            _inner: Box::new(inner),
+        }
+    }
+}
+
 fn encode_args<A: Serialize>(args: &A) -> NativeResult<Vec<WhiskerValue>> {
     let json = serde_json::to_string(args).map_err(|e| NativeError(e.to_string()))?;
     Ok(vec![WhiskerValue::String(json)])

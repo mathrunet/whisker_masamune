@@ -249,7 +249,7 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
     }
 
     /// Reads one row: from the cache unless `options.reload`, otherwise from the server (and
-    /// caches the result).
+    /// caches the result). Traced as `masamune.model.load|document|load|<database>.<table>`.
     pub async fn load(
         &self,
         database: &str,
@@ -257,6 +257,9 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
         id: &str,
         options: ReadOptions,
     ) -> ApiResult<Option<Row>> {
+        let _trace = masamune_whisker_logger::start_trace(format!(
+            "masamune.model.load|document|load|{database}.{table}"
+        ));
         if !options.reload
             && let Some(row) = self.cached(database, table, id).await
         {
@@ -304,7 +307,7 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
 
     /// Reads rows matching `query` from the server and caches them. With
     /// `options.offline_fallback`, answers from the cache when the server cannot be reached.
-    /// Returns `(id, row)` pairs.
+    /// Returns `(id, row)` pairs. Traced as `masamune.model.load|collection|query|<database>.<table>`.
     pub async fn query(
         &self,
         database: &str,
@@ -312,6 +315,9 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
         query: &Query,
         options: ReadOptions,
     ) -> ApiResult<Vec<(String, Row)>> {
+        let _trace = masamune_whisker_logger::start_trace(format!(
+            "masamune.model.load|collection|query|{database}.{table}"
+        ));
         let generation = self.generation.get();
         let timeout = options.timeout.unwrap_or(self.options.read_timeout);
         let result =

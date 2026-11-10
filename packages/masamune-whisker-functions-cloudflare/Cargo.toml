@@ -1,0 +1,25 @@
+[package]
+name = "masamune-whisker-functions-cloudflare"
+description = "Cloudflare Workers adapter for Whisker Functions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[features]
+default = []
+firebase-auth = ["masamune-whisker-workers/firebase-auth"]
+
+[dependencies]
+masamune-whisker-workers.workspace = true
+masamune-whisker-functions.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+wiremock.workspace = true

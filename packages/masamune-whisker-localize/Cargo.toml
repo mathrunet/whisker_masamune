@@ -1,0 +1,57 @@
+[package]
+name = "masamune-whisker-localize"
+description = "Localization for Whisker apps: system languages, language selection, typed strings in Rust (localize!) and the localize YAML generator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**", "web/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+web = { manifest = "web/Cargo.toml" }
+
+# CNG plugin: `app.project_plugin::<MasamuneLocalize>(|c| …)` in whisker.rs declares the iOS languages.
+[package.metadata.whisker.plugins.masamune-whisker-localize]
+bin = "masamune-whisker-localize-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-localize-plugin"
+path = "bin/masamune_whisker_localize_plugin.rs"
+test = false
+bench = false
+
+[features]
+default = ["runtime"]
+# Language state, system languages and `localize!` (the app's normal dependency).
+runtime = [
+    "dep:whisker",
+    "dep:log",
+    "dep:serde_json",
+    "dep:whisker-local-store",
+    "dep:masamune-whisker-bridge",
+    "dep:masamune-whisker-appearance",
+]
+# `LocalizeBuilder` for build scripts (`default-features = false, features = ["build"]`).
+build = ["dep:serde_yaml"]
+
+[dependencies]
+serde.workspace = true
+whisker = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+whisker-local-store = { workspace = true, optional = true }
+masamune-whisker-bridge = { workspace = true, optional = true }
+masamune-whisker-appearance = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+whisker-plugin.workspace = true
+anyhow.workspace = true
+

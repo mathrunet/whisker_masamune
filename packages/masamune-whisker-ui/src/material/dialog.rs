@@ -3,7 +3,7 @@
 use std::future::Future;
 use std::rc::Rc;
 
-use masamune_whisker_appearance::{TextKind, bold, palette, text, text_with};
+use masamune_whisker_appearance::{TextKind, bold, palette, shape, text, text_with};
 use whisker::css::{AlignItems, Color, JustifyContent, PositionKind};
 use whisker::prelude::*;
 
@@ -200,7 +200,7 @@ fn dialog_view(overlay: Overlay) -> Element {
                 .max_width(px(400))
                 .padding(px(24))
                 .gap(px(16))
-                .border_radius(px(28))
+                .border_radius(px(shape().extra_large))
                 .background_color(palette.surface)) {
                 Show(when: move || !title.get().is_empty()) {
                     Text(value: title, style: text(TextKind::HeadlineSmall))
@@ -237,7 +237,7 @@ pub fn busy_host(overlay: Overlay) -> Element {
                 .background_color(Color::rgba(0, 0, 0, 0.3))
                 .position(PositionKind::Absolute),
                 on_tap_catch: |_| {}) {
-                CircularProgressIndicator(size: 40.0)
+                CircularProgressIndicator(size: 40.0, trace_name: "busy".to_owned())
             }
         }
     }

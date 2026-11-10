@@ -6,6 +6,7 @@
 //! only re-layout, then read [`screen_size`] / [`orientation`] in reactive closures.
 
 pub mod cng;
+pub use cng::IosOrientation;
 
 use std::ops::BitOr;
 

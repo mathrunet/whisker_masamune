@@ -1,0 +1,25 @@
+[package]
+name = "masamune-whisker-functions-firebase"
+description = "Firebase callable adapter for Whisker Functions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[features]
+default = []
+firebase = ["masamune-whisker-workers/firebase-functions"]
+
+[dependencies]
+masamune-whisker-workers.workspace = true
+masamune-whisker-functions.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+wiremock.workspace = true

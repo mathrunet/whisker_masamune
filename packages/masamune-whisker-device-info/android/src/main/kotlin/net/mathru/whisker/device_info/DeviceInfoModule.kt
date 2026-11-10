@@ -1,4 +1,4 @@
-// Returns the device language, time zone, and app info. Screen size is also reported via events whenever it changes (rotation, split screen, etc.).
+// Returns the time zone and app info. Screen size is also reported via events whenever it changes (rotation, split screen, etc.).
 
 package net.mathru.whisker.device_info
 
@@ -8,14 +8,12 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Handler
-import android.os.LocaleList
 import android.os.Looper
 import rs.whisker.runtime.Module
 import rs.whisker.runtime.ModuleDefinition
 import rs.whisker.runtime.WhiskerApplication
 import rs.whisker.runtime.WhiskerInsetsDispatcher
 import rs.whisker.runtime.WhiskerModule
-import java.util.Locale
 import java.util.TimeZone
 
 @WhiskerModule
@@ -26,7 +24,7 @@ class DeviceInfoModule : Module() {
     /** Configuration change observer. `null` while there are no subscribers. */
     private var configurationCallbacks: ComponentCallbacks? = null
 
-    /** Observer for configuration changes such as dark mode, language, and orientation. `null` while there are no subscribers. */
+    /** Observer for configuration changes such as dark mode and orientation. `null` while there are no subscribers. */
     private var appearanceCallbacks: ComponentCallbacks? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -66,7 +64,7 @@ class DeviceInfoModule : Module() {
             configurationCallbacks = null
         }
 
-        // Changes to dark mode, language, orientation, and font scale. Including uiMode and locale in configChanges
+        // Changes to dark mode, orientation, and font scale. Including uiMode in configChanges
         // prevents Activity recreation, so receive them here and let the app apply them. The current value is also sent right after subscribing.
         OnStartObserving("configurationChanged") {
             if (appearanceCallbacks == null) {
@@ -90,7 +88,7 @@ class DeviceInfoModule : Module() {
             appearanceCallbacks = null
         }
 
-        // info() -> { locales: [{language, country}], timezone, offsetMinutes, packageName, versionName, versionCode, sdkInt, debuggable }
+        // info() -> { timezone, offsetMinutes, packageName, versionName, versionCode, sdkInt, debuggable }
         Function("info") { _ ->
             try {
                 Bridge.ok(info())
@@ -111,28 +109,17 @@ class DeviceInfoModule : Module() {
         sendEvent("configurationChanged", Bridge.event(size + configuration(config)))
     }
 
-    /** Dark mode, language, orientation, and font scale. */
+    /** Dark mode, orientation, and font scale. */
     private fun configuration(config: Configuration): Map<String, Any?> {
-        val locales = config.locales
-        val list = (0 until locales.size()).map { index ->
-            val locale: Locale = locales.get(index)
-            mapOf("language" to locale.language, "country" to locale.country)
-        }
         return mapOf(
             "nightMode" to ((config.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES),
             "orientation" to if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait",
             "fontScale" to config.fontScale.toDouble(),
-            "locales" to list,
         )
     }
 
     private fun info(): Map<String, Any?> {
         val context = WhiskerApplication.appContext
-        val locales = LocaleList.getDefault()
-        val list = (0 until locales.size()).map { index ->
-            val locale: Locale = locales.get(index)
-            mapOf("language" to locale.language, "country" to locale.country)
-        }
         val zone = TimeZone.getDefault()
         var versionName: String? = null
         var versionCode: Long? = null
@@ -158,7 +145,6 @@ class DeviceInfoModule : Module() {
         )
         val appearance = context?.resources?.configuration?.let { configuration(it) } ?: emptyMap()
         return size + appearance + mapOf(
-            "locales" to list,
             "timezone" to zone.id,
             "offsetMinutes" to zone.getOffset(System.currentTimeMillis()) / 60000,
             "packageName" to context?.packageName,

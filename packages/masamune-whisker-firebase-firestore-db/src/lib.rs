@@ -7,6 +7,12 @@
 //! (`FieldValue::timestamp(ms)`, `FieldValue::server_timestamp()`, …).
 //!
 //! For an optional on-device cache in front of these reads, use `masamune-whisker-firestore`.
+//!
+//! On iOS the default Firebase app is configured from the bundled `GoogleService-Info.plist` on
+//! first use (Android initializes it at startup). Invalid arguments that the iOS SDK reports as
+//! Objective-C exceptions (bad paths, invalid queries, `configure` after first use) are returned
+//! as errors like on Android; error messages are the SDK's own and differ in wording between
+//! platforms. Bytes fields, which have no JSON form, are read as base64 strings on iOS.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -1,6 +1,7 @@
 //! Registers bundled fonts so they can be used with `font_family("Name")`.
 //!
-//! The app bundles font files with whisker-asset and passes paths obtained from `whisker_asset::resolve`.
+//! The app bundles font files with whisker-asset and passes paths obtained from `whisker_asset::resolve`
+//! (`file:///android_asset/…` on Android, `file://<app bundle>/whisker_assets/…` on iOS).
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
@@ -44,6 +45,12 @@ impl FontFamily {
 /// Registers fonts and returns the names of the families that were registered. Already registered families are not reloaded.
 ///
 /// Call this before the first Text is measured (at the start of `app()`).
+///
+/// On iOS the files are registered for the app process with CoreText. Because the whisker iOS Host
+/// looks fonts up by the names stored inside the font files, the module maps each registered
+/// family name to the PostScript name of its face (the face assigned to weight 400 by default,
+/// and the face assigned to the requested weight when a weight is set), so any family name works
+/// as on Android. Weights without an assigned face use the face of the closest assigned weight.
 pub fn register(families: &[FontFamily]) -> NativeResult<Vec<String>> {
     module().call("register", &serde_json::json!({ "families": families }))
 }

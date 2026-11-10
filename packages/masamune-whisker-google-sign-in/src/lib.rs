@@ -1,4 +1,13 @@
 //! Sign in with Google (Firebase Auth `google.com` provider). Like the Flutter version, sign-in runs in a web screen.
+//!
+//! On iOS sign-in uses the Google Sign-In SDK (in an `ASWebAuthenticationSession` sheet) and signs
+//! in to Firebase Auth with its tokens; results and the `cancelled` / `already-registered` errors are
+//! the same as on Android. The client id comes from `GoogleService-Info.plist` (`CLIENT_ID`), and
+//! the [`cng::MasamuneGoogleSignIn`] plugin must register its `REVERSED_CLIENT_ID` URL scheme. The
+//! account picker is the SDK's own (Android passes `prompt=select_account`), and the error raised when
+//! no view controller can present the screen is still `no activity`.
+
+pub mod cng;
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};

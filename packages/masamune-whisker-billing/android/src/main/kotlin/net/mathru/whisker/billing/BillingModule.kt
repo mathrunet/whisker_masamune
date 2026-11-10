@@ -1,4 +1,7 @@
 // Google Play Billing (subscriptions). Purchase results are sent to Rust via the "purchases" event.
+//
+// The wire contract is shared with the StoreKit 2 implementation on iOS (BillingModule.swift): products,
+// offers and purchases are encoded with platform-neutral keys, and response codes are mapped to status strings.
 
 package net.mathru.whisker.billing
 
@@ -29,11 +32,7 @@ class BillingModule : Module() {
         sendEvent(
             "purchases",
             Bridge.event(
-                mapOf(
-                    "responseCode" to result.responseCode,
-                    "debugMessage" to result.debugMessage,
-                    "purchases" to (purchases ?: emptyList()).map(::encode),
-                ),
+                encodeResult(result) + mapOf("purchases" to (purchases ?: emptyList()).map(::encode)),
             ),
         )
     }
@@ -45,32 +44,17 @@ class BillingModule : Module() {
         // connect() -> true
         AsyncFunction("connect") { _, promise -> connect(promise) { Bridge.resolve(promise, true) } }
 
-        // queryProducts({ ids: [...] }) -> [{ productId, title, offers: [...] }]
+        // queryProducts({ ids: [...] }) -> [{ id, title, description, price, priceMicros, currency, period, offers }]
         AsyncFunction("queryProducts") { args, promise ->
             val ids = Bridge.args(args).optJSONArray("ids")
             val list = (0 until (ids?.length() ?: 0)).map { ids!!.getString(it) }
             connect(promise) {
-                val params = QueryProductDetailsParams.newBuilder().setProductList(
-                    list.map {
-                        QueryProductDetailsParams.Product.newBuilder()
-                            .setProductId(it)
-                            .setProductType(BillingClient.ProductType.SUBS)
-                            .build()
-                    },
-                ).build()
-                client!!.queryProductDetailsAsync(params) { result, response ->
-                    if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        Bridge.reject(promise, "queryProducts failed: ${result.responseCode} ${result.debugMessage}")
-                        return@queryProductDetailsAsync
-                    }
-                    val products: List<ProductDetails> = response
-                    products.forEach { product -> details[product.productId] = product }
-                    Bridge.resolve(promise, products.map(::encodeDetails))
-                }
+                loadDetails(list, promise) { products -> Bridge.resolve(promise, products.map(::encodeDetails)) }
             }
         }
 
-        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> launch response code
+        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> { status, code, message } of the launch.
+        // The outcome arrives through the "purchases" event.
         AsyncFunction("purchase") { args, promise ->
             val json = Bridge.args(args)
             val activity = appContext.currentActivity
@@ -78,34 +62,41 @@ class BillingModule : Module() {
                 Bridge.reject(promise, "no activity")
                 return@AsyncFunction
             }
+            val productId = json.getString("productId")
             connect(promise) {
-                val product = details[json.getString("productId")]
-                if (product == null) {
-                    Bridge.reject(promise, "product details not loaded")
-                    return@connect
+                val launch = { product: ProductDetails ->
+                    val offers = product.subscriptionOfferDetails.orEmpty()
+                    val offerToken = json.optString("offerToken").ifBlank { null }
+                        ?: offers.firstOrNull()?.offerToken
+                    val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
+                        .setProductDetails(product)
+                        .apply { if (offerToken != null) setOfferToken(offerToken) }
+                        .build()
+                    val builder = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams))
+                    val old = json.optString("oldPurchaseToken")
+                    if (old.isNotBlank()) {
+                        builder.setSubscriptionUpdateParams(
+                            BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                                .setOldPurchaseToken(old)
+                                .setSubscriptionReplacementMode(
+                                    BillingFlowParams.SubscriptionUpdateParams.ReplacementMode.WITH_TIME_PRORATION,
+                                )
+                                .build(),
+                        )
+                    }
+                    Bridge.onMain {
+                        val result = client!!.launchBillingFlow(activity, builder.build())
+                        Bridge.resolve(promise, encodeResult(result))
+                    }
                 }
-                val offers = product.subscriptionOfferDetails.orEmpty()
-                val offerToken = json.optString("offerToken").ifBlank { null }
-                    ?: offers.firstOrNull()?.offerToken
-                val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
-                    .setProductDetails(product)
-                    .apply { if (offerToken != null) setOfferToken(offerToken) }
-                    .build()
-                val builder = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams))
-                val old = json.optString("oldPurchaseToken")
-                if (old.isNotBlank()) {
-                    builder.setSubscriptionUpdateParams(
-                        BillingFlowParams.SubscriptionUpdateParams.newBuilder()
-                            .setOldPurchaseToken(old)
-                            .setSubscriptionReplacementMode(
-                                BillingFlowParams.SubscriptionUpdateParams.ReplacementMode.WITH_TIME_PRORATION,
-                            )
-                            .build(),
-                    )
-                }
-                Bridge.onMain {
-                    val result = client!!.launchBillingFlow(activity, builder.build())
-                    Bridge.resolve(promise, mapOf("responseCode" to result.responseCode, "debugMessage" to result.debugMessage))
+                val cached = details[productId]
+                if (cached != null) {
+                    launch(cached)
+                } else {
+                    loadDetails(listOf(productId), promise) { products ->
+                        val product = products.firstOrNull { it.productId == productId }
+                        if (product == null) Bridge.reject(promise, "product not found: $productId") else launch(product)
+                    }
                 }
             }
         }
@@ -117,7 +108,7 @@ class BillingModule : Module() {
                     QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(),
                 ) { result, purchases ->
                     if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        Bridge.reject(promise, "queryPurchases failed: ${result.responseCode}")
+                        Bridge.reject(promise, "queryPurchases failed: ${result.responseCode} ${result.debugMessage}")
                     } else {
                         Bridge.resolve(promise, purchases.map(::encode))
                     }
@@ -125,14 +116,48 @@ class BillingModule : Module() {
             }
         }
 
-        // acknowledge({ purchaseToken })
-        AsyncFunction("acknowledge") { args, promise ->
-            val token = Bridge.args(args).getString("purchaseToken")
+        // finish({ token, transactionId }) — acknowledges the purchase token.
+        AsyncFunction("finish") { args, promise ->
+            val token = Bridge.args(args).optString("token")
+            if (token.isBlank()) {
+                Bridge.reject(promise, "finish: token is empty")
+                return@AsyncFunction
+            }
             connect(promise) {
                 client!!.acknowledgePurchase(
                     AcknowledgePurchaseParams.newBuilder().setPurchaseToken(token).build(),
-                ) { result -> Bridge.resolve(promise, result.responseCode) }
+                ) { result ->
+                    if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                        Bridge.resolve(promise, null)
+                    } else {
+                        Bridge.reject(promise, "acknowledge failed: ${result.responseCode} ${result.debugMessage}")
+                    }
+                }
             }
+        }
+    }
+
+    private fun loadDetails(ids: List<String>, promise: WhiskerPromise, then: (List<ProductDetails>) -> Unit) {
+        if (ids.isEmpty()) {
+            then(emptyList())
+            return
+        }
+        val params = QueryProductDetailsParams.newBuilder().setProductList(
+            ids.map {
+                QueryProductDetailsParams.Product.newBuilder()
+                    .setProductId(it)
+                    .setProductType(BillingClient.ProductType.SUBS)
+                    .build()
+            },
+        ).build()
+        client!!.queryProductDetailsAsync(params) { result, response ->
+            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                Bridge.reject(promise, "queryProducts failed: ${result.responseCode} ${result.debugMessage}")
+                return@queryProductDetailsAsync
+            }
+            val products: List<ProductDetails> = response
+            products.forEach { product -> details[product.productId] = product }
+            then(products)
         }
     }
 
@@ -167,36 +192,86 @@ class BillingModule : Module() {
         })
     }
 
-    private fun encode(purchase: Purchase): Map<String, Any?> = mapOf(
-        "productIds" to purchase.products,
-        "purchaseToken" to purchase.purchaseToken,
-        "orderId" to purchase.orderId,
-        "purchaseState" to purchase.purchaseState,
-        "acknowledged" to purchase.isAcknowledged,
-        "purchaseTime" to purchase.purchaseTime,
-        "autoRenewing" to purchase.isAutoRenewing,
+    private fun encodeResult(result: BillingResult): Map<String, Any?> = mapOf(
+        "status" to status(result.responseCode),
+        "code" to result.responseCode,
+        "message" to result.debugMessage,
     )
 
-    private fun encodeDetails(product: ProductDetails): Map<String, Any?> = mapOf(
-        "productId" to product.productId,
-        "title" to product.title,
-        "name" to product.name,
-        "offers" to product.subscriptionOfferDetails.orEmpty().map { offer ->
-            mapOf(
-                "offerToken" to offer.offerToken,
-                "basePlanId" to offer.basePlanId,
-                "offerId" to offer.offerId,
-                "phases" to offer.pricingPhases.pricingPhaseList.map { phase ->
-                    mapOf(
-                        "formattedPrice" to phase.formattedPrice,
-                        "priceAmountMicros" to phase.priceAmountMicros,
-                        "priceCurrencyCode" to phase.priceCurrencyCode,
-                        "billingPeriod" to phase.billingPeriod,
-                        "billingCycleCount" to phase.billingCycleCount,
-                        "recurrenceMode" to phase.recurrenceMode,
-                    )
-                },
-            )
+    private fun status(code: Int): String = when (code) {
+        BillingClient.BillingResponseCode.OK -> "ok"
+        BillingClient.BillingResponseCode.USER_CANCELED -> "user_canceled"
+        BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> "already_owned"
+        BillingClient.BillingResponseCode.ITEM_NOT_OWNED -> "not_owned"
+        BillingClient.BillingResponseCode.ITEM_UNAVAILABLE -> "item_unavailable"
+        BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "billing_unavailable"
+        BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE -> "service_unavailable"
+        BillingClient.BillingResponseCode.SERVICE_DISCONNECTED -> "service_disconnected"
+        BillingClient.BillingResponseCode.NETWORK_ERROR -> "network_error"
+        BillingClient.BillingResponseCode.DEVELOPER_ERROR -> "developer_error"
+        BillingClient.BillingResponseCode.FEATURE_NOT_SUPPORTED -> "not_supported"
+        else -> "error"
+    }
+
+    private fun encode(purchase: Purchase): Map<String, Any?> {
+        val orderId = purchase.orderId.orEmpty()
+        return mapOf(
+            "productId" to purchase.products.firstOrNull().orEmpty(),
+            "transactionId" to orderId,
+            // Renewals get order ids like "GPA.1234..0"; the part before ".." is shared by the whole subscription.
+            "originalId" to (orderId.substringBefore("..").ifBlank { purchase.purchaseToken }),
+            "token" to purchase.purchaseToken,
+            "platform" to "android",
+            "state" to when (purchase.purchaseState) {
+                Purchase.PurchaseState.PURCHASED -> "purchased"
+                Purchase.PurchaseState.PENDING -> "pending"
+                else -> "unspecified"
+            },
+            "finished" to purchase.isAcknowledged,
+            "autoRenewing" to purchase.isAutoRenewing,
+            "purchaseTime" to purchase.purchaseTime,
+            "expiresTime" to null,
+        )
+    }
+
+    private fun encodePhase(phase: ProductDetails.PricingPhase): Map<String, Any?> = mapOf(
+        "price" to phase.formattedPrice,
+        "priceMicros" to phase.priceAmountMicros,
+        "currency" to phase.priceCurrencyCode,
+        "period" to phase.billingPeriod,
+        "cycles" to phase.billingCycleCount,
+        "recurrence" to when (phase.recurrenceMode) {
+            ProductDetails.RecurrenceMode.INFINITE_RECURRING -> "infinite"
+            ProductDetails.RecurrenceMode.FINITE_RECURRING -> "finite"
+            ProductDetails.RecurrenceMode.NON_RECURRING -> "non_recurring"
+            else -> "unknown"
         },
     )
+
+    private fun encodeDetails(product: ProductDetails): Map<String, Any?> {
+        val offers = product.subscriptionOfferDetails.orEmpty()
+        // The regular price is the last phase of the base plan (the offer without an offer id).
+        val regular = (offers.firstOrNull { it.offerId == null } ?: offers.firstOrNull())
+            ?.pricingPhases?.pricingPhaseList?.lastOrNull()
+        return mapOf(
+            "id" to product.productId,
+            "title" to product.name.ifBlank { product.title },
+            "description" to product.description,
+            "price" to (regular?.formattedPrice ?: product.oneTimePurchaseOfferDetails?.formattedPrice.orEmpty()),
+            "priceMicros" to (regular?.priceAmountMicros ?: product.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0L),
+            "currency" to (regular?.priceCurrencyCode ?: product.oneTimePurchaseOfferDetails?.priceCurrencyCode.orEmpty()),
+            "period" to regular?.billingPeriod,
+            "offers" to offers.map { offer ->
+                val phases = offer.pricingPhases.pricingPhaseList
+                mapOf(
+                    "kind" to (if (offer.offerId == null) "base" else "developer"),
+                    "id" to offer.offerId,
+                    "basePlanId" to offer.basePlanId,
+                    "token" to offer.offerToken,
+                    "freeTrial" to phases.any { it.priceAmountMicros == 0L },
+                    "phases" to phases.map(::encodePhase),
+                )
+            },
+        )
+    }
 }

@@ -4,7 +4,7 @@
 //! it down and unmounts it after the animation. Reversing midway continues from the current
 //! position.
 
-use masamune_whisker_appearance::palette;
+use masamune_whisker_appearance::{palette, shape};
 use whisker::AnimConfig;
 use whisker::AnimationController;
 use whisker::css::{
@@ -113,15 +113,16 @@ fn sheet_frame(
     content: Children,
 ) -> Element {
     let insets = safe_area_insets();
+    let radius = shape().extra_large;
     let sheet_style = computed(move || {
         column()
             .width(percent(100))
             .padding_top(px(12))
-            .padding_left(px(24))
-            .padding_right(px(24))
+            .padding_left(px(24.0 + insets.get().leading as f32))
+            .padding_right(px(24.0 + insets.get().trailing as f32))
             .padding_bottom(px(24.0 + insets.get().bottom as f32))
-            .border_top_left_radius(px(28))
-            .border_top_right_radius(px(28))
+            .border_top_left_radius(px(radius))
+            .border_top_right_radius(px(radius))
             .background_color(color)
             .transform(Transform::new().push(TransformFn::TranslateY(
                 percent((1.0 - progress.get()) * 100.0).into(),

@@ -20,6 +20,7 @@ futures-channel.workspace = true
 futures-executor.workspace = true
 futures-util.workspace = true
 masamune-whisker-workers.workspace = true
+masamune-whisker-logger.workspace = true
 log.workspace = true
 whisker-paths.workspace = true
 

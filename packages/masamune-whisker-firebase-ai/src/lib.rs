@@ -3,6 +3,10 @@
 //! Sends a single request (generate or stream) through the host SDK. The caller owns the conversation
 //! history, function execution, and the function-calling loop. Types are JSON close to the Gemini REST API;
 //! pass a function call's `thought_signature` back unchanged in the next request.
+//!
+//! On iOS the default Firebase app is configured from the bundled `GoogleService-Info.plist` on
+//! first use (Android initializes it at startup), and error messages are built from the SDK errors
+//! in the same form as Android's (`Content generation stopped. Reason: …`, `Prompt was blocked: …`).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 

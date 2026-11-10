@@ -47,11 +47,14 @@ impl Slot {
     }
 }
 
-/// Space nobody has used yet (top/bottom safe area and the keyboard).
+/// Space nobody has used yet (safe area and the keyboard).
 #[derive(Clone, Copy)]
 pub struct ScaffoldInsets {
     pub top: ReadSignal<f32>,
     pub bottom: ReadSignal<f32>,
+    /// Side safe areas (non-zero on landscape iPhones with a notch or Dynamic Island).
+    pub left: ReadSignal<f32>,
+    pub right: ReadSignal<f32>,
     pub keyboard: ReadSignal<f32>,
 }
 
@@ -62,9 +65,19 @@ impl ScaffoldInsets {
         Self {
             top: computed(move || insets.get().top as f32),
             bottom: computed(move || insets.get().bottom as f32),
+            left: computed(move || insets.get().leading as f32),
+            right: computed(move || insets.get().trailing as f32),
             keyboard: computed(move || keyboard.get() as f32),
         }
     }
+}
+
+/// Side safe areas the bars of the current scaffold (such as `AppBar`) still have to keep clear.
+/// The bars paint their background under them and pad only their content.
+#[derive(Clone, Copy)]
+pub(crate) struct BarInsets {
+    pub left: ReadSignal<f32>,
+    pub right: ReadSignal<f32>,
 }
 
 /// Space left by the enclosing scaffold (the whole screen outside any scaffold). Call it in a
@@ -133,6 +146,10 @@ pub fn scaffold(
         }
     });
 
+    provide_context(BarInsets {
+        left: parent.left,
+        right: parent.right,
+    });
     // Space handed down to nested screens.
     provide_context(ScaffoldInsets {
         top: computed(move || {
@@ -149,6 +166,9 @@ pub fn scaffold(
                 free_bottom.get()
             }
         }),
+        // The body, sheet and navigation bar below are padded by the side safe areas.
+        left: computed(|| 0.0),
+        right: computed(|| 0.0),
         keyboard: computed(move || {
             if resize_to_avoid_bottom_inset {
                 0.0
@@ -173,17 +193,23 @@ pub fn scaffold(
             .flex_basis(px(0))
             .padding_top(px(if pad_top { parent.top.get() } else { 0.0 }))
             .padding_bottom(px(if pad_bottom { free_bottom.get() } else { 0.0 }))
+            .padding_left(px(parent.left.get()))
+            .padding_right(px(parent.right.get()))
     });
     let sheet_style = computed(move || {
         column()
             .flex_shrink(0.0)
             .padding_bottom(px(if has_nav { 0.0 } else { free_bottom.get() }))
+            .padding_left(px(parent.left.get()))
+            .padding_right(px(parent.right.get()))
             .background_color(bottom_sheet_color)
     });
     let nav_style = computed(move || {
         let nav = column()
             .flex_shrink(0.0)
             .padding_bottom(px(parent.bottom.get()))
+            .padding_left(px(parent.left.get()))
+            .padding_right(px(parent.right.get()))
             .background_color(bottom_navigation_bar_color);
         if keyboard_visible.get() {
             nav.display(Display::None)
@@ -217,6 +243,8 @@ pub fn scaffold(
 pub fn safe_area(
     #[prop(default = true)] top: bool,
     #[prop(default = true)] bottom: bool,
+    #[prop(default = true)] left: bool,
+    #[prop(default = true)] right: bool,
     #[prop(default = 0.0)] padding: f32,
     children: Children,
 ) -> Element {
@@ -226,8 +254,8 @@ pub fn safe_area(
             .flex_grow(1.0)
             .padding_top(px(padding + if top { insets.top.get() } else { 0.0 }))
             .padding_bottom(px(padding + if bottom { insets.bottom.get() } else { 0.0 }))
-            .padding_left(px(padding))
-            .padding_right(px(padding))
+            .padding_left(px(padding + if left { insets.left.get() } else { 0.0 }))
+            .padding_right(px(padding + if right { insets.right.get() } else { 0.0 }))
     });
     let projected = children.clone();
     render! {

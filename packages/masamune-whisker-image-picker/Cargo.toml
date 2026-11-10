@@ -8,17 +8,30 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 publish = false
-include = ["Cargo.toml", "src/**", "android/**", "build.gradle.kts"]
+include = ["Cargo.toml", "src/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**", "bin/**"]
 
 [lib]
 crate-type = ["rlib"]
 
-# Android is implemented today. iOS (Package.swift) and Web keep the same Rust API.
+# CNG plugin: `app.plugin::<MasamuneImagePicker>(|c| …)` in whisker.rs writes the iOS camera and
+# photo library usage descriptions.
+[package.metadata.whisker.plugins.masamune-whisker-image-picker]
+bin = "masamune-whisker-image-picker-plugin"
+
+[[bin]]
+name = "masamune-whisker-image-picker-plugin"
+path = "bin/masamune_whisker_image_picker_plugin.rs"
+test = false
+bench = false
+
 [package.metadata.whisker.module.platforms]
 android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
 
 [dependencies]
 whisker.workspace = true
 masamune-whisker-bridge.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

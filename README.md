@@ -4,9 +4,9 @@ Native modules and app foundations for [Whisker](https://whisker.rs) apps, extra
 apps built with the Masamune framework. Every crate is published from this workspace as
 `masamune-whisker-*`.
 
-Whisker discovers native modules through `cargo metadata`, so the Android (and later iOS)
-sources inside each crate are picked up whether the crate comes from a path, a git repository
-or crates.io.
+Whisker discovers native modules through `cargo metadata`, so the Android (Kotlin) and iOS
+(Swift package) sources inside each crate are picked up whether the crate comes from a path, a
+git repository or crates.io.
 
 ## Crates
 
@@ -14,7 +14,7 @@ or crates.io.
 |---|---|
 | `masamune-whisker-bridge` | Shared JSON bridge used by every native module (Rust only) |
 | `masamune-whisker-fonts` | Register bundled fonts by family name |
-| `masamune-whisker-device-info` | Locale, screen metrics, time zone and app version |
+| `masamune-whisker-device-info` | Screen metrics, time zone, app version and appearance settings |
 | `masamune-whisker-app-control` | Open URLs externally and close the app |
 | `masamune-whisker-date-picker` | Native date and time pickers |
 | `masamune-whisker-view-capture` | Capture a view subtree as PNG |
@@ -33,21 +33,67 @@ or crates.io.
 
 ### Foundations
 
+Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logger/README.md): initialize with the app flavor before startup work; Debug/Info are disabled in prod. Register adapters with `LoggerConfig` to send records, events and errors to every output at once, such as Firebase Analytics/Crashlytics via [`masamune-whisker-logger-firebase`](packages/masamune-whisker-logger-firebase/README.md). Never log credentials or personal data.
+
 | Crate | Description |
 |---|---|
 | `masamune-whisker-workers` | HTTP client for Masamune Cloudflare Workers and Firebase callable functions |
+| `masamune-whisker-functions` | [Typed server actions, JSON REST and runtime adapters](packages/masamune-whisker-functions/README.md) |
+| `masamune-whisker-functions-cloudflare` | [Cloudflare Functions adapter with edge/region routing](packages/masamune-whisker-functions-cloudflare/README.md) |
+| `masamune-whisker-functions-firebase` | [Firebase callable Functions adapter with Auth and App Check](packages/masamune-whisker-functions-firebase/README.md) |
 | `masamune-whisker-model` | Query types, REST database client, on-device libsql cache and `CachedStore` |
 | `masamune-whisker-turso` | Turso through the Masamune worker, with the libsql cache |
 | `masamune-whisker-tidb` | TiDB through the Masamune worker (counts, vector search, bulk writes), with the libsql cache |
 | `masamune-whisker-firestore` | Firestore reads/listeners with cache policies and UI signals |
-| `masamune-whisker-appearance` | Light/dark/system themes, languages, typography and app-wide rebuilds |
-| `masamune-whisker-localize-build` | Build-script generator of typed `l()` tables from localize YAML |
+| `masamune-whisker-storage` | `StorageAdapter` trait (upload, download, delete, public and download URLs), file types and an in-memory adapter |
+| `masamune-whisker-storage-firebase` | Cloud Storage for Firebase as a `StorageAdapter` (needs `whisker-firebase-storage` in the app's `[patch.crates-io]`) |
+| `masamune-whisker-storage-cloudflare` | Cloudflare R2 through the Masamune storage worker as a `StorageAdapter` |
+| `masamune-whisker-appearance` | App-wide Material theme (`ThemeConfig`: palettes, typography, shapes, spacing, elevation), light/dark/system modes and app-wide rebuilds |
+| `masamune-whisker-localize` | Everything about languages: system languages (Android, iOS, Web), system or pinned language saved across launches, typed strings in Rust (`localize!`) and the localize YAML generator (feature `build`) |
 | `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |
+| `masamune-whisker-adapter` | [Plugin settings and startup work registered in one place](packages/masamune-whisker-adapter/README.md) (Masamune's `MasamuneAdapter`) |
 | `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
-| `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons) |
+| `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
+| `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) |
+| `masamune-whisker-ai-debugger` | [Dev-only AI debugger overlay](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases and camera |
 
-Android is implemented for all native modules today. The Rust APIs are platform-neutral so
-iOS and Web hosts can be added without breaking apps.
+Every native module is implemented for Android and iOS (iOS 15 or later) behind the same Rust
+API. Where a platform has no equivalent, the function's documentation says what it does there
+(for example `exit_app` does nothing on iOS, where apps must not close themselves).
+
+### iOS setup
+
+Some modules need `Info.plist` keys or entitlements on iOS. Each of those crates ships a CNG
+plugin to configure them from `whisker.rs`:
+
+```rust
+use masamune_whisker_admob::cng::MasamuneAdmob;
+use masamune_whisker_apple_sign_in::cng::MasamuneAppleSignIn;
+use masamune_whisker_firebase_app_check::cng::MasamuneFirebaseAppCheck;
+use masamune_whisker_google_sign_in::cng::MasamuneGoogleSignIn;
+use masamune_whisker_image_picker::cng::MasamuneImagePicker;
+use masamune_whisker_localize::cng::MasamuneLocalize;
+
+app.plugin::<MasamuneAdmob>(|c| {
+    c.ios_app_id("ca-app-pub-xxxxxxxx~yyyyyyyy")
+        .tracking_usage_description("Used to show ads that fit you.");
+});
+app.plugin::<MasamuneImagePicker>(|c| {
+    c.camera_usage("Take a profile photo.").photo_library_usage("Pick a profile photo.");
+});
+app.project_plugin::<MasamuneFirebaseAppCheck>(|c| { c.app_attest_environment("production"); });
+app.project_plugin::<MasamuneAppleSignIn>(|_| {});
+// Registers REVERSED_CLIENT_ID from GoogleService-Info.plist as a URL scheme.
+app.project_plugin::<MasamuneGoogleSignIn>(|c| { c.ios_config("firebase/GoogleService-Info.plist"); });
+// Declares the app's languages so iOS system UI (pickers, share sheets, prompts) follows them.
+app.project_plugin::<MasamuneLocalize>(|c| {
+    c.strings("en", "CFBundleDisplayName", "My App").strings("ja", "CFBundleDisplayName", "マイアプリ");
+});
+```
+
+`masamune-whisker-screen` restricts the iOS orientations (`ios_orientations` /
+`ipad_orientations`). Firebase modules use firebase-ios-sdk 12.19.2, the version
+`whisker-firebase` pins.
 
 ## Usage
 
@@ -57,9 +103,9 @@ Depend on a release tag:
 [dependencies]
 masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.1.0" }
 
-# Required by the tab/scaffold widgets: keeps tabs mounted when switching tabs inside a Stack.
+# Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]
-whisker-router = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.1.0" }
+whisker-router = { git = "https://github.com/mathrunet/whisker", branch = "main" }
 ```
 
 ### Developing against a local checkout
@@ -72,22 +118,80 @@ that contains `.cargo/`:
 [patch."https://github.com/mathrunet/whisker_masamune"]
 masamune-whisker-billing = { path = "../whisker_masamune/packages/masamune-whisker-billing" }
 
-# A git `[patch]` cannot be patched again, so override the crates-io patch directly.
-[patch.crates-io]
-whisker-router = { path = "../whisker_masamune/patches/whisker-router" }
+# The router stays on the whisker fork main declared in Cargo.toml.
 ```
 
 While the override is active, `Cargo.lock` records the path sources. Remove the override and
 run `cargo update -p <crate>` before committing the app.
 
+### Adapters
+
+List the plugins' settings once, like `masamuneAdapters` in Flutter Masamune, and install them
+while preparing the app. Each adapter prepares itself (for example the notification channel)
+and starts its background work (for example re-arming saved notifications); plugins read their
+settings with `XxxMasamuneAdapter::primary()`.
+
+```rust
+#[whisker::main]
+fn app() -> Element {
+    logger::init();
+    MasamuneAdapters::new()
+        .adapter(LocalNotificationMasamuneAdapter::new(NotificationConfig { /* … */ }))
+        .install();
+    render! { Root }
+}
+```
+
+### Localization
+
+Write the strings as a trait with one implementation per language; a missing string does not
+compile. The first language is the fallback.
+
+```rust
+// src/i18n.rs
+pub trait Strings {
+    fn ok(&self) -> &'static str;
+    fn hello(&self, name: &str) -> String;
+}
+pub struct En;
+impl Strings for En { /* … */ }
+pub struct Ja;
+impl Strings for Ja { /* … */ }
+
+masamune_whisker_localize::localize! { Strings; "en_US" => En, "ja_JP" => Ja }
+
+// Startup
+i18n::register();
+masamune_whisker_localize::init_locale(&masamune_whisker_localize::system_languages(), None);
+masamune_whisker_localize::follow_system();
+
+// Screens: i18n::l().hello("Taro")
+// Settings: masamune_whisker_localize::change_language(LanguagePref::Fixed("ja".into()))
+```
+
+Language changes rebuild the UI under `masamune_whisker_appearance::AppRoot`. On Android, add
+`ConfigChanges::LOCALE` (masamune-whisker-screen) so a system language change does not restart
+the app. Apps ported from Flutter can keep their localize YAML with
+`masamune-whisker-localize = { default-features = false, features = ["build"] }` in
+`[build-dependencies]` and `LocalizeBuilder` in `build.rs`.
+
 ## Development
+
+The workspace (and the apps using it) builds against the
+[mathrunet/whisker](https://github.com/mathrunet/whisker) fork `main`: every whisker crate is
+redirected with `[patch.crates-io]` using the same source string.
 
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets
 cargo test --workspace
 scripts/check-android.sh   # cross-check for aarch64-linux-android with the NDK toolchain
+scripts/check-ios.sh       # cargo check for the iOS targets + build every Swift package (macOS)
+scripts/whisker-fork.sh check   # every whisker crate in Cargo.lock comes from one fork revision
+scripts/whisker-fork.sh cli     # install the whisker CLI of that revision
 ```
+
+Apps copy `scripts/whisker-fork.sh` and run the same `check` / `cli` steps in CI.
 
 ## License
 

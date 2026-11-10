@@ -1,0 +1,18 @@
+[package]
+name = "masamune-whisker-storage-firebase"
+description = "Cloud Storage for Firebase as a masamune-whisker-storage adapter for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+masamune-whisker-storage.workspace = true
+whisker-firebase = { workspace = true, features = ["storage"] }

@@ -1,0 +1,13 @@
+[package]
+name = "masamune-whisker-cached-image"
+description = "URL-keyed temporary image cache with sized decoding and a shared memory budget"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[dependencies]
+whisker.workspace = true
+whisker-image.workspace = true

@@ -14,6 +14,7 @@
 //! | `CircularProgressIndicator` | [`CircularProgressIndicator`] |
 //! | `FilledButton` / `OutlinedButton` / `TextButton` | [`FilledButton`], [`OutlinedButton`], [`TextButton`] |
 //! | `Divider` | [`Divider`], [`LabeledDivider`] |
+//! | `showTimePicker` / `TimePickerDialog` | [`TimePickerDialog`] (+ [`TimeOfDay`], [`HourFormat`]) |
 
 pub mod material;
 pub mod style;
@@ -30,3 +31,6 @@ pub use material::navigation::{
 };
 pub use material::progress::CircularProgressIndicator;
 pub use material::scaffold::{SafeArea, Scaffold, ScaffoldInsets, Slot, use_scaffold_insets};
+pub use material::time_picker::{
+    HourFormat, TimeOfDay, TimePickerDialog, TimePickerEntryMode, TimePickerLabels,
+};

@@ -1,0 +1,18 @@
+[package]
+name = "masamune-whisker-adapter"
+description = "Register plugin settings and startup work in one place for Whisker apps (Masamune's MasamuneAdapter)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-logger.workspace = true

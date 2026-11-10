@@ -1,4 +1,8 @@
 //! Firebase Remote Config. All values are returned as strings (callers convert numbers and booleans).
+//!
+//! On iOS the default Firebase app is configured from the bundled `GoogleService-Info.plist` on
+//! first use (Android initializes it at startup); the values are the union of the active and the
+//! default keys, like Android's `getAll()`.
 
 use std::collections::BTreeMap;
 use std::time::Duration;

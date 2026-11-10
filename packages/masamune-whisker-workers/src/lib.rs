@@ -11,6 +11,7 @@
 mod auth;
 #[cfg(feature = "firebase-functions")]
 mod callable;
+mod callable_client;
 mod error;
 mod retry;
 
@@ -21,8 +22,10 @@ pub use auth::AuthProvider;
 #[cfg(feature = "firebase-auth")]
 pub use auth::current_uid;
 #[cfg(feature = "firebase-functions")]
-pub use callable::Callable;
+pub use callable::{Callable, firebase_app_check_provider};
+pub use callable_client::{CallableClient, CallableFailure};
 pub use error::{ApiError, ApiResult};
+pub use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 pub use reqwest::{Method, Url};
 pub use retry::{RetryPolicy, retry, with_timeout};
 use serde_json::Value;
@@ -149,17 +152,43 @@ impl Workers {
         body: Option<&Value>,
         timeout: Duration,
     ) -> ApiResult<Value> {
-        let mut request = client()
-            .request(method, url)
-            .header("Accept", "application/json")
-            .timeout(timeout);
-        if let Some(token) = self.auth.token(false).await? {
-            request = request.bearer_auth(token);
-        }
-        if let Some(body) = body {
-            request = request.json(body);
-        }
-        read_json(request.send().await?).await
+        self.send_with_headers(method, url, body, timeout, HeaderMap::new())
+            .await
+    }
+
+    /// Sends additional headers. Managed authentication and JSON headers take precedence.
+    /// The deadline includes token acquisition as well as the HTTP exchange.
+    pub async fn send_with_headers(
+        &self,
+        method: Method,
+        url: reqwest::Url,
+        body: Option<&Value>,
+        timeout: Duration,
+        mut headers: HeaderMap,
+    ) -> ApiResult<Value> {
+        with_timeout(timeout, async {
+            headers.remove("accept");
+            let token = self.auth.token(false).await?;
+            if token.is_some() {
+                headers.remove("authorization");
+            }
+            if body.is_some() {
+                headers.remove("content-type");
+            }
+            let mut request = client()
+                .request(method, url)
+                .headers(headers)
+                .header("Accept", "application/json")
+                .timeout(timeout);
+            if let Some(token) = token {
+                request = request.bearer_auth(token);
+            }
+            if let Some(body) = body {
+                request = request.json(body);
+            }
+            read_json(request.send().await?).await
+        })
+        .await
     }
 }
 

@@ -127,6 +127,11 @@ class AdmobModule : Module() {
             }
         }
 
+        // requestTrackingAuthorization() — App Tracking Transparency only exists on iOS, so Android reports "authorized".
+        AsyncFunction("requestTrackingAuthorization") { _, promise ->
+            Bridge.resolve(promise, "authorized")
+        }
+
         View("masamune-whisker-admob:Banner", AdBannerView::class.java) {
             Prop("ad-unit-id") { view: AdBannerView, value -> view.setAdUnit(value.asString() ?: "") }
             Prop("width-dp") { view: AdBannerView, value -> view.setWidthDp(value.asString()?.toIntOrNull() ?: value.asInt()?.toInt() ?: 0) }

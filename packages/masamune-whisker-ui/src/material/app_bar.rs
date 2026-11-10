@@ -7,6 +7,7 @@ use whisker_icons::{Icon, lucide};
 use whisker_router::use_navigator;
 use whisker_safe_area::safe_area_insets;
 
+use super::scaffold::BarInsets;
 use crate::style::{column, css_color, row};
 
 /// Height of the bar below the status bar (`kToolbarHeight`).
@@ -27,14 +28,20 @@ pub fn app_bar(
     let nav = use_navigator();
     let projected = children.clone();
     let insets = safe_area_insets();
+    // Inside a scaffold only the side insets it has not used yet; alone, the whole safe area.
+    let side = use_context::<BarInsets>().unwrap_or_else(|| BarInsets {
+        left: computed(move || insets.get().leading as f32),
+        right: computed(move || insets.get().trailing as f32),
+    });
     let icon_color = computed(move || css_color(foreground));
     let style = computed(move || {
         row()
             .flex_shrink(0.0)
             .height(px(APP_BAR_HEIGHT + insets.get().top as f32))
             .padding_top(px(insets.get().top as f32))
-            .padding_left(px(if back { 4.0 } else { 16.0 }))
-            .padding_right(px(4))
+            // Landscape iPhones have side insets (notch / Dynamic Island).
+            .padding_left(px((if back { 4.0 } else { 16.0 }) + side.left.get()))
+            .padding_right(px(4.0 + side.right.get()))
             .background_color(color)
     });
     render! {

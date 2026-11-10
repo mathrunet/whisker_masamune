@@ -1,4 +1,8 @@
 //! Indeterminate circular progress indicator (Flutter's `CircularProgressIndicator`).
+//!
+//! While it is shown it runs a `masamune.indicator.show|<trace_name>` trace
+//! (`masamune_whisker_logger::start_trace`), so slow-operation detectors such as
+//! `masamune-whisker-ai-debugger` notice spinners that stay up too long.
 
 use masamune_whisker_appearance::palette;
 use whisker::AnimConfig;
@@ -14,7 +18,13 @@ pub fn circular_progress_indicator(
     #[prop(default = 32.0)] size: f32,
     #[prop(default = palette().primary)] color: Color,
     #[prop(default = 3.0)] stroke: f32,
+    /// Fixed code naming what is loading, used in the trace name.
+    #[prop(default = "circular_progress_indicator".to_owned())]
+    trace_name: String,
 ) -> Element {
+    let trace =
+        masamune_whisker_logger::start_trace(format!("masamune.indicator.show|{trace_name}"));
+    on_cleanup(move || drop(trace));
     let controller = AnimationController::new(AnimConfig::linear(900));
     controller.repeat();
     let progress = controller.value();

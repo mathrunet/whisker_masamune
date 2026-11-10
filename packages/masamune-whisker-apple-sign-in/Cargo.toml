@@ -8,17 +8,31 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 publish = false
-include = ["Cargo.toml", "src/**", "android/**", "build.gradle.kts"]
+include = ["Cargo.toml", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
 
 [lib]
 crate-type = ["rlib"]
 
-# Android is implemented today. iOS (Package.swift) and Web keep the same Rust API.
 [package.metadata.whisker.module.platforms]
 android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+# CNG plugin: `app.project_plugin::<MasamuneAppleSignIn>(|_| {})` in whisker.rs adds the
+# Sign in with Apple entitlement on iOS (no-op on Android).
+[package.metadata.whisker.plugins.masamune-whisker-apple-sign-in]
+bin = "masamune-whisker-apple-sign-in-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-apple-sign-in-plugin"
+path = "bin/masamune_whisker_apple_sign_in_plugin.rs"
+test = false
+bench = false
 
 [dependencies]
 whisker.workspace = true
 masamune-whisker-bridge.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

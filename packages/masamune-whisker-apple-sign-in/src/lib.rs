@@ -1,4 +1,12 @@
 //! Sign in with Apple (Firebase Auth `apple.com` provider).
+//!
+//! Android uses Firebase Auth's web flow. iOS uses the native Sign in with Apple sheet
+//! (AuthenticationServices, with a SHA-256 nonce) and signs in to Firebase Auth with the Apple ID
+//! token, so the result and the `cancelled` / `already-registered` errors are the same. On iOS add
+//! the [`cng::MasamuneAppleSignIn`] plugin to whisker.rs for the entitlement; the error raised when
+//! no window can present the sheet is still `no activity`.
+
+pub mod cng;
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};

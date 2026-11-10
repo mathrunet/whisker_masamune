@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::auth::AuthProvider;
 use crate::error::{ApiError, ApiResult};
-use crate::{client, read_json};
+use crate::{CallableClient, CallableFailure, HeaderMap};
 
 /// Firebase HTTPS callable functions (`https://{region}-{project}.cloudfunctions.net/{name}`).
 #[derive(Clone)]
@@ -32,27 +32,29 @@ impl Callable {
 
     /// Calls `name` with `data` and returns its `result`.
     pub async fn call(&self, name: &str, data: Value) -> ApiResult<Value> {
-        let url = format!(
-            "https://{}-{}.cloudfunctions.net/{name}",
-            self.region, self.project_id
-        );
-        let mut request = client()
-            .post(url)
-            .json(&json!({ "data": data }))
-            .timeout(self.timeout);
-        if let Some(token) = self.auth.token(false).await? {
-            request = request.bearer_auth(token);
-        }
+        let mut client = CallableClient::new(&self.project_id, &self.region);
+        client.auth = self.auth.clone();
+        client.timeout = self.timeout;
         if self.app_check {
-            match masamune_whisker_firebase_app_check::token(false).await {
-                Ok(token) => request = request.header("X-Firebase-AppCheck", token),
-                Err(error) => log::warn!("app check token unavailable: {error}"),
-            }
+            client.app_check = Some(firebase_app_check_provider());
         }
-        let response = read_json(request.send().await?).await?;
-        match response.get("error") {
-            Some(error) => Err(ApiError::Other(error.to_string())),
-            None => Ok(response.get("result").cloned().unwrap_or(Value::Null)),
-        }
+        client
+            .call(name, data, HeaderMap::new(), None)
+            .await
+            .map_err(|error| match error {
+                CallableFailure::Transport(error) => error,
+                other => ApiError::Other(other.to_string()),
+            })
     }
+}
+
+/// Native App Check provider shared by the legacy client and Functions adapter.
+/// Activate the App Check module before using this provider.
+pub fn firebase_app_check_provider() -> AuthProvider {
+    AuthProvider::new(|force| async move {
+        masamune_whisker_firebase_app_check::token(force)
+            .await
+            .map(Some)
+            .map_err(|error| ApiError::Other(error.to_string()))
+    })
 }

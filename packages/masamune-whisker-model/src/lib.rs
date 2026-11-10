@@ -4,6 +4,10 @@
 //! - [`cache`]: on-device document cache backed by a local libsql database.
 //! - [`rest`]: client of the Masamune Cloudflare database workers.
 //! - [`store`]: remote store + cache with deadlines, sessions and cache filters.
+//!
+//! `CachedStore::load` / `query` run inside a `masamune_whisker_logger::start_trace` named
+//! `masamune.model.load|<document|collection>|<load|query>|<database>.<table>`, so logger
+//! adapters (such as `masamune-whisker-ai-debugger`) can detect slow loads.
 
 pub mod query;
 

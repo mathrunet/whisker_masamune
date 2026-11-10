@@ -1,6 +1,6 @@
 [package]
 name = "masamune-whisker-appearance"
-description = "Theme palettes, typography, language selection and app-wide rebuilds for Whisker apps"
+description = "App-wide Material theme (palettes, typography, shapes, spacing, elevation) and app-wide rebuilds for Whisker apps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

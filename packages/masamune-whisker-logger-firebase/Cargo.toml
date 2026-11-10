@@ -1,0 +1,20 @@
+[package]
+name = "masamune-whisker-logger-firebase"
+description = "Firebase Analytics and Crashlytics as a masamune-whisker-logger adapter for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+masamune-whisker-logger.workspace = true
+log.workspace = true
+whisker.workspace = true
+whisker-firebase = { workspace = true, features = ["analytics", "crashlytics"] }

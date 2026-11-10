@@ -1,4 +1,5 @@
-//! Device language, screen size, time zone, and app version.
+//! Device screen size, time zone, app version and appearance settings. System languages are in
+//! masamune-whisker-localize.
 
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
@@ -9,37 +10,36 @@ fn module() -> NativeModule {
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceLocale {
-    pub language: String,
-    #[serde(default)]
-    pub country: String,
-}
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceInfo {
     #[serde(default)]
-    pub locales: Vec<DeviceLocale>,
-    #[serde(default)]
     pub timezone: String,
     #[serde(default)]
     pub offset_minutes: i32,
+    /// Android package name; the bundle identifier on iOS.
     #[serde(default)]
     pub package_name: Option<String>,
+    /// `versionName`; `CFBundleShortVersionString` on iOS.
     #[serde(default)]
     pub version_name: Option<String>,
+    /// `versionCode`; `CFBundleVersion` on iOS (`None` when it is not a plain integer such as `"1.2"`).
     #[serde(default)]
     pub version_code: Option<i64>,
+    /// Android API level (`Build.VERSION.SDK_INT`). Android only: always `0` on iOS.
     #[serde(default)]
     pub sdk_int: i32,
+    /// The app is a debuggable build (`FLAG_DEBUGGABLE`); on iOS, whether the module was compiled
+    /// with the `DEBUG` condition (debug configuration).
     #[serde(default)]
     pub debuggable: bool,
+    /// Window width in dp (points on iOS).
     #[serde(default)]
     pub width_dp: f64,
+    /// Window height in dp (points on iOS).
     #[serde(default)]
     pub height_dp: f64,
+    /// Pixels per dp (the screen scale on iOS).
     #[serde(default)]
     pub density: f64,
     /// System dark mode is on.
@@ -74,15 +74,13 @@ pub fn on_metrics_changed(handler: impl Fn(ScreenMetrics) + 'static) -> Subscrip
     module().subscribe("metricsChanged", handler)
 }
 
-/// Device configuration that can change while the app runs (dark mode, languages, orientation,
-/// font scale and window size).
+/// Device configuration that can change while the app runs (dark mode, orientation, font scale
+/// and window size).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceConfiguration {
     #[serde(default)]
     pub night_mode: bool,
-    #[serde(default)]
-    pub locales: Vec<DeviceLocale>,
     /// `"portrait"` or `"landscape"`.
     #[serde(default)]
     pub orientation: String,
@@ -96,9 +94,12 @@ pub struct DeviceConfiguration {
     pub density: f64,
 }
 
-/// Receives configuration changes (dark mode, languages, orientation, font scale). The current
-/// value is delivered right after subscribing. Requires `uiMode|locale` in the activity's
-/// `configChanges`, otherwise Android recreates the activity instead.
+/// Receives configuration changes (dark mode, orientation, font scale). The current value is
+/// delivered right after subscribing.
+///
+/// On Android this requires `uiMode` in the activity's `configChanges`, otherwise Android
+/// recreates the activity instead. On iOS it works without any setup (window size, trait and
+/// Dynamic Type changes are observed directly).
 pub fn on_configuration_changed(handler: impl Fn(DeviceConfiguration) + 'static) -> Subscription {
     module().subscribe("configurationChanged", handler)
 }

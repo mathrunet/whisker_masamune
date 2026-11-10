@@ -7,6 +7,8 @@ use whisker::prelude::*;
 use whisker_local_store::WhiskerLocalStore;
 
 use crate::palette::{Brightness, Palette};
+use crate::tokens::{Shape, Spacing};
+use crate::typography::Typography;
 
 /// Which palette the app uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -39,11 +41,26 @@ impl ThemeMode {
     }
 }
 
-/// Palettes and defaults given by the app.
+/// The app-wide theme (the Masamune `AppThemeData`): palettes, typography, fonts, shapes,
+/// spacing and the default mode.
+///
+/// `ThemeConfig::default()` is the Material 3 baseline. Override only what the app needs:
+/// `ThemeConfig { light: LIGHT, dark: DARK, storage_key: "app.theme_mode", ..Default::default() }`.
 #[derive(Clone)]
 pub struct ThemeConfig {
     pub light: Palette,
     pub dark: Palette,
+    /// Text styles shared by both palettes.
+    pub typography: Typography,
+    /// Corner radii.
+    pub shape: Shape,
+    /// Gaps and paddings.
+    pub spacing: Spacing,
+    /// Chooses the default font family (for example per language; an empty name keeps the
+    /// platform font). `None` keeps the resolver set by
+    /// [`crate::typography::set_font_family_resolver`]. Register the font files with
+    /// `masamune-whisker-fonts`.
+    pub font_family: Option<fn() -> &'static str>,
     /// Mode used until the user picks one.
     pub default_mode: ThemeMode,
     /// `whisker-local-store` key of the saved mode.
@@ -55,6 +72,10 @@ impl Default for ThemeConfig {
         Self {
             light: Palette::MATERIAL_LIGHT,
             dark: Palette::MATERIAL_DARK,
+            typography: Typography::MATERIAL,
+            shape: Shape::DEFAULT,
+            spacing: Spacing::DEFAULT,
+            font_family: None,
             default_mode: ThemeMode::System,
             storage_key: "masamune.appearance.theme_mode",
         }
@@ -102,6 +123,9 @@ pub fn init_theme(config: ThemeConfig) {
         .ok()
         .flatten()
         .and_then(|value| ThemeMode::parse(&value));
+    if let Some(resolver) = config.font_family {
+        crate::typography::set_font_family_resolver(resolver);
+    }
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.mode = saved.unwrap_or(config.default_mode);
@@ -140,6 +164,21 @@ pub fn palette() -> Palette {
     STATE.with(|state| resolve(&state.borrow()))
 }
 
+/// The current text styles.
+pub fn typography() -> Typography {
+    STATE.with(|state| state.borrow().config.typography)
+}
+
+/// The current corner radii.
+pub fn shape() -> Shape {
+    STATE.with(|state| state.borrow().config.shape)
+}
+
+/// The current gaps and paddings.
+pub fn spacing() -> Spacing {
+    STATE.with(|state| state.borrow().config.spacing)
+}
+
 /// The current palette as a signal.
 pub fn use_palette() -> ReadSignal<Palette> {
     PALETTE.with(|signal| signal.read_only())
@@ -172,5 +211,24 @@ fn publish() {
     let listeners = STATE.with(|state| state.borrow().listeners.clone());
     for listener in listeners {
         listener(&current);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_is_material_baseline() {
+        let config = ThemeConfig::default();
+        assert_eq!(config.light, Palette::MATERIAL_LIGHT);
+        assert_eq!(config.dark, Palette::MATERIAL_DARK);
+        assert_eq!(config.typography, Typography::MATERIAL);
+        assert_eq!(config.shape.extra_large, 28.0);
+        assert_eq!(config.spacing.medium, 16.0);
+        assert_eq!(config.default_mode, ThemeMode::System);
+        assert!(config.font_family.is_none());
+        assert_eq!(typography(), Typography::MATERIAL);
+        assert_eq!(shape(), Shape::DEFAULT);
     }
 }

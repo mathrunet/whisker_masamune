@@ -4,6 +4,8 @@
 //! - The splash stays for at least [`BootConfig::min_display`] so it never just flashes.
 //! - Failures show "retry / quit"; [`BootError::Offline`] uses the offline message.
 //! - [`BootError::UpdateRequired`] shows "update / quit" and opens the store.
+//! - iOS has no "quit" button (apps must not terminate themselves there): failures offer only
+//!   "retry", and the update dialog stays up after opening the store.
 //! - [`restart`] goes back to the boot screen as if the app had been launched again.
 
 use std::future::Future;
@@ -153,6 +155,44 @@ fn quit() {
     let _ = masamune_whisker_app_control::exit_app();
 }
 
+/// Whether the platform lets the app close itself (not on iOS).
+const CAN_QUIT: bool = !cfg!(target_os = "ios");
+
+/// Shows the update-required dialog. Without a quit button it comes back after the store opens.
+fn show_update(config: BootConfig) {
+    let texts = config.texts.clone();
+    let store_url = config.store_url.clone();
+    let open_store = move || {
+        if let Some(url) = &store_url {
+            let _ = masamune_whisker_app_control::open_url(url);
+        }
+    };
+    if CAN_QUIT {
+        config.overlay.confirm(
+            (texts.update_title)(),
+            (texts.update_message)(),
+            (texts.update)(),
+            (texts.quit)(),
+            move || {
+                open_store();
+                quit();
+            },
+            Some(Rc::new(quit)),
+        );
+    } else {
+        let again = config.clone();
+        config.overlay.alert_then(
+            (texts.update_title)(),
+            (texts.update_message)(),
+            (texts.update)(),
+            move || {
+                open_store();
+                show_update(again.clone());
+            },
+        );
+    }
+}
+
 fn run(config: BootConfig, nav: RouterHandle) {
     spawn_local(async move {
         let (result, _) = tokio::join!((config.task)(), tokio::time::sleep(config.min_display));
@@ -168,20 +208,7 @@ fn run(config: BootConfig, nav: RouterHandle) {
                     on_error(&error);
                 }
                 if error == BootError::UpdateRequired {
-                    let store_url = config.store_url.clone();
-                    config.overlay.confirm(
-                        (texts.update_title)(),
-                        (texts.update_message)(),
-                        (texts.update)(),
-                        (texts.quit)(),
-                        move || {
-                            if let Some(url) = &store_url {
-                                let _ = masamune_whisker_app_control::open_url(url);
-                            }
-                            quit();
-                        },
-                        Some(Rc::new(quit)),
-                    );
+                    show_update(config);
                     return;
                 }
                 let message = if error == BootError::Offline {
@@ -190,14 +217,24 @@ fn run(config: BootConfig, nav: RouterHandle) {
                     (texts.failed)()
                 };
                 let retry_config = config.clone();
-                config.overlay.confirm(
-                    (texts.error_title)(),
-                    message,
-                    (texts.retry)(),
-                    (texts.quit)(),
-                    move || run(retry_config.clone(), nav.clone()),
-                    Some(Rc::new(quit)),
-                );
+                let retry = move || run(retry_config.clone(), nav.clone());
+                if CAN_QUIT {
+                    config.overlay.confirm(
+                        (texts.error_title)(),
+                        message,
+                        (texts.retry)(),
+                        (texts.quit)(),
+                        retry,
+                        Some(Rc::new(quit)),
+                    );
+                } else {
+                    config.overlay.alert_then(
+                        (texts.error_title)(),
+                        message,
+                        (texts.retry)(),
+                        retry,
+                    );
+                }
             }
         }
     });

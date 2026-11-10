@@ -1,6 +1,6 @@
 //! Buttons (Flutter's `FilledButton`, `OutlinedButton` and `TextButton`).
 
-use masamune_whisker_appearance::{TextKind, bold, palette};
+use masamune_whisker_appearance::{TextKind, bold, palette, shape};
 use whisker::css::{AlignItems, Color, Display, FlexDirection, JustifyContent, TextAlign};
 use whisker::prelude::*;
 use whisker_svg::Svg;
@@ -35,7 +35,7 @@ pub fn filled_button(
             gap: px(8),
             min_height: px(40),
             padding: (px(8), px(24)),
-            border_radius: px(24),
+            border_radius: px(shape().full),
             background_color: if off { palette().disabled } else { color },
         );
         if expand {
@@ -80,7 +80,7 @@ pub fn outlined_button(
             gap: px(8),
             height: px(40),
             padding: (px(0), px(24)),
-            border_radius: px(32),
+            border_radius: px(shape().full),
             border: whisker::css::Border::new().width(px(2)).solid().color(color),
             background_color: if filled { palette().primary } else { Color::rgba(0, 0, 0, 0.0) },
             opacity: if off { 0.5 } else { 1.0 },

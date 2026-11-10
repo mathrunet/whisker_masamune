@@ -1,6 +1,6 @@
 [package]
 name = "masamune-whisker-ui"
-description = "Material-style widgets for Whisker apps: Scaffold, AppBar, navigation bars, sheets, dialogs and buttons"
+description = "Material-style widgets for Whisker apps: Scaffold, AppBar, navigation bars, sheets, dialogs, buttons and the time picker"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -20,5 +20,7 @@ whisker-icons.workspace = true
 whisker-svg.workspace = true
 whisker-safe-area.workspace = true
 whisker-keyboard.workspace = true
+whisker-input.workspace = true
 masamune-whisker-appearance.workspace = true
+masamune-whisker-logger.workspace = true
 log.workspace = true

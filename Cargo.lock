@@ -12,6 +12,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "android_system_properties"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae221649c9976a6f6c56ae1facf410f3ddb33cc661c4b7b61020a912d4237fbc"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -49,6 +58,12 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "autocfg"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "base64"
@@ -155,6 +170,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono"
+version = "0.4.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
+dependencies = [
+ "iana-time-zone",
+ "js-sys",
+ "num-traits",
+ "serde",
+ "wasm-bindgen",
+ "windows-link",
+]
+
+[[package]]
 name = "clang-sys"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -173,6 +202,12 @@ checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "core-foundation-sys"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "cpufeatures"
@@ -542,6 +577,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "iana-time-zone"
+version = "0.1.65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470"
+dependencies = [
+ "android_system_properties",
+ "core-foundation-sys",
+ "iana-time-zone-haiku",
+ "js-sys",
+ "log",
+ "wasm-bindgen",
+ "windows-core",
+]
+
+[[package]]
+name = "iana-time-zone-haiku"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "icu_collections"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -807,23 +866,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
+name = "masamune-whisker-adapter"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-logger",
+ "whisker",
+]
+
+[[package]]
 name = "masamune-whisker-admob"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "masamune-whisker-ai-debugger"
+version = "0.2.1"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "futures-channel",
+ "futures-util",
+ "log",
+ "masamune-whisker-billing",
+ "masamune-whisker-device-info",
+ "masamune-whisker-image-picker",
+ "masamune-whisker-logger",
+ "masamune-whisker-view-capture",
+ "masamune-whisker-workers",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "whisker",
+ "whisker-image",
+ "whisker-input",
+ "whisker-local-store",
+ "whisker-safe-area",
+ "wiremock",
 ]
 
 [[package]]
 name = "masamune-whisker-app-control"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
@@ -841,10 +940,12 @@ dependencies = [
 name = "masamune-whisker-apple-sign-in"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
@@ -877,6 +978,14 @@ dependencies = [
  "serde",
  "serde_json",
  "whisker",
+]
+
+[[package]]
+name = "masamune-whisker-cached-image"
+version = "0.2.1"
+dependencies = [
+ "whisker",
+ "whisker-image",
 ]
 
 [[package]]
@@ -915,10 +1024,12 @@ dependencies = [
 name = "masamune-whisker-firebase-app-check"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
@@ -964,23 +1075,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-functions"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-workers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "masamune-whisker-functions-cloudflare"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-functions",
+ "masamune-whisker-workers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "masamune-whisker-functions-firebase"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-functions",
+ "masamune-whisker-workers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
 name = "masamune-whisker-google-sign-in"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
 name = "masamune-whisker-image-picker"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
  "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
@@ -997,6 +1147,7 @@ dependencies = [
 name = "masamune-whisker-local-notification"
 version = "0.2.1"
 dependencies = [
+ "masamune-whisker-adapter",
  "masamune-whisker-bridge",
  "serde",
  "serde_json",
@@ -1004,12 +1155,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "masamune-whisker-localize-build"
+name = "masamune-whisker-localize"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
+ "log",
+ "masamune-whisker-appearance",
+ "masamune-whisker-bridge",
  "serde",
+ "serde_json",
  "serde_yaml",
- "tempfile",
+ "whisker",
+ "whisker-local-store",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "masamune-whisker-logger"
+version = "0.2.1"
+dependencies = [
+ "log",
+ "web-sys",
+]
+
+[[package]]
+name = "masamune-whisker-logger-firebase"
+version = "0.2.1"
+dependencies = [
+ "log",
+ "masamune-whisker-logger",
+ "whisker",
+ "whisker-firebase",
 ]
 
 [[package]]
@@ -1021,6 +1197,7 @@ dependencies = [
  "futures-util",
  "libsql",
  "log",
+ "masamune-whisker-logger",
  "masamune-whisker-workers",
  "serde",
  "serde_json",
@@ -1050,6 +1227,35 @@ dependencies = [
  "serde",
  "serde_json",
  "whisker",
+]
+
+[[package]]
+name = "masamune-whisker-storage"
+version = "0.2.1"
+dependencies = [
+ "futures-executor",
+ "tempfile",
+]
+
+[[package]]
+name = "masamune-whisker-storage-cloudflare"
+version = "0.2.1"
+dependencies = [
+ "base64 0.22.1",
+ "masamune-whisker-storage",
+ "masamune-whisker-workers",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
+name = "masamune-whisker-storage-firebase"
+version = "0.2.1"
+dependencies = [
+ "masamune-whisker-storage",
+ "whisker-firebase",
 ]
 
 [[package]]
@@ -1083,8 +1289,10 @@ version = "0.2.1"
 dependencies = [
  "log",
  "masamune-whisker-appearance",
+ "masamune-whisker-logger",
  "whisker",
  "whisker-icons",
+ "whisker-input",
  "whisker-keyboard",
  "whisker-router",
  "whisker-safe-area",
@@ -1150,6 +1358,15 @@ name = "num-conv"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
+
+[[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "num_cpus"
@@ -2122,8 +2339,7 @@ dependencies = [
 [[package]]
 name = "whisker"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "181730bc5db9bb5f46b79ebf05f18c7e019f67f7000274517a093488132d98ae"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "serde",
  "serde_json",
@@ -2140,8 +2356,7 @@ dependencies = [
 [[package]]
 name = "whisker-animation"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68af1cd8a11ac36c27de325d55414667d8e59838a8d878f57086e0296c00e719"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker-css",
  "whisker-runtime",
@@ -2150,8 +2365,7 @@ dependencies = [
 [[package]]
 name = "whisker-config"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "774c79d14b4f78718d49b7bad9143e64f107bb9b11aea21cde21597a4470d0cd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "anyhow",
  "serde",
@@ -2162,8 +2376,7 @@ dependencies = [
 [[package]]
 name = "whisker-css"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b428f0f9ffcd96be862995ed623db546a604ac2cf2aa4758959128fb9aaff004"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker-macros",
  "whisker-style",
@@ -2172,8 +2385,7 @@ dependencies = [
 [[package]]
 name = "whisker-driver"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644219639b2cf919df18a0c3f683d1324ee96711e99c3223fae3f0dad9b2d6ca"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker-driver-sys",
  "whisker-engine",
@@ -2183,8 +2395,7 @@ dependencies = [
 [[package]]
 name = "whisker-driver-sys"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f03555ea857a177f7b8ec25723f6eb3e018b28a5280c33f1cd379318b596aaa"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "cc",
 ]
@@ -2192,8 +2403,7 @@ dependencies = [
 [[package]]
 name = "whisker-engine"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f9ab1ad2b2604e013b63b44c1d2b0558a6c8fa334e96e2d43030cea71401307"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker-layout",
  "whisker-protocol",
@@ -2203,14 +2413,28 @@ dependencies = [
 [[package]]
 name = "whisker-firebase"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af280d07123dedec51e95aa01f230ff05aa7e562f58f5e2b1e2b1765c94384e3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "anyhow",
  "plist",
  "serde",
  "serde_json",
+ "whisker-firebase-analytics",
  "whisker-firebase-auth",
+ "whisker-firebase-core",
+ "whisker-firebase-crashlytics",
+ "whisker-firebase-storage",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "whisker-firebase-analytics"
+version = "0.1.1"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
+dependencies = [
+ "anyhow",
+ "serde",
+ "whisker",
  "whisker-firebase-core",
  "whisker-plugin",
 ]
@@ -2218,8 +2442,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-auth"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c30da5630c4cafb0fa90b3279c1abe63177fced210c6271994bfd69a9afd8c1b"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
  "whisker-firebase-core",
@@ -2228,8 +2451,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-core"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1d4a8139ee2b0d1a4e9ed04b1af2cd1d9c4c25ee9b185e1ca09a72b76e3600"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "anyhow",
  "serde",
@@ -2238,20 +2460,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "whisker-firebase-crashlytics"
+version = "0.1.1"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
+dependencies = [
+ "anyhow",
+ "serde",
+ "whisker",
+ "whisker-firebase-core",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "whisker-firebase-storage"
+version = "0.1.1"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
+dependencies = [
+ "whisker",
+ "whisker-firebase-core",
+]
+
+[[package]]
 name = "whisker-icons"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4096bdb4792b03d00522edd8414f834b225ddd3c52ce899c9f54e8e0bd2de81"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
  "whisker-svg",
 ]
 
 [[package]]
+name = "whisker-image"
+version = "0.14.4"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
+dependencies = [
+ "serde",
+ "serde_json",
+ "whisker",
+]
+
+[[package]]
+name = "whisker-input"
+version = "0.14.4"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
+dependencies = [
+ "serde",
+ "whisker",
+]
+
+[[package]]
 name = "whisker-keyboard"
 version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a923a4357ed0aca876c8978f698c95602691b51de95aa6afe07757d1a55afa7a"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
 ]
@@ -2259,8 +2519,7 @@ dependencies = [
 [[package]]
 name = "whisker-layout"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4a7d92358f3480d3ca325e7583e070dc47ac3fbeff7e6015316ee62d4c4cd28"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "taffy",
  "whisker-protocol",
@@ -2270,8 +2529,7 @@ dependencies = [
 [[package]]
 name = "whisker-local-store"
 version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c90ff67b8e1f07e683c494ddb6b316dd933c05b55dbc1844c6052e124f009"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
 ]
@@ -2279,8 +2537,7 @@ dependencies = [
 [[package]]
 name = "whisker-macro-syntax"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6a31fb97624345fcd01420720b94bf3cf99882093a67692eb33a1dab60499b3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
@@ -2289,8 +2546,7 @@ dependencies = [
 [[package]]
 name = "whisker-macros"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e3433c55c8305e1afcae8691ca7f6c2f9018f3c11e4ba5d1737930a76e3fe36"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2301,8 +2557,7 @@ dependencies = [
 [[package]]
 name = "whisker-paths"
 version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "990183968582ff0498fe8f6aa2fef8b780683061be3062adffc9938b0aa32b48"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
 ]
@@ -2310,8 +2565,7 @@ dependencies = [
 [[package]]
 name = "whisker-plugin"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fbe810c6c4c48fe3e8b64e6f56bc5d0520891bfac33175a902fd0c992685503"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "anyhow",
  "serde",
@@ -2321,8 +2575,7 @@ dependencies = [
 [[package]]
 name = "whisker-protocol"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4f03e87fb35abea1d6ee2aaa36381d36606db306c9d4b07cf4ccc5e585eb935"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker-value",
 ]
@@ -2330,6 +2583,7 @@ dependencies = [
 [[package]]
 name = "whisker-router"
 version = "0.14.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "anyhow",
  "serde",
@@ -2341,8 +2595,7 @@ dependencies = [
 [[package]]
 name = "whisker-runtime"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ed6abacef324f756e7fb916f10638d48f42832308f7fc053e7f876180c8adf"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -2359,8 +2612,7 @@ dependencies = [
 [[package]]
 name = "whisker-safe-area"
 version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cee2d18ed808b7235ec18b2bd0757c883ed893c3800ba54b376bd84a6b2780d0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "whisker",
 ]
@@ -2368,14 +2620,12 @@ dependencies = [
 [[package]]
 name = "whisker-style"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaea22ae107f0fb5e8bfb1ab98a49f275a164d74d5d39e0dae5d71b385a4d822"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 
 [[package]]
 name = "whisker-svg"
 version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70cd8851aee41746544f45a71fa94cc2f12ab67f4a796642c353e8aeb5f6ec50"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "base64 0.22.1",
  "roxmltree",
@@ -2385,11 +2635,45 @@ dependencies = [
 [[package]]
 name = "whisker-value"
 version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaf33f9a932743bb8fd899ec419f3703558d3dd2289ee8fdd20c6d14d64aca7a"
+source = "git+https://github.com/mathrunet/whisker?branch=main#f386880d210e1c6777c9f5377aca839a9bab50d8"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "windows-core"
+version = "0.62.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
+dependencies = [
+ "windows-implement",
+ "windows-interface",
+ "windows-link",
+ "windows-result",
+ "windows-strings",
+]
+
+[[package]]
+name = "windows-implement"
+version = "0.60.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "windows-interface"
+version = "0.59.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2397,6 +2681,24 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
+name = "windows-result"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
+dependencies = [
+ "windows-link",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
+dependencies = [
+ "windows-link",
+]
 
 [[package]]
 name = "windows-sys"

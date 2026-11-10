@@ -23,6 +23,9 @@ pub struct PickedTime {
 }
 
 /// Date dialog. `initial` is (year, month 1-12, day). `min_ms` and `max_ms` are UTC milliseconds. Returns `None` if cancelled.
+///
+/// On iOS an inline Gregorian calendar (`UIDatePicker`) is shown in a centered dialog with Cancel /
+/// Done; tapping outside the dialog cancels, like on Android.
 pub async fn pick_date(
     initial: (i32, u32, u32),
     min_ms: Option<i64>,
@@ -39,6 +42,8 @@ pub async fn pick_date(
 }
 
 /// Time dialog (follows the device's 12/24-hour setting). Returns `None` if cancelled.
+///
+/// On iOS a wheel `UIDatePicker` is shown in the same dialog as [`pick_date`].
 pub async fn pick_time(hour: u32, minute: u32) -> NativeResult<Option<PickedTime>> {
     module()
         .call_async("pickTime", &json!({ "hour": hour, "minute": minute }))

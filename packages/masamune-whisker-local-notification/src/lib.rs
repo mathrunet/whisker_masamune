@@ -2,7 +2,17 @@
 //!
 //! Schedules are persisted on the host and re-armed after device reboots and app updates.
 //! Call [`configure`] first to set the notification channel and small icon.
+//! With [`LocalNotificationMasamuneAdapter`] in the app's `MasamuneAdapters`, configuring and re-arming
+//! happen at startup.
+//!
+//! On iOS the schedules are repeating `UNCalendarNotificationTrigger` requests, which iOS keeps
+//! across reboots and updates by itself. Like on Android, the notifications are also shown while the
+//! app is in the foreground: the module installs a `UNUserNotificationCenterDelegate` in front of
+//! the one already set (for example Firebase Messaging) and forwards every other notification to it.
 
+mod adapter;
+
+pub use adapter::LocalNotificationMasamuneAdapter;
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult};
 use serde::Deserialize;
@@ -35,6 +45,9 @@ pub struct Schedule {
 }
 
 /// Sets the notification channel and small icon (once at startup).
+///
+/// Android only: iOS has no notification channels and always uses the app icon, so the values are
+/// ignored there (the call still succeeds).
 pub fn configure(config: &NotificationConfig<'_>) -> NativeResult<bool> {
     module().call(
         "configure",
@@ -48,10 +61,35 @@ pub fn configure(config: &NotificationConfig<'_>) -> NativeResult<bool> {
 }
 
 /// Whether notifications are allowed (for both the app and the channel).
+///
+/// On iOS this returns the authorization status the module caches at startup, after
+/// [`request_permission`] and whenever the app becomes active (authorized, provisional and
+/// ephemeral count as allowed).
 pub fn authorized() -> bool {
     module()
         .call::<_, String>("status", &json!({}))
         .is_ok_and(|s| s == "authorized")
+}
+
+/// Notification permission state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionStatus {
+    /// Notifications can be shown.
+    Authorized,
+    /// The user turned notifications off; only the system settings can change it.
+    Denied,
+    /// The app has not asked yet, so [`request_permission`] shows the system prompt (iOS only;
+    /// Android reports a missing permission as [`PermissionStatus::Denied`]).
+    NotDetermined,
+}
+
+/// The current permission state (cached on iOS like [`authorized`]).
+pub fn permission_status() -> PermissionStatus {
+    match module().call::<_, String>("status", &json!({})).as_deref() {
+        Ok("authorized") => PermissionStatus::Authorized,
+        Ok("notDetermined") => PermissionStatus::NotDetermined,
+        _ => PermissionStatus::Denied,
+    }
 }
 
 /// Requests notification permission. Returns `true` if granted.
@@ -79,6 +117,9 @@ pub fn schedule(id: &str) -> NativeResult<Option<Schedule>> {
 }
 
 /// Re-arms all saved schedules (at startup).
+///
+/// Not needed on iOS, where repeating requests survive by themselves; it re-registers the saved
+/// schedules, which is harmless.
 pub fn rearm() -> NativeResult<bool> {
     module().call("rearm", &json!({}))
 }
@@ -92,6 +133,8 @@ pub fn cancel_all() -> NativeResult<bool> {
 }
 
 /// Opens this app's notification settings screen.
+///
+/// On iOS 16 and later this opens the app's notification settings, on iOS 15 the app's settings.
 pub fn open_settings() -> NativeResult<bool> {
     module().call("openSettings", &json!({}))
 }
