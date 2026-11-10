@@ -17,3 +17,5 @@ crate-type = ["rlib"]
 whisker.workspace = true
 log.workspace = true
 whisker-local-store.workspace = true
+masamune-whisker-device-info.workspace = true
+masamune-whisker-app-control.workspace = true
