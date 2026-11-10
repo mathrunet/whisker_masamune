@@ -1053,6 +1053,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-tidb"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "masamune-whisker-model",
+ "masamune-whisker-workers",
+ "serde_json",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
 name = "masamune-whisker-turso"
 version = "0.1.0"
 dependencies = [

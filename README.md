@@ -31,6 +31,21 @@ or crates.io.
 | `masamune-whisker-firebase-firestore-db` | Cloud Firestore on named databases |
 | `masamune-whisker-firebase-ai` | Firebase AI Logic (Gemini) |
 
+### Foundations
+
+| Crate | Description |
+|---|---|
+| `masamune-whisker-workers` | HTTP client for Masamune Cloudflare Workers and Firebase callable functions |
+| `masamune-whisker-model` | Query types, REST database client, on-device libsql cache and `CachedStore` |
+| `masamune-whisker-turso` | Turso through the Masamune worker, with the libsql cache |
+| `masamune-whisker-tidb` | TiDB through the Masamune worker (counts, vector search, bulk writes), with the libsql cache |
+| `masamune-whisker-firestore` | Firestore reads/listeners with cache policies and UI signals |
+| `masamune-whisker-appearance` | Light/dark/system themes, languages, typography and app-wide rebuilds |
+| `masamune-whisker-localize-build` | Build-script generator of typed `l()` tables from localize YAML |
+| `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |
+| `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
+| `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons) |
+
 Android is implemented for all native modules today. The Rust APIs are platform-neutral so
 iOS and Web hosts can be added without breaking apps.
 
