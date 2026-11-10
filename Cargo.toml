@@ -3,7 +3,7 @@
 members = ["packages/*"]
 # Apps and this workspace use whisker-router from the mathrunet/whisker fork main.
 # Rust Host crates are built by whisker-cng inside the generated platform projects.
-exclude = ["patches/whisker-router", "packages/masamune-whisker-localize/web"]
+exclude = ["packages/masamune-whisker-localize/web"]
 resolver = "2"
 
 [workspace.package]

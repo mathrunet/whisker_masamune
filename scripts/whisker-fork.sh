@@ -3,8 +3,7 @@
 #
 #   scripts/whisker-fork.sh check [--allow-path]
 #       Fails unless every `whisker*` package in Cargo.lock comes from the fork's
-#       `main` branch at a single revision. `whisker-router` may also come from
-#       whisker_masamune (the patched router). `--allow-path` accepts local path
+#       `main` branch at a single revision. `--allow-path` accepts local path
 #       sources while testing against a working tree of the fork.
 #
 #   scripts/whisker-fork.sh cli
@@ -46,15 +45,13 @@ cmd_check() {
   while IFS=$'\t' read -r name version source; do
     count=$((count + 1))
     if [[ -z "$source" ]]; then
-      if [[ $allow_path -eq 1 || "$name" == "whisker-router" ]]; then
+      if [[ $allow_path -eq 1 ]]; then
         continue
       fi
       echo "path source: $name $version (use --allow-path while testing a local fork)" >&2
       bad=1
     elif [[ "$source" == "$FORK_SOURCE"* ]]; then
       revs+="${source#"$FORK_SOURCE"}"$'\n'
-    elif [[ "$name" == "whisker-router" && "$source" == git+https://github.com/mathrunet/whisker_masamune* ]]; then
-      continue
     else
       echo "not from the fork: $name $version ($source)" >&2
       echo "  add it to [patch.crates-io] with the fork source, or raise the version requirement" >&2
