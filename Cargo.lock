@@ -867,7 +867,7 @@ checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
 name = "masamune-whisker-adapter"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-logger",
  "whisker",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-admob"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -888,7 +888,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-ai-debugger"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-app-control"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-bridge",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-appearance"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-app-control",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-apple-sign-in"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -952,14 +952,14 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "masamune-whisker-auth-firebase"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-auth",
  "whisker-firebase",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth0"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "log",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth0-firebase"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "futures-util",
  "masamune-whisker-auth",
@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-billing"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-boot"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-app-control",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-bridge"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-cached-image"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "whisker",
  "whisker-image",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-date-picker"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1049,7 +1049,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-device-info"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-ai"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-app-check"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-firestore-db"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1095,7 +1095,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-remote-config"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firestore"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-firebase-firestore-db",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-fonts"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1127,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-auth",
@@ -1140,7 +1140,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions-cloudflare"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-functions",
  "serde",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions-firebase"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-auth-firebase",
  "masamune-whisker-firebase-app-check",
@@ -1164,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-google-sign-in"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1177,7 +1177,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-image-picker"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-in-app-review"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-local-notification"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-localize"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "log",
@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-logger"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "web-sys",
@@ -1236,7 +1236,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-logger-firebase"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-logger",
@@ -1246,7 +1246,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-model"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-model-functions"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-functions",
  "masamune-whisker-model",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-screen"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-app-control",
@@ -1288,7 +1288,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-share"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1298,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-share-receive"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "log",
@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-shimmer"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-appearance",
  "whisker",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "futures-executor",
  "tempfile",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-cloudflare"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-functions",
@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-firebase"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "masamune-whisker-storage",
  "whisker-firebase",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-functions"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-functions",
@@ -1361,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-tidb"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-functions",
@@ -1373,7 +1373,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-turso"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-functions",
@@ -1386,7 +1386,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-ui"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "log",
  "masamune-whisker-appearance",
@@ -1402,14 +1402,14 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-view-capture"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "masamune-whisker-webview"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-youtube"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "tokio",

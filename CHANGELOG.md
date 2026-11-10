@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+- Added `masamune-whisker-webview`: `MasamuneWebView` (`WKWebView` / `android.webkit.WebView`)
+  for app shells around a web app, with scripts injected at document start (`user_scripts`),
+  navigation restricted to `allowed_origins` (other links go to `on_external_navigation`),
+  `window.open` / `target="_blank"` handed to `on_open_window`, camera / microphone grants for
+  `getUserMedia`, `<input type="file">` on Android, recovery when the web content process ends,
+  page messaging through `MasamuneWebViewRef` and `WebViewMasamuneAdapter` for app defaults
+  (including `max_download_bytes`).
+- Added `masamune-whisker-share-receive`: receives text, URLs and images shared by other apps
+  (Android `ACTION_SEND` / `ACTION_SEND_MULTIPLE`; iOS Share Extension writing into an App Group),
+  delivered once through `take_pending` / `latest_share`, with the `MasamuneShareReceive` CNG
+  plugin and `ShareReceiveMasamuneAdapter`.
 
 - Added `masamune-whisker-auth0`: Auth0 Universal Login (Auth0.swift 2.x / Auth0.Android 3.x)
   with credentials stored and renewed by the native credentials managers. `Auth0Adapter` with
