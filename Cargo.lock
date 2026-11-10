@@ -856,6 +856,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-boot"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "masamune-whisker-app-control",
+ "masamune-whisker-ui",
+ "masamune-whisker-workers",
+ "tokio",
+ "whisker",
+ "whisker-router",
+]
+
+[[package]]
 name = "masamune-whisker-bridge"
 version = "0.1.0"
 dependencies = [

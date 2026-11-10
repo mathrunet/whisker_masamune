@@ -1,0 +1,28 @@
+[package]
+name = "masamune-whisker-boot"
+description = "Boot screen for Whisker apps: run startup work behind a splash, retry or quit on failure, force updates"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+# `From<ApiError> for BootError`.
+workers = ["dep:masamune-whisker-workers"]
+
+[dependencies]
+whisker.workspace = true
+whisker-router.workspace = true
+tokio.workspace = true
+log.workspace = true
+masamune-whisker-ui.workspace = true
+masamune-whisker-app-control.workspace = true
+masamune-whisker-workers = { workspace = true, optional = true }
