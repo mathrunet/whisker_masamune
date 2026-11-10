@@ -1006,12 +1006,16 @@ version = "0.1.0"
 dependencies = [
  "futures-channel",
  "futures-executor",
+ "futures-util",
  "libsql",
  "log",
+ "masamune-whisker-workers",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "whisker-paths",
+ "wiremock",
 ]
 
 [[package]]
@@ -1034,6 +1038,19 @@ dependencies = [
  "serde",
  "serde_json",
  "whisker",
+]
+
+[[package]]
+name = "masamune-whisker-turso"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "masamune-whisker-model",
+ "masamune-whisker-workers",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wiremock",
 ]
 
 [[package]]

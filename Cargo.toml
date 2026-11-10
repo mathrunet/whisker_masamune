@@ -48,6 +48,8 @@ masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.1.0"
 masamune-whisker-boot = { path = "packages/masamune-whisker-boot", version = "0.1.0" }
 masamune-whisker-screen = { path = "packages/masamune-whisker-screen", version = "0.1.0" }
 masamune-whisker-localize-build = { path = "packages/masamune-whisker-localize-build", version = "0.1.0" }
+masamune-whisker-turso = { path = "packages/masamune-whisker-turso", version = "0.1.0" }
+masamune-whisker-tidb = { path = "packages/masamune-whisker-tidb", version = "0.1.0" }
 masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.1.0" }
 masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.1.0" }
 

@@ -23,7 +23,7 @@ pub use auth::current_uid;
 #[cfg(feature = "firebase-functions")]
 pub use callable::Callable;
 pub use error::{ApiError, ApiResult};
-pub use reqwest::Method;
+pub use reqwest::{Method, Url};
 pub use retry::{RetryPolicy, retry, with_timeout};
 use serde_json::Value;
 

@@ -18,6 +18,8 @@ serde.workspace = true
 serde_json.workspace = true
 futures-channel.workspace = true
 futures-executor.workspace = true
+futures-util.workspace = true
+masamune-whisker-workers.workspace = true
 log.workspace = true
 whisker-paths.workspace = true
 
@@ -26,3 +28,5 @@ libsql.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+wiremock.workspace = true

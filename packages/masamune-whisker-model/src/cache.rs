@@ -292,6 +292,37 @@ impl ModelCache {
         Ok(query.apply(docs, |d| &d.data))
     }
 
+    /// Collections under `scope` whose name starts with `prefix`.
+    pub async fn list_collections(&self, scope: &str, prefix: &str) -> CacheResult<Vec<String>> {
+        let scope = scope.to_owned();
+        let pattern = format!(
+            "{}%",
+            prefix
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        self.run(move |conn| {
+            block_on(async {
+                let mut rows = conn
+                    .query(
+                        "SELECT DISTINCT collection FROM mw_documents WHERE scope = ?1 AND collection LIKE ?2 ESCAPE '\\'",
+                        params![scope, pattern],
+                    )
+                    .await?;
+                let mut out = Vec::new();
+                while let Some(row) = rows.next().await? {
+                    if let SqlValue::Text(name) = row.get_value(0)? {
+                        out.push(name);
+                    }
+                }
+                Ok::<_, libsql::Error>(out)
+            })
+            .map_err(CacheError::from)
+        })
+        .await
+    }
+
     /// Removes every document of a collection.
     pub async fn clear_collection(&self, scope: &str, collection: &str) -> CacheResult<()> {
         let (scope, collection) = (scope.to_owned(), collection.to_owned());
