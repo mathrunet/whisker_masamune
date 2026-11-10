@@ -19,6 +19,7 @@ git repository or crates.io.
 | `masamune-whisker-date-picker` | Native date and time pickers |
 | `masamune-whisker-view-capture` | Capture a view subtree as PNG |
 | `masamune-whisker-share` | OS share sheet |
+| `masamune-whisker-youtube` | [YouTube player (IFrame Player API in a native web view) and a 16:9 `YouTube` box](packages/masamune-whisker-youtube/README.md) |
 | `masamune-whisker-image-picker` | Gallery / camera picker with resizing |
 | `masamune-whisker-local-notification` | Daily scheduled local notifications |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
@@ -39,6 +40,8 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 |---|---|
 | `masamune-whisker-auth` | [`AuthAdapter` interface and `Auth` token handle](packages/masamune-whisker-auth/README.md) |
 | `masamune-whisker-auth-firebase` | [Firebase Authentication `AuthAdapter` (ID tokens, UID)](packages/masamune-whisker-auth-firebase/README.md) |
+| `masamune-whisker-auth0` | [Auth0 Universal Login with Keychain/Keystore credentials, `Auth0` session handle (`AuthAdapter`), runtime adapter, Functions body injection and URL scheme CNG plugin](packages/masamune-whisker-auth0/README.md) |
+| `masamune-whisker-auth0-firebase` | [Firebase Auth sign-in with an Auth0 session (`auth0_custom_token` exchange): login, restore, logout](packages/masamune-whisker-auth0-firebase/README.md) |
 | `masamune-whisker-functions` | [Typed server actions, the shared HTTP foundation (`ApiError`, retry), JSON REST and runtime adapters](packages/masamune-whisker-functions/README.md) |
 | `masamune-whisker-functions-cloudflare` | [Cloudflare Functions adapter with edge/region routing](packages/masamune-whisker-functions-cloudflare/README.md) |
 | `masamune-whisker-functions-firebase` | [Firebase callable Functions adapter with Auth and App Check](packages/masamune-whisker-functions-firebase/README.md) |
@@ -46,9 +49,11 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-turso` | Turso through the Masamune worker (any `FunctionsAdapter`), with the libsql cache |
 | `masamune-whisker-tidb` | TiDB through the Masamune worker (any `FunctionsAdapter`; counts, vector search, bulk writes), with the libsql cache |
 | `masamune-whisker-firestore` | Firestore reads/listeners with cache policies and UI signals |
+| `masamune-whisker-model-functions` | [Firestore documents/collections through the Masamune model Functions callables](packages/masamune-whisker-model-functions/README.md) (any `FunctionsAdapter`; Masamune's `FunctionsModelAdapter`), with the libsql cache |
 | `masamune-whisker-storage` | `StorageAdapter` trait (upload, download, delete, public and download URLs), file types and an in-memory adapter |
 | `masamune-whisker-storage-firebase` | Cloud Storage for Firebase as a `StorageAdapter` (needs `whisker-firebase-storage` in the app's `[patch.crates-io]`) |
 | `masamune-whisker-storage-cloudflare` | Cloudflare R2 through the Masamune storage worker (any `FunctionsAdapter`) as a `StorageAdapter` |
+| `masamune-whisker-storage-functions` | [Files through the Masamune storage Functions callable](packages/masamune-whisker-storage-functions/README.md) (`storage_firebase`; any `FunctionsAdapter`; Masamune's `FunctionsStorageAdapter`) as a `StorageAdapter` |
 | `masamune-whisker-appearance` | App-wide Material theme (`ThemeConfig`: palettes, typography, shapes, spacing, elevation), light/dark/system modes and app-wide rebuilds |
 | `masamune-whisker-localize` | Everything about languages: system languages (Android, iOS, Web), system or pinned language saved across launches, typed strings in Rust (`localize!`) and the localize YAML generator (feature `build`) |
 | `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |
@@ -133,7 +138,7 @@ while preparing the app. Each adapter prepares itself (for example the notificat
 and starts its background work (for example re-arming saved notifications); plugins read their
 settings with `XxxMasamuneAdapter::primary()`.
 
-Crates with an adapter: admob, ai-debugger, apple-sign-in, billing, firebase-ai,
+Crates with an adapter: admob, ai-debugger, apple-sign-in, auth0, billing, firebase-ai,
 firebase-app-check, firebase-remote-config, google-sign-in, image-picker, in-app-review and
 local-notification. share and view-capture have no runtime settings, and build-time settings stay
 in their CNG plugins.

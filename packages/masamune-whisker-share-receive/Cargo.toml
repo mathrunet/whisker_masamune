@@ -1,0 +1,40 @@
+[package]
+name = "masamune-whisker-share-receive"
+description = "Receive text, URLs and images shared from other apps for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+# CNG plugin: `app.project_plugin::<MasamuneShareReceive>(|c| …)` in whisker.rs adds the share
+# intent filters to MainActivity on Android and a Share Extension with an App Group on iOS.
+[package.metadata.whisker.plugins.masamune-whisker-share-receive]
+bin = "masamune-whisker-share-receive-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-share-receive-plugin"
+path = "bin/masamune_whisker_share_receive_plugin.rs"
+test = false
+bench = false
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+masamune-whisker-bridge.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

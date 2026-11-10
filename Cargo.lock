@@ -966,6 +966,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-auth0"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "log",
+ "masamune-whisker-adapter",
+ "masamune-whisker-auth",
+ "masamune-whisker-bridge",
+ "masamune-whisker-functions",
+ "serde",
+ "serde_json",
+ "tokio",
+ "whisker",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "masamune-whisker-auth0-firebase"
+version = "0.3.1"
+dependencies = [
+ "futures-util",
+ "masamune-whisker-auth",
+ "masamune-whisker-auth-firebase",
+ "masamune-whisker-auth0",
+ "masamune-whisker-functions",
+ "serde_json",
+ "tokio",
+ "whisker-firebase",
+]
+
+[[package]]
 name = "masamune-whisker-billing"
 version = "0.3.1"
 dependencies = [
@@ -1233,6 +1264,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-model-functions"
+version = "0.3.1"
+dependencies = [
+ "masamune-whisker-functions",
+ "masamune-whisker-model",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "masamune-whisker-screen"
 version = "0.3.1"
 dependencies = [
@@ -1252,6 +1294,20 @@ dependencies = [
  "serde",
  "serde_json",
  "whisker",
+]
+
+[[package]]
+name = "masamune-whisker-share-receive"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "log",
+ "masamune-whisker-adapter",
+ "masamune-whisker-bridge",
+ "serde",
+ "serde_json",
+ "whisker",
+ "whisker-plugin",
 ]
 
 [[package]]
@@ -1289,6 +1345,18 @@ version = "0.3.1"
 dependencies = [
  "masamune-whisker-storage",
  "whisker-firebase",
+]
+
+[[package]]
+name = "masamune-whisker-storage-functions"
+version = "0.3.1"
+dependencies = [
+ "base64 0.22.1",
+ "masamune-whisker-functions",
+ "masamune-whisker-storage",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -1336,6 +1404,27 @@ dependencies = [
 name = "masamune-whisker-view-capture"
 version = "0.3.1"
 dependencies = [
+ "whisker",
+]
+
+[[package]]
+name = "masamune-whisker-webview"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "masamune-whisker-adapter",
+ "serde",
+ "serde_json",
+ "whisker",
+ "whisker-plugin",
+]
+
+[[package]]
+name = "masamune-whisker-youtube"
+version = "0.3.1"
+dependencies = [
+ "serde",
+ "tokio",
  "whisker",
 ]
 

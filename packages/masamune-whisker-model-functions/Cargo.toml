@@ -1,0 +1,23 @@
+[package]
+name = "masamune-whisker-model-functions"
+description = "Firestore document/collection access through Masamune model Functions callables for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+masamune-whisker-functions.workspace = true
+masamune-whisker-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }

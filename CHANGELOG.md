@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+- Added `masamune-whisker-auth0`: Auth0 Universal Login (Auth0.swift 2.x / Auth0.Android 3.x)
+  with credentials stored and renewed by the native credentials managers. `Auth0Adapter` with
+  `NativeAuth0Adapter` and `RuntimeAuth0Adapter`, the `Auth0` session handle (`login`, `restore`,
+  `access_token`, `logout`, `user_id`; implements `AuthAdapter`), `Auth0MasamuneAdapter` /
+  `auth0_auth()`, `Auth0FunctionsAdapter` (adds `auth0_domain` / `auth0_access_token` to request
+  bodies) and the `MasamuneAuth0` CNG plugin (iOS URL scheme, Android `auth0Scheme` /
+  `auth0Domain` manifest placeholders).
+- Added `masamune-whisker-auth0-firebase`: signs in to Firebase Auth with the Auth0 session through
+  the `auth0_custom_token` callable (`Auth0CustomTokenAction`); `login`, `restore`, `logout`,
+  `sign_in_firebase` and `Auth0FirebaseAuthAdapter`. The Functions backend is passed in by the app.
+
+- Added `masamune-whisker-youtube`: `YouTubePlayer` hosts the YouTube IFrame Player API in a
+  native web view (`WKWebView` / `android.webkit.WebView`) with `video_id`, `autoplay`,
+  `loop_video` and `origin` props, ready / state / error events and a `YouTubePlayerRef`
+  (play, pause, cue, load, seek, mute, unmute); `YouTube` is the 16:9 box of Masamune's
+  `VideoWidget` (black until the ID is set and the page transition ended).
+- Added `masamune-whisker-model-functions`: `FunctionsStore` reads and writes Firestore documents
+  and collections through the `document_model_firestore` / `collection_model_firestore` /
+  `aggregate_model_firestore` callables (Masamune's `FunctionsModelAdapter`) as a `RemoteStore`,
+  with on-device query evaluation and `field_value` helpers for Masamune timestamps, references
+  and counters.
+- Added `masamune-whisker-storage-functions`: `FunctionsStorageAdapter` uploads, downloads and
+  deletes files through the `storage_firebase` callable (Masamune's `FunctionsStorageAdapter`;
+  `{method, path: "{bucket}/{path}", binary (base64), meta}`) as a `StorageAdapter`, with the
+  public and download URLs and downloaded bytes cached in memory like `FunctionsStorageDatabase`.
+- `masamune-whisker-model`: `CachedStore` keeps an in-memory layer for the current session
+  (Masamune's `ref.app.model`). Cacheable rows are served from memory before the on-device cache,
+  `CachedStore::peek` returns the last known value of any row synchronously (including rows
+  rejected by the cache filter, and `Some(None)` for rows known not to exist), and
+  `CacheOptions::with_memory(false)` turns the layer off. The memory is cleared by
+  `set_session`, `clear_cache` and `clear_database`.
+
 ## 0.3.1
 
 - Added `masamune-whisker-shimmer`: `ShimmerBox` and `ShimmerMultiLine` loading placeholders

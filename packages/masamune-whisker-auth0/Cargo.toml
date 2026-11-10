@@ -1,0 +1,50 @@
+[package]
+name = "masamune-whisker-auth0"
+description = "Auth0 Universal Login with stored, renewing credentials for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+# CNG plugin: `app.project_plugin::<MasamuneAuth0>(|c| …)` in whisker.rs registers the callback
+# URL scheme on iOS and the `auth0Domain` / `auth0Scheme` manifest placeholders on Android.
+[package.metadata.whisker.plugins.masamune-whisker-auth0]
+bin = "masamune-whisker-auth0-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-auth0-plugin"
+path = "bin/masamune_whisker_auth0_plugin.rs"
+test = false
+bench = false
+
+[features]
+default = ["functions"]
+# `Auth0FunctionsAdapter`, which adds the Auth0 domain and access token to every request body.
+functions = ["dep:masamune-whisker-functions", "dep:log"]
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+masamune-whisker-auth.workspace = true
+masamune-whisker-bridge.workspace = true
+masamune-whisker-functions = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }

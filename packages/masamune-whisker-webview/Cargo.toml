@@ -1,0 +1,37 @@
+[package]
+name = "masamune-whisker-webview"
+description = "Native WebView element (WKWebView / android.webkit.WebView) with a JS bridge, origin-restricted navigation, media permissions and file uploads for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+# CNG plugin: `app.plugin::<MasamuneWebViewPlugin>(|c| …)` in whisker.rs adds the Android camera /
+# microphone permissions and the iOS camera / microphone / photo library usage descriptions.
+[package.metadata.whisker.plugins.masamune-whisker-webview]
+bin = "masamune-whisker-webview-plugin"
+
+[[bin]]
+name = "masamune-whisker-webview-plugin"
+path = "bin/masamune_whisker_webview_plugin.rs"
+test = false
+bench = false
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

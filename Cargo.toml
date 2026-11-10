@@ -71,6 +71,13 @@ masamune-whisker-view-capture = { path = "packages/masamune-whisker-view-capture
 masamune-whisker-billing = { path = "packages/masamune-whisker-billing", version = "0.3.1" }
 masamune-whisker-image-picker = { path = "packages/masamune-whisker-image-picker", version = "0.3.1" }
 masamune-whisker-ai-debugger = { path = "packages/masamune-whisker-ai-debugger", version = "0.3.1" }
+masamune-whisker-webview = { path = "packages/masamune-whisker-webview", version = "0.3.1" }
+masamune-whisker-share-receive = { path = "packages/masamune-whisker-share-receive", version = "0.3.1" }
+masamune-whisker-auth0 = { path = "packages/masamune-whisker-auth0", version = "0.3.1" }
+masamune-whisker-auth0-firebase = { path = "packages/masamune-whisker-auth0-firebase", version = "0.3.1" }
+masamune-whisker-youtube = { path = "packages/masamune-whisker-youtube", version = "0.3.1" }
+masamune-whisker-model-functions = { path = "packages/masamune-whisker-model-functions", version = "0.3.1" }
+masamune-whisker-storage-functions = { path = "packages/masamune-whisker-storage-functions", version = "0.3.1" }
 whisker-input = "0.14"
 regex = "1"
 

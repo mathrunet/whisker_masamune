@@ -9,6 +9,10 @@
 //!   cache.
 //! - [`CacheOptions::cache_filter`] decides what is cached; rows it rejects are removed from
 //!   the cache instead of being left stale.
+//! - An in-memory layer (`ref.app.model` in Flutter) keeps the last known value of every row
+//!   read or written in the current session. Cacheable rows are served from it before the
+//!   on-device cache, and [`CachedStore::peek`] returns any row synchronously (including rows
+//!   rejected by the filter) so screens can show it without a loading state.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -65,6 +69,8 @@ pub struct CacheOptions {
     pub ttl: Option<Duration>,
     /// `None` caches every row.
     pub cache_filter: Option<CacheFilter>,
+    /// Keeps rows in memory for the current session (enabled by default).
+    pub memory: bool,
 }
 
 impl CacheOptions {
@@ -74,6 +80,7 @@ impl CacheOptions {
             read_timeout: Duration::from_millis(4500),
             ttl: None,
             cache_filter: None,
+            memory: true,
         }
     }
 
@@ -89,6 +96,12 @@ impl CacheOptions {
 
     pub fn with_read_timeout(mut self, timeout: Duration) -> Self {
         self.read_timeout = timeout;
+        self
+    }
+
+    /// Enables or disables the in-memory layer.
+    pub fn with_memory(mut self, memory: bool) -> Self {
+        self.memory = memory;
         self
     }
 }
@@ -115,6 +128,9 @@ impl ReadOptions {
 
 type SharedRead = Shared<LocalBoxFuture<'static, ApiResult<Option<Row>>>>;
 
+/// Last known value of a row (`None` when it is known not to exist) and when it was stored.
+type MemoryEntry = (Option<Row>, i64);
+
 fn cache_error(error: CacheError) -> ApiError {
     ApiError::Other(error.to_string())
 }
@@ -126,10 +142,12 @@ pub struct CachedStore<R: RemoteStore + 'static> {
     options: CacheOptions,
     generation: Rc<Cell<u64>>,
     inflight: Rc<RefCell<HashMap<String, SharedRead>>>,
+    memory: Rc<RefCell<HashMap<String, MemoryEntry>>>,
 }
 
 impl<R: RemoteStore + 'static> CachedStore<R> {
-    /// `cache = None` disables caching (every read goes to the server).
+    /// `cache = None` disables the on-device cache; the in-memory layer still applies unless
+    /// it is turned off with [`CacheOptions::with_memory`].
     pub fn new(remote: R, cache: Option<&'static ModelCache>, options: CacheOptions) -> Self {
         Self {
             remote: Rc::new(remote),
@@ -137,6 +155,7 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
             options,
             generation: Rc::new(Cell::new(0)),
             inflight: Rc::new(RefCell::new(HashMap::new())),
+            memory: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -146,6 +165,32 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
 
     fn collection(database: &str, table: &str) -> String {
         format!("{database}/{table}")
+    }
+
+    fn memory_key(database: &str, table: &str, id: &str) -> String {
+        format!("{database}\u{1}{table}\u{1}{id}")
+    }
+
+    fn remember(&self, generation: u64, database: &str, table: &str, id: &str, row: Option<&Row>) {
+        if !self.options.memory || generation != self.generation.get() {
+            return;
+        }
+        self.memory.borrow_mut().insert(
+            Self::memory_key(database, table, id),
+            (row.cloned(), now_ms()),
+        );
+    }
+
+    /// Last known value of a row in this session, read synchronously from memory.
+    ///
+    /// `None` means the row has not been read yet; `Some(None)` means it is known not to exist.
+    /// Rows rejected by [`CacheOptions::cache_filter`] are returned too, so the value may be
+    /// stale: use it to render immediately and refresh with [`CachedStore::load`] when needed.
+    pub fn peek(&self, database: &str, table: &str, id: &str) -> Option<Option<Row>> {
+        self.memory
+            .borrow()
+            .get(&Self::memory_key(database, table, id))
+            .map(|(row, _)| row.clone())
     }
 
     fn cacheable(&self, table: &str, row: &Row) -> bool {
@@ -166,17 +211,40 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
     pub fn set_session(&self) {
         self.generation.set(self.generation.get() + 1);
         self.inflight.borrow_mut().clear();
+        self.memory.borrow_mut().clear();
     }
 
-    /// Cached row, if any (and fresh).
+    /// Cached row, if any (and fresh): from memory first, then from the on-device cache.
     pub async fn cached(&self, database: &str, table: &str, id: &str) -> Option<Row> {
+        if let Some((Some(row), cached_at)) = self
+            .memory
+            .borrow()
+            .get(&Self::memory_key(database, table, id))
+            && self.fresh(*cached_at)
+            && self.cacheable(table, row)
+        {
+            return Some(row.clone());
+        }
         let cache = self.cache?;
+        let generation = self.generation.get();
         let doc = cache
             .get(&self.options.scope, &Self::collection(database, table), id)
             .await
             .ok()
             .flatten()?;
-        (self.fresh(doc.cached_at) && self.cacheable(table, &doc.data)).then_some(doc.data)
+        if !(self.fresh(doc.cached_at) && self.cacheable(table, &doc.data)) {
+            return None;
+        }
+        let key = Self::memory_key(database, table, id);
+        if self.options.memory
+            && generation == self.generation.get()
+            && !self.memory.borrow().contains_key(&key)
+        {
+            self.memory
+                .borrow_mut()
+                .insert(key, (Some(doc.data.clone()), doc.cached_at));
+        }
+        Some(doc.data)
     }
 
     async fn store(
@@ -187,6 +255,7 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
         id: &str,
         row: Option<&Row>,
     ) {
+        self.remember(generation, database, table, id, row);
         let Some(cache) = self.cache else { return };
         if generation != self.generation.get() {
             return;
@@ -332,6 +401,9 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
                         Some((id, row))
                     })
                     .collect();
+                for (id, row) in &rows {
+                    self.remember(generation, database, table, id, Some(row));
+                }
                 if let Some(cache) = self.cache
                     && generation == self.generation.get()
                 {
@@ -391,7 +463,9 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
 
     /// Deletes a row on the server and in the cache.
     pub async fn delete(&self, database: &str, table: &str, id: &str) -> ApiResult<()> {
+        let generation = self.generation.get();
         self.remote.delete(database, table, id).await?;
+        self.remember(generation, database, table, id, None);
         if let Some(cache) = self.cache {
             let _ = cache
                 .remove(&self.options.scope, &Self::collection(database, table), id)
@@ -414,6 +488,10 @@ impl<R: RemoteStore + 'static> CachedStore<R> {
 
     /// Removes the cached rows of one database (for example one user's).
     pub async fn clear_database(&self, database: &str) -> ApiResult<()> {
+        let prefix = format!("{database}\u{1}");
+        self.memory
+            .borrow_mut()
+            .retain(|key, _| !key.starts_with(&prefix));
         let Some(cache) = self.cache else {
             return Ok(());
         };
@@ -620,5 +698,114 @@ mod tests {
                 .unwrap();
             assert!(store.cached("db", "nansuru", "x").await.is_none());
         }
+    }
+    #[tokio::test]
+    async fn serves_rows_from_memory_and_peeks_filtered_rows() {
+        let (remote, store, _dir) = setup();
+        remote
+            .rows
+            .borrow_mut()
+            .insert("user/u".into(), row(json!({"id": "u", "name": "A"})));
+        remote.rows.borrow_mut().insert(
+            "nansuru/x".into(),
+            row(json!({"id": "x", "generated": false})),
+        );
+        assert_eq!(store.peek("db", "user", "u"), None);
+        store
+            .load("db", "user", "u", ReadOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(store.peek("db", "user", "u").unwrap().unwrap()["name"], "A");
+        store
+            .load("db", "nansuru", "x", ReadOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            store.peek("db", "nansuru", "x").unwrap().unwrap()["generated"],
+            false,
+            "filtered rows are visible through peek"
+        );
+        assert_eq!(
+            store.cached("db", "nansuru", "x").await,
+            None,
+            "filtered rows are not served by load"
+        );
+        store
+            .load("db", "user", "missing", ReadOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(store.peek("db", "user", "missing"), Some(None));
+        store.delete("db", "user", "u").await.unwrap();
+        assert_eq!(store.peek("db", "user", "u"), Some(None));
+    }
+
+    #[tokio::test]
+    async fn fills_memory_from_queries_and_clears_it() {
+        let (remote, store, _dir) = setup();
+        remote.rows.borrow_mut().insert(
+            "nansuru/x".into(),
+            row(json!({"id": "x", "generated": true})),
+        );
+        store
+            .query("db", "nansuru", &Query::new(), ReadOptions::default())
+            .await
+            .unwrap();
+        assert!(store.peek("db", "nansuru", "x").is_some());
+        store
+            .load("db", "nansuru", "x", ReadOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(remote.gets.get(), 0, "query results are served from memory");
+        store.clear_database("db").await.unwrap();
+        assert_eq!(store.peek("db", "nansuru", "x"), None);
+        store
+            .save("db", "user", "u", row(json!({"id": "u"})))
+            .await
+            .unwrap();
+        store.set_session();
+        assert_eq!(store.peek("db", "user", "u"), None);
+    }
+
+    #[tokio::test]
+    async fn drops_writes_of_previous_sessions_from_memory() {
+        let (_remote, store, _dir) = setup();
+        let session = store.session();
+        store.set_session();
+        store
+            .write_cache(session, "db", "user", "u", Some(&row(json!({"id": "u"}))))
+            .await;
+        assert_eq!(store.peek("db", "user", "u"), None);
+        store
+            .write_cache(
+                store.session(),
+                "db",
+                "user",
+                "u",
+                Some(&row(json!({"id": "u"}))),
+            )
+            .await;
+        assert!(store.peek("db", "user", "u").is_some());
+    }
+
+    #[tokio::test]
+    async fn memory_can_be_disabled() {
+        let remote = Rc::new(FakeRemote::default());
+        remote
+            .rows
+            .borrow_mut()
+            .insert("user/u".into(), row(json!({"id": "u"})));
+        let store = CachedStore::new(
+            remote.clone(),
+            None,
+            CacheOptions::new("test").with_memory(false),
+        );
+        for _ in 0..2 {
+            store
+                .load("db", "user", "u", ReadOptions::default())
+                .await
+                .unwrap();
+        }
+        assert_eq!(remote.gets.get(), 2);
+        assert_eq!(store.peek("db", "user", "u"), None);
     }
 }

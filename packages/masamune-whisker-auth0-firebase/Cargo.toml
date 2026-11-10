@@ -1,0 +1,26 @@
+[package]
+name = "masamune-whisker-auth0-firebase"
+description = "Sign in to Firebase Auth with an Auth0 session (custom token exchange) for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+masamune-whisker-auth0.workspace = true
+masamune-whisker-auth.workspace = true
+masamune-whisker-auth-firebase.workspace = true
+masamune-whisker-functions.workspace = true
+whisker-firebase = { workspace = true, features = ["auth"] }
+serde_json.workspace = true
+futures-util.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
