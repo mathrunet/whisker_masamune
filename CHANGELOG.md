@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- `masamune-whisker-billing`: depend on the Java Billing 8.3.0 artifact instead of unused Kotlin extensions, keeping Kotlin 2.0 consumers compatible. Remove the module metadata-check bypass.
+
 ## 0.5.1
 
 - `masamune-whisker-billing`: upgrade Google Play Billing from 7.1.1 to 8.3.0 and adapt product queries to `QueryProductDetailsResult`, preserving the subscription bridge API.
