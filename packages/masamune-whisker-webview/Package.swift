@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerWebview", targets: ["MasamuneWhiskerWebview"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/whiskerrs/whisker.git", exact: "0.1.19"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "d7cbd957dac30f0b30b7eb31bf2a31d1b22ad2d5"),
     ],
     targets: [
         .target(

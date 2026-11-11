@@ -41,7 +41,10 @@ PY
 cmd_check() {
   local allow_path=0
   [[ "${1:-}" == "--allow-path" ]] && allow_path=1
-  local revs="" bad=0 count=0
+  local revs="" bad=0 count=0 packages
+  # Do not hide a parser failure inside process substitution.
+  packages=$(whisker_packages) || return 1
+  [[ -n "$packages" ]] || { echo "error: no whisker packages in lock" >&2; return 1; }
   while IFS=$'\t' read -r name version source; do
     count=$((count + 1))
     if [[ -z "$source" ]]; then
@@ -57,7 +60,7 @@ cmd_check() {
       echo "  add it to [patch.crates-io] with the fork source, or raise the version requirement" >&2
       bad=1
     fi
-  done < <(whisker_packages)
+  done <<< "$packages"
 
   local unique
   unique=$(printf '%s' "$revs" | sort -u | sed '/^$/d')
@@ -70,6 +73,9 @@ cmd_check() {
     exit 1
   fi
   echo "ok: $count whisker packages, fork revision ${unique:-<path>}"
+  if [[ -d packages && -f scripts/check-swift-host-pins.py && $allow_path -eq 0 ]]; then
+    python3 -I scripts/check-swift-host-pins.py "$LOCK"
+  fi
 }
 
 cmd_cli() {
