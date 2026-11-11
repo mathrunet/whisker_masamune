@@ -209,3 +209,31 @@ Apps copy `scripts/whisker-fork.sh` and run the same `check` / `cli` steps in CI
 ## License
 
 MIT
+
+## Security checks
+
+`PATH=<python-3.11-or-newer-bin>:$PATH scripts/whisker-fork.sh check` verifies both Rust
+and the standalone Swift manifests use the same fork revision. When intentionally updating
+Whisker after its fixes merge, run `cargo update -p whisker`, update the Swift manifest revision
+pins to the new lock revision, prepare the matching CLI and regenerate native app projects.
+Generated CNG applications must use the local Host SDK at that same lock revision.
+Standalone Swift manifests also use the fork, so they no longer silently build upstream 0.1.19.
+
+`python3 scripts/test-release-security.py` checks debug and release behavior and scans the
+executables for dummy credential sentinels. `JAVA_HOME=<Android-Studio-JBR> python3
+scripts/test-native-security.py` executes the native file, URI and origin policies using
+installed Swift and cached Kotlin tooling. Set `SECURITY_ANDROID_SERIAL` to additionally
+execute them on a connected Android device/emulator. No dependencies are installed.
+
+Security changes require explicit dev flavor for AI Debugger, deny native WebView privileges
+without explicit trusted origins, and reauthorize every Functions storage read/URL lookup
+(no cross-operation metadata/byte cache). Capture filenames are single ASCII basenames of
+1–128 bytes, starting with a letter or digit; parent traversal and escaping symlinks are rejected.
+Android shared streams must use `content://` URI grants. Release forced-purchase APIs are
+inert and never create entitlements.
+
+Account binding for billing (`obfuscatedAccountId` / `appAccountToken`) remains separate work:
+applications and receipt-verification servers must agree on stable pseudonymous IDs, UUID
+mapping for Apple, and anonymous-purchase/account-switch behavior before enabling it.
+The build-only unmaintained `unsafe-libyaml` dependency is unchanged. Whisker framework
+WebView, deep-link and cleartext fixes remain tracked by the separate framework audit.

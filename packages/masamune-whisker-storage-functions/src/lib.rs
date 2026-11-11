@@ -25,19 +25,14 @@
 //!
 //! Files travel base64-encoded inside JSON, so keep them to a few megabytes.
 //!
-//! # URLs and the cache
+//! # URLs and authorization
 //!
-//! The callable has no URL operation: the public and download URLs come from the `meta` of the
-//! last upload or download of the path. Like Flutter's `FunctionsStorageDatabase`, the adapter
-//! keeps that `meta` and the downloaded bytes in memory (shared by clones of the adapter), and
-//! [`StorageAdapter::download`] answers from it. When a URL is asked for a path that was not
-//! transferred yet, the adapter downloads it first (Flutter fails instead). Call
-//! [`FunctionsStorageAdapter::clear_cache`] to forget everything.
+//! Each download and URL lookup goes through the callable with the current credentials.
+//! No bytes or metadata are reused between operations, including across adapter clones or
+//! user changes. URL lookups download the file to obtain its metadata. This costs another
+//! request but lets the server enforce authorization on every access.
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
 use std::time::Duration;
 
 use base64::Engine;
@@ -75,7 +70,7 @@ impl StorageMethod {
     }
 }
 
-/// What the adapter remembers about a path (`FunctionsStorageDatabaseItem`).
+/// Data returned by a single authorized download.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct CacheEntry {
     bytes: Option<Vec<u8>>,
@@ -89,7 +84,6 @@ pub struct FunctionsStorageAdapter {
     bucket: String,
     action: String,
     transfer_timeout: Duration,
-    cache: Rc<RefCell<HashMap<String, CacheEntry>>>,
 }
 
 impl FunctionsStorageAdapter {
@@ -102,7 +96,6 @@ impl FunctionsStorageAdapter {
             bucket: trim_query(&bucket.into()).trim_matches('/').to_owned(),
             action: "storage_firebase".into(),
             transfer_timeout: Duration::from_secs(120),
-            cache: Rc::default(),
         }
     }
 
@@ -130,10 +123,8 @@ impl FunctionsStorageAdapter {
         &self.action
     }
 
-    /// Forgets the cached `meta` and bytes of every path.
-    pub fn clear_cache(&self) {
-        self.cache.borrow_mut().clear();
-    }
+    /// Compatibility no-op: this adapter no longer caches bytes or metadata.
+    pub fn clear_cache(&self) {}
 
     /// Callable input `{method, path: "{bucket}/{path}"[, binary, meta]}` for a normalized
     /// `path`.
@@ -169,7 +160,7 @@ impl FunctionsStorageAdapter {
         decode_response(response)
     }
 
-    /// Downloads `path` (normalized) from the server and caches its bytes and `meta`.
+    /// Downloads `path` (normalized) with the current server-side authorization.
     async fn fetch(&self, path: &str) -> StorageResult<CacheEntry> {
         let response = self
             .send(self.request(StorageMethod::Get, path, None, None)?)
@@ -188,52 +179,32 @@ impl FunctionsStorageAdapter {
             bytes: Some(bytes),
             meta: response_meta(&response),
         };
-        self.cache
-            .borrow_mut()
-            .insert(path.to_owned(), entry.clone());
         Ok(entry)
     }
 
-    /// `meta[key]` of `path`, downloading it when it is not cached.
+    /// `meta[key]` of `path`, requesting authorization on every lookup.
     async fn meta_uri(&self, path: &str, key: &str) -> StorageResult<String> {
         let path = normalize_path(path)?;
-        let cached = self
-            .cache
-            .borrow()
-            .get(&path)
-            .and_then(|entry| meta_string(&entry.meta, key));
-        if let Some(uri) = cached {
-            return Ok(uri);
-        }
         let entry = self.fetch(&path).await?;
         meta_string(&entry.meta, key).ok_or_else(|| invalid_response(key))
     }
 }
 
 impl StorageAdapter for FunctionsStorageAdapter {
-    /// `publicUri` of the last transfer of `path` (see the crate docs).
+    /// `publicUri` returned by a newly authorized download.
     async fn fetch_public_uri(&self, path: &str) -> StorageResult<String> {
         self.meta_uri(path, PUBLIC_URI_KEY).await
     }
 
-    /// `downloadUri` of the last transfer of `path` (see the crate docs).
+    /// `downloadUri` returned by a newly authorized download.
     async fn fetch_download_uri(&self, path: &str) -> StorageResult<String> {
         self.meta_uri(path, DOWNLOAD_URI_KEY).await
     }
 
-    /// Answers from the cache when the bytes of `path` were downloaded before.
+    /// Downloads with current credentials, even if the path was accessed before.
     async fn download(&self, path: &str, local: Option<&Path>) -> StorageResult<LocalFile> {
         let path = normalize_path(path)?;
-        let cached = self
-            .cache
-            .borrow()
-            .get(&path)
-            .filter(|entry| entry.bytes.is_some())
-            .cloned();
-        let entry = match cached {
-            Some(entry) => entry,
-            None => self.fetch(&path).await?,
-        };
+        let entry = self.fetch(&path).await?;
         let bytes = entry.bytes.unwrap_or_default();
         if let Some(local) = local {
             write_file(local, &bytes)?;
@@ -288,10 +259,6 @@ impl StorageAdapter for FunctionsStorageAdapter {
         let uri =
             meta_string(&meta, PUBLIC_URI_KEY).ok_or_else(|| invalid_response(PUBLIC_URI_KEY))?;
         let mime_type = meta_string(&meta, CONTENT_TYPE_KEY).or(mime_type);
-        // Like Flutter, an upload keeps only the `meta` (the next download fetches the bytes).
-        self.cache
-            .borrow_mut()
-            .insert(path, CacheEntry { bytes: None, meta });
         Ok(RemoteFile { uri, mime_type })
     }
 
@@ -299,7 +266,6 @@ impl StorageAdapter for FunctionsStorageAdapter {
         let path = normalize_path(path)?;
         self.send(self.request(StorageMethod::Delete, &path, None, None)?)
             .await?;
-        self.cache.borrow_mut().remove(&path);
         Ok(())
     }
 }

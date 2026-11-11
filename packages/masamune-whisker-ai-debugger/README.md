@@ -6,7 +6,7 @@ panics and slow operations become AI sessions automatically. It speaks the same
 `/api/app-debug/*` API and exposes the same accessibility identifiers and labels as the Flutter
 package, so the existing SamuraiAI backend and Maestro flows work unchanged.
 
-Only `Flavor::Dev` enables it. In prod the overlay renders only its children, the logger adapter
+Only debug builds with `Flavor::Dev` enable it. In release builds or prod the overlay renders only its children, the logger adapter
 and panic hook drop everything, and nothing is sent.
 
 ## Setup
@@ -21,7 +21,7 @@ Compile-time values, read in the app crate by `ai_debugger_config!`:
 | `MASAMUNE_AI_DEBUGGER_ACCOUNTS` | Optional `id1:pass1,id2:pass2` debug accounts |
 
 The API key is compiled into dev builds: never distribute them. Set `<APP>_FLAVOR=prod` for
-production builds.
+production builds. Development requires an explicit `<APP>_FLAVOR=dev`.
 
 ```rust,ignore
 use masamune_whisker_ai_debugger::{AiDebugController, AiDebugger, ai_debugger_config};
@@ -178,3 +178,11 @@ let config = ai_debugger_config!(flavor)
 - No app lifecycle events in Whisker: the run stays alive with heartbeats and the server expires
   it after the app stops.
 - Purchase and camera pictures are chosen from chips instead of drop-downs.
+
+## Security boundary
+
+The debugger runs only in debug builds with an explicit `dev` flavor. Unset flavor is
+production. Release builds disable the controller, overlay, settings I/O and reporting
+even when passed `Flavor::Dev`. The configuration macro does not read compile-time API
+keys or test accounts in release builds. Do not distribute development builds or pass
+credentials through separate literals in application code.

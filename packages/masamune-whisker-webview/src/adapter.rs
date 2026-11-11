@@ -58,7 +58,7 @@ impl WebViewMasamuneAdapter {
     }
 
     /// Origins (for example `https://example.com`) the main frame may navigate to. Empty allows
-    /// every origin. Entries are normalized (lowercase, default ports and paths removed).
+    /// every origin for navigation, but disables the native bridge and media access. Entries are normalized (lowercase, default ports and paths removed).
     pub fn allowed_origins(mut self, origins: impl IntoIterator<Item = impl Into<String>>) -> Self {
         let origins: Vec<String> = origins.into_iter().map(Into::into).collect();
         self.allowed_origins = normalize_origins(&origins);
@@ -111,6 +111,9 @@ impl MasamuneAdapter for WebViewMasamuneAdapter {
     /// Registers this adapter's values as the runtime's web view defaults. Repeating it stores
     /// the same values again.
     fn prepare(&self) -> Result<(), AdapterError> {
+        if self.grant_media_permissions && self.allowed_origins.is_empty() {
+            return Err("media permissions require explicit allowed origins".into());
+        }
         DEFAULTS.with(|defaults| *defaults.borrow_mut() = Some(self.defaults()));
         Ok(())
     }
@@ -153,4 +156,18 @@ pub fn webview_defaults() -> WebViewDefaults {
 /// [`WebViewDefaults::max_download_bytes`] of the installed adapter.
 pub fn max_download_bytes() -> u64 {
     webview_defaults().max_download_bytes
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    #[test]
+    fn rejects_implicit_media_trust() {
+        assert!(
+            WebViewMasamuneAdapter::new()
+                .grant_media_permissions(true)
+                .prepare()
+                .is_err()
+        );
+    }
 }

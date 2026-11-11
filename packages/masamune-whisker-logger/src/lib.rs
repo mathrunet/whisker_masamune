@@ -21,11 +21,11 @@ pub enum Flavor {
 }
 
 impl Flavor {
-    /// Unset means dev; unknown values fail instead of enabling development logs.
+    /// Unset means prod; unknown values fail instead of enabling development logs.
     pub fn from_env(value: Option<&str>) -> Result<Self, InvalidFlavor> {
         match value {
-            None | Some("dev") => Ok(Self::Dev),
-            Some("prod") => Ok(Self::Prod),
+            Some("dev") => Ok(Self::Dev),
+            None | Some("prod") => Ok(Self::Prod),
             Some(_) => Err(InvalidFlavor),
         }
     }

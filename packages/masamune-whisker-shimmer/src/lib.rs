@@ -15,10 +15,10 @@
 //! placeholders from boxes.
 
 use masamune_whisker_appearance::{palette, shape};
-use whisker::css::{AlignSelf, Color, ColorStop, Gradient, LinearDirection};
-use whisker::prelude::*;
 use whisker::AnimConfig;
 use whisker::AnimationController;
+use whisker::css::{AlignSelf, Color, ColorStop, Gradient, LinearDirection};
+use whisker::prelude::*;
 
 /// Default duration of one sweep, in milliseconds (`Shimmer.period`).
 pub const DEFAULT_PERIOD_MS: u32 = 1500;

@@ -29,19 +29,24 @@ pub type AiDebugSpawner = Rc<dyn Fn(LocalBoxFuture<'static, ()>)>;
 /// ```
 #[macro_export]
 macro_rules! ai_debugger_config {
-    ($flavor:expr) => {
-        $crate::AiDebuggerConfig::from_values(
-            $flavor,
+    ($flavor:expr) => {{
+        let flavor = $flavor;
+        #[cfg(debug_assertions)]
+        let config = $crate::AiDebuggerConfig::from_values(
+            flavor,
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_PROJECT_ID"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_ENDPOINT"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_API_KEY"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_ACCOUNTS"),
-        )
-    };
+        );
+        #[cfg(not(debug_assertions))]
+        let config = $crate::AiDebuggerConfig::new(flavor);
+        config
+    }};
 }
 
-/// Everything the AI debugger needs. Only [`Flavor::Dev`] enables it; in prod every operation
-/// does nothing and the overlay only renders its children.
+/// Everything the AI debugger needs. Only debug builds with [`Flavor::Dev`] enable it.
+/// Otherwise every operation does nothing and the overlay only renders its children.
 #[derive(Clone)]
 pub struct AiDebuggerConfig {
     pub(crate) flavor: Flavor,
@@ -104,9 +109,9 @@ impl AiDebuggerConfig {
             .accounts(AiDebugAccount::parse(accounts.unwrap_or_default()))
     }
 
-    /// Whether the debugger runs (dev flavor only).
+    /// Whether the debugger runs (debug builds with explicit dev flavor only).
     pub fn enabled(&self) -> bool {
-        self.flavor == Flavor::Dev
+        cfg!(debug_assertions) && self.flavor == Flavor::Dev
     }
 
     /// SamuraiAI project id (the app path with `/` replaced by `-`).

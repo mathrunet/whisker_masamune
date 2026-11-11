@@ -111,7 +111,7 @@ struct Inner {
 /// Talks to SamuraiAI: registers the run, keeps it alive, sends instructions and screenshots,
 /// reports incidents and uploads breadcrumbs. Clones share one run.
 ///
-/// Every method does nothing outside [`masamune_whisker_logger::Flavor::Dev`].
+/// Reporting and settings I/O run only in debug builds with explicit dev flavor.
 #[derive(Clone)]
 pub struct AiDebugController(Rc<Inner>);
 
@@ -161,7 +161,7 @@ impl AiDebugController {
         })))
     }
 
-    /// Whether the debugger runs (dev flavor).
+    /// Whether the debugger runs (debug builds with explicit dev flavor).
     pub fn enabled(&self) -> bool {
         self.0.config.enabled()
     }
@@ -191,6 +191,9 @@ impl AiDebugController {
     /// Starts handling reports from the logger adapter and the panic hook, and lets the
     /// controller run timers. The overlay calls it on mount; call it yourself without the overlay.
     pub fn attach(&self, spawner: AiDebugSpawner) {
+        if !self.enabled() {
+            return;
+        }
         *self.0.spawner.borrow_mut() = Some(spawner);
         let Some(receiver) = self.0.receiver.borrow_mut().take() else {
             return;
@@ -237,6 +240,9 @@ impl AiDebugController {
 
     /// Current settings, loading the saved ones on first use.
     pub fn settings(&self) -> AiDebugSettings {
+        if !self.enabled() {
+            return self.0.config.settings.clone();
+        }
         if !self.0.state.borrow().settings_loaded {
             let loaded = self.load_saved_settings();
             let mut state = self.0.state.borrow_mut();
@@ -279,6 +285,9 @@ impl AiDebugController {
 
     /// Saves settings for this project.
     pub fn update_settings(&self, settings: AiDebugSettings) -> Result<(), AiDebugError> {
+        if !self.enabled() {
+            return Ok(());
+        }
         self.settings();
         let settings = self.normalize(settings);
         self.0.state.borrow_mut().settings = settings.clone();

@@ -61,6 +61,7 @@ async fn uploads_base64_with_the_content_type() {
     let (storage, log) = storage(|_| {
         Ok(json!({
             "status": 200,
+            "binary": "aGVsbG8=",
             "message": "File uploaded successfully",
             "meta": {
                 "contentType": "image/png",
@@ -85,7 +86,7 @@ async fn uploads_base64_with_the_content_type() {
     assert_eq!(file.uri, PUBLIC);
     assert_eq!(file.mime_type.as_deref(), Some("image/png"));
 
-    // URLs come from the upload's `meta` without another request.
+    // Every URL lookup reauthorizes with the server.
     assert_eq!(
         storage.fetch_public_uri("public/u1/a.png").await.unwrap(),
         PUBLIC
@@ -94,7 +95,7 @@ async fn uploads_base64_with_the_content_type() {
         storage.fetch_download_uri("public/u1/a.png").await.unwrap(),
         "https://signed.example/a.png?sig=1"
     );
-    assert_eq!(log.borrow().len(), 1);
+    assert_eq!(log.borrow().len(), 3);
 
     // Files are read from disk; unknown extensions send no `meta`.
     let dir = tempfile::tempdir().unwrap();
@@ -120,11 +121,11 @@ async fn uploads_base64_with_the_content_type() {
         .await
         .unwrap();
     assert_eq!(remote.uri, "https://cdn.example/a.png");
-    assert_eq!(log.borrow().len(), 2);
+    assert_eq!(log.borrow().len(), 4);
 }
 
 #[tokio::test]
-async fn downloads_into_memory_and_files_once() {
+async fn downloads_into_memory_and_files_with_authorization_each_time() {
     let (storage, log) = storage(|_| Ok(get_response()));
     let file = storage.download("public/u1/a.png", None).await.unwrap();
     assert_callable(
@@ -135,7 +136,7 @@ async fn downloads_into_memory_and_files_once() {
     assert_eq!(file.mime_type.as_deref(), Some("image/png"));
     assert_eq!(file.path, None);
 
-    // The second download and the URLs come from the cache.
+    // A second download and each URL lookup require another server request.
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("cache/a.png");
     let file = storage
@@ -148,11 +149,11 @@ async fn downloads_into_memory_and_files_once() {
         storage.fetch_public_uri("public/u1/a.png").await.unwrap(),
         PUBLIC
     );
-    assert_eq!(log.borrow().len(), 1);
+    assert_eq!(log.borrow().len(), 3);
 
     storage.clear_cache();
     storage.download("public/u1/a.png", None).await.unwrap();
-    assert_eq!(log.borrow().len(), 2);
+    assert_eq!(log.borrow().len(), 4);
 }
 
 #[tokio::test]
@@ -167,7 +168,7 @@ async fn fetches_urls_of_uncached_paths() {
         storage.fetch_public_uri("public/u1/a.png").await.unwrap(),
         PUBLIC
     );
-    assert_eq!(log.borrow().len(), 1);
+    assert_eq!(log.borrow().len(), 2);
 }
 
 #[tokio::test]
@@ -247,4 +248,38 @@ async fn rejects_an_empty_bucket() {
             "the storage bucket is empty".into()
         ))
     );
+}
+
+#[tokio::test]
+async fn switching_users_never_reuses_private_bytes_or_urls() {
+    use std::cell::Cell;
+    let signed_in = Rc::new(Cell::new(true));
+    let current = signed_in.clone();
+    let (storage, log) = storage(move |_| {
+        if current.get() {
+            Ok(get_response())
+        } else {
+            Err(ApiError::NotSignedIn.into())
+        }
+    });
+    storage.download("private/file.png", None).await.unwrap();
+    storage
+        .fetch_download_uri("private/file.png")
+        .await
+        .unwrap();
+    signed_in.set(false);
+    let other = storage.clone();
+    assert_eq!(
+        other.download("private/file.png", None).await,
+        Err(StorageError::Unauthorized)
+    );
+    assert_eq!(
+        other.fetch_download_uri("private/file.png").await,
+        Err(StorageError::Unauthorized)
+    );
+    assert_eq!(
+        other.fetch_public_uri("private/file.png").await,
+        Err(StorageError::Unauthorized)
+    );
+    assert_eq!(log.borrow().len(), 5);
 }

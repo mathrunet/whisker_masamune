@@ -6,7 +6,7 @@ use std::process::Command;
 
 #[test]
 fn flavor_values() {
-    assert_eq!(Flavor::from_env(None), Ok(Flavor::Dev));
+    assert_eq!(Flavor::from_env(None), Ok(Flavor::Prod));
     assert_eq!(Flavor::from_env(Some("dev")), Ok(Flavor::Dev));
     assert_eq!(Flavor::from_env(Some("prod")), Ok(Flavor::Prod));
     assert!(Flavor::from_env(Some("production")).is_err());

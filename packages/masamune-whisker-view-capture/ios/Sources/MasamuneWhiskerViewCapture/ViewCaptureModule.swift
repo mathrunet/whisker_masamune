@@ -84,9 +84,8 @@ public final class CaptureView: WhiskerUI<UIView> {
         }
 
         let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let directory = caches.appendingPathComponent("masamune_whisker_view_capture", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let file = directory.appendingPathComponent(fileName)
+        let file = try captureFileURL(cache: caches, fileName: fileName)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         do {
             try data.write(to: file, options: .atomic)
         } catch {

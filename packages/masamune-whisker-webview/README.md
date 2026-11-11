@@ -85,9 +85,9 @@ window.addEventListener("whisker:message", (event) => {
 `window.dispatchEvent(new CustomEvent('whisker:message', { detail: data }))` in the main frame.
 `data` is always a string, escaped as a JavaScript string literal.
 
-Messages are accepted only from the main frame, and only while it shows an allowed origin (or the
-inline `html` page). On Android the bridge uses `WebViewCompat.addWebMessageListener`; on
-WebView versions without it a `JavascriptInterface` is used, which cannot tell frames apart.
+Messages are accepted only from the main frame with an explicitly allowed web origin.
+Empty allowlists and opaque inline HTML origins cannot send native messages. Android uses
+`WebViewCompat.addWebMessageListener`; WebView versions without it have no native bridge.
 
 ## Navigation policy
 
@@ -148,3 +148,12 @@ app.plugin::<MasamuneWebViewPlugin>(|c| {
 - iOS: writes `NSCameraUsageDescription`, `NSMicrophoneUsageDescription` and
   `NSPhotoLibraryUsageDescription`. Unset descriptions get short English defaults, which never
   replace a value written by another plugin.
+
+## Native privileges
+
+An empty `allowed_origins` list permits web navigation but denies all incoming bridge
+messages and media requests. Explicitly list trusted web origins to enable these features.
+Inline HTML with an opaque origin cannot send native messages. Only the main frame can
+send bridge messages. Android devices without `WEB_MESSAGE_LISTENER` have no native
+bridge; the insecure legacy fallback is not supported. Media auto-grant additionally
+requires `grant_media_permissions`; configuring it with an empty list is an error.

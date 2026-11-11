@@ -17,7 +17,7 @@ fn prepare() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Unset flavor means dev; only `dev` and `prod` are accepted. A typo returns an error
+Unset flavor means prod; explicitly set `<APP>_FLAVOR=dev` for development; only `dev` and `prod` are accepted. A typo returns an error
 without including its value. Do not ignore initialization errors or fall back to dev.
 The app must set its own `<APP>_FLAVOR=prod` at compile time for production, regardless
 of Cargo's debug/release profile; the dependency cannot read the app's `option_env!`.

@@ -1,3 +1,5 @@
+#![cfg(debug_assertions)]
+
 //! Controller behavior, mirroring `masamune_ai_debugger_test.dart`.
 
 use std::cell::RefCell;

@@ -14,7 +14,7 @@
 
 mod html;
 
-pub use html::{player_html, sanitize_video_id, DEFAULT_ORIGIN};
+pub use html::{DEFAULT_ORIGIN, player_html, sanitize_video_id};
 
 use std::rc::Rc;
 use std::time::Duration;

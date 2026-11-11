@@ -245,6 +245,10 @@ public final class MasamuneWebView: WhiskerUI<UIView> {
         return allowedOrigins.isEmpty || allowedOrigins.contains(origin)
     }
 
+    private func isTrustedOrigin(_ origin: String?) -> Bool {
+        NativeOriginPolicy.allows(origin, allowedOrigins: allowedOrigins)
+    }
+
     private static func parseStringArray(_ json: String) -> [String]? {
         guard let data = json.data(using: .utf8),
               let array = try? JSONSerialization.jsonObject(with: data) as? [String]
@@ -255,16 +259,8 @@ public final class MasamuneWebView: WhiskerUI<UIView> {
     // MARK: - Bridge
 
     func handleScriptMessage(_ message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame else { return }
         let origin = message.frameInfo.securityOrigin
-        let accepted: Bool
-        if let webOrigin = Self.origin(of: origin) {
-            accepted = isAllowedOrigin(webOrigin)
-        } else {
-            // Inline `html` page (opaque origin).
-            accepted = requestedUrl.isEmpty
-        }
-        guard accepted else { return }
+        guard NativeOriginPolicy.allows(Self.origin(of: origin), allowedOrigins: allowedOrigins, isMainFrame: message.frameInfo.isMainFrame) else { return }
         let data = message.body as? String ?? ""
         emit("message", ["data": data])
     }
@@ -382,7 +378,7 @@ extension MasamuneWebView: WKUIDelegate {
         type: WKMediaCaptureType,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
-        guard isAllowedOrigin(Self.origin(of: origin)) else {
+        guard frame.isMainFrame, isTrustedOrigin(Self.origin(of: origin)) else {
             decisionHandler(.deny)
             return
         }

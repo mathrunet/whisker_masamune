@@ -169,6 +169,8 @@ class ShareReceiveModule : Module() {
 
     /** Copies a shared stream into `directory`, keeping its extension. Returns the absolute path. */
     private fun copy(context: Context, uri: Uri, directory: File, prefix: String): String? {
+        // Never let an external intent read app-private files through a file:// URI.
+        if (!acceptsSharedStream(uri.scheme)) return null
         val resolver = context.contentResolver
         var name: String? = null
         if (uri.scheme == "content") {

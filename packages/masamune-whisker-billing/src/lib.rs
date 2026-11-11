@@ -25,7 +25,7 @@
 //! [`BillingMasamuneAdapter`] in the app's `MasamuneAdapters` holds the product ids and loads them
 //! after startup into [`products`].
 //!
-//! In development, [`debug_force_purchase`] / [`debug_force_unpurchase`] simulate a purchase without
+//! In debug builds, [`debug_force_purchase`] / [`debug_force_unpurchase`] simulate a purchase without
 //! the store (used by `masamune-whisker-ai-debugger`). Forced purchases carry
 //! [`DEBUG_PURCHASE_TOKEN`] as their token.
 
@@ -344,8 +344,8 @@ pub async fn purchase(
 /// Lists the purchases the user currently owns: active subscriptions (Android `queryPurchasesAsync`
 /// for subscriptions, iOS `Transaction.currentEntitlements`, which excludes expired and revoked ones).
 ///
-/// Forced purchases ([`debug_force_purchase`]) are included, and are returned alone when the store
-/// cannot be queried (for example on a simulator).
+/// In debug builds, forced purchases ([`debug_force_purchase`]) are included, and are returned alone
+/// when the store cannot be queried (for example on a simulator). Release builds only return store purchases.
 pub async fn query_purchases() -> NativeResult<Vec<Purchase>> {
     match module().call_async("queryPurchases", &json!({})).await {
         Ok(purchases) => Ok(debug::merge(purchases)),

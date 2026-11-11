@@ -20,7 +20,9 @@ pub use adapter::{
     webview_defaults,
 };
 pub use js::{MESSAGE_EVENT, js_string_literal, post_message_script};
-pub use origin::{is_allowed_url, normalize_origin, normalize_origins, origin_of};
+pub use origin::{
+    is_allowed_url, is_trusted_origin, normalize_origin, normalize_origins, origin_of,
+};
 
 use whisker::platform_module::WhiskerValue;
 use whisker::prelude::*;

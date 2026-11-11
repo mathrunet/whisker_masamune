@@ -47,6 +47,12 @@ pub fn is_allowed_url(url: &str, allowed_origins: &[String]) -> bool {
     allowed_origins.is_empty() || allowed_origins.contains(&origin)
 }
 
+/// Whether a web origin may use the native bridge or request media access.
+/// Unlike navigation, an empty allowlist grants no native privileges.
+pub fn is_trusted_origin(origin: &str, allowed_origins: &[String]) -> bool {
+    normalize_origin(origin).is_some_and(|origin| allowed_origins.contains(&origin))
+}
+
 /// Normalizes every entry. An entry that cannot be normalized is kept as is so that it matches
 /// nothing: a typo must not turn a restricted list into an empty one, which would allow all.
 pub fn normalize_origins(origins: &[String]) -> Vec<String> {
@@ -162,5 +168,26 @@ mod tests {
             "https://A.example:443/".to_string(),
         ]);
         assert_eq!(allowed, ["https://a.example"]);
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    #[test]
+    fn native_privileges_require_an_explicit_web_origin() {
+        assert!(!is_trusted_origin("https://example.com", &[]));
+        let allowed = vec!["https://example.com".into()];
+        assert!(is_trusted_origin("https://example.com:443", &allowed));
+        for origin in [
+            "https://evil.test",
+            "null",
+            "about:blank",
+            "file:///x",
+            "https://example.com.evil.test",
+        ] {
+            assert!(!is_trusted_origin(origin, &allowed));
+        }
+        assert!(is_allowed_url("https://example.com", &[]));
     }
 }

@@ -27,7 +27,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
@@ -263,13 +262,12 @@ class MasamuneWebView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context)
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             WebViewCompat.addWebMessageListener(wv, BRIDGE_NAME, setOf("*")) { _, message, sourceOrigin, isMainFrame, _ ->
-                if (isMainFrame && acceptsMessagesFrom(sourceOrigin.toString())) {
+                if (acceptsMessagesFrom(sourceOrigin.toString(), isMainFrame)) {
                     emit("message", mapOf("data" to (message.data ?: "")))
                 }
             }
-        } else {
-            wv.addJavascriptInterface(LegacyBridge(), BRIDGE_NAME)
         }
+        // No legacy bridge: addJavascriptInterface cannot authenticate the calling frame.
         if (documentStartSupported) {
             WebViewCompat.addDocumentStartJavaScript(wv, BRIDGE_SHIM, setOf("*"))
         }
@@ -321,10 +319,12 @@ class MasamuneWebView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context)
     private fun isAllowedOrigin(origin: String?): Boolean =
         origin != null && (allowedOrigins.isEmpty() || allowedOrigins.contains(origin))
 
-    /** Messages come from allowed origins, or from the inline `html` page (opaque origin). */
-    private fun acceptsMessagesFrom(sourceOrigin: String): Boolean {
-        if (sourceOrigin == "null") return requestedUrl == null
-        return isAllowedOrigin(originOf(Uri.parse(sourceOrigin)))
+    private fun isTrustedOrigin(origin: String?): Boolean =
+        NativeOriginPolicy.allows(origin, allowedOrigins)
+
+    /** Native privileges require an explicit web origin; opaque origins are denied. */
+    private fun acceptsMessagesFrom(sourceOrigin: String, isMainFrame: Boolean): Boolean {
+        return NativeOriginPolicy.allows(originOf(Uri.parse(sourceOrigin)), allowedOrigins, isMainFrame)
     }
 
     /** Returns true to cancel the navigation. */
@@ -361,7 +361,7 @@ class MasamuneWebView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context)
     // ---- media permissions ------------------------------------------------------------------
 
     private fun handlePermissionRequest(request: PermissionRequest) {
-        if (!grantMediaPermissions || !isAllowedOrigin(originOf(request.origin))) {
+        if (!grantMediaPermissions || !isTrustedOrigin(originOf(request.origin))) {
             request.deny()
             return
         }
@@ -391,6 +391,11 @@ class MasamuneWebView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context)
 
     /** Grants the resources whose runtime permission the app holds, or denies the request. */
     private fun grantHeld(request: PermissionRequest, resources: List<String>) {
+        // Permissions can return after navigation or a prop update; recheck the policy.
+        if (!grantMediaPermissions || !isTrustedOrigin(originOf(request.origin))) {
+            request.deny()
+            return
+        }
         val granted = resources.filter { hasPermission(androidPermission(it)) }
         if (granted.isEmpty()) request.deny() else request.grant(granted.toTypedArray())
     }
@@ -556,17 +561,5 @@ class MasamuneWebView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context)
             filePathCallback: ValueCallback<Array<Uri>>,
             fileChooserParams: FileChooserParams,
         ): Boolean = showFileChooser(filePathCallback, fileChooserParams)
-    }
-
-    /** Fallback bridge without frame information; runs on the JavaBridge thread. */
-    private inner class LegacyBridge {
-        @JavascriptInterface
-        fun postMessage(data: String) {
-            mainHandler.post {
-                val origin = currentUrl?.let { Uri.parse(it) }?.let { originOf(it) }
-                val accepted = if (requestedUrl == null && origin == null) true else isAllowedOrigin(origin)
-                if (accepted && webView != null) emit("message", mapOf("data" to data))
-            }
-        }
     }
 }

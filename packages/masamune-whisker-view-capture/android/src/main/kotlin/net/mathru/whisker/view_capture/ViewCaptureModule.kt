@@ -14,7 +14,6 @@ import rs.whisker.runtime.WhiskerContext
 import rs.whisker.runtime.WhiskerModule
 import rs.whisker.runtime.WhiskerUI
 import rs.whisker.runtime.WhiskerValue
-import java.io.File
 import java.io.FileOutputStream
 
 @WhiskerModule
@@ -40,6 +39,7 @@ class CaptureView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         val requestedHeightDp = map["heightDp"]?.asDouble()
         post {
             try {
+                val file = captureFile(context.cacheDir, fileName)
                 // Whisker places the background and children in the native component's parent HostNode.
                 // Drawing this CaptureView itself would capture only an empty FrameLayout.
                 val target = parent as? WhiskerContainerView
@@ -51,9 +51,8 @@ class CaptureView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
                 val width = target.width
                 val fullHeight = target.height
                 val cropHeight = requestedHeightDp?.let { (it * density).toInt().coerceIn(1, fullHeight) } ?: fullHeight
+                check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs()) { "capture directory unavailable" }
                 val bitmap = Bitmap.createBitmap(width, cropHeight, Bitmap.Config.ARGB_8888)
-                val dir = File(context.cacheDir, "masamune_whisker_view_capture").apply { mkdirs() }
-                val file = File(dir, fileName)
                 try {
                     target.draw(Canvas(bitmap))
                     FileOutputStream(file).use {

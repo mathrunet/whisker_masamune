@@ -37,13 +37,12 @@ base64-encoded inside JSON, so keep them to a few megabytes.
 `status` outside 2xx is an error (`404` → `StorageError::NotFound`); callable errors keep their
 HTTP status (`permission-denied` → `StorageError::Unauthorized`).
 
-## URLs and the cache
+## URLs and authorization
 
-The callable has no URL operation, so `fetch_public_uri` and `fetch_download_uri` return
-`publicUri` / `downloadUri` from the `meta` of the last upload or download of the path. Like
-Flutter's `FunctionsStorageDatabase`, the adapter keeps that `meta` and the downloaded bytes in
-memory (shared by clones), and `download` answers from it. For a path that was not transferred
-yet, asking for a URL downloads the file first (Flutter fails instead). `clear_cache` forgets
-everything; `delete` forgets the path.
+Every download and URL lookup sends a new callable request using the current credentials.
+The adapter does not retain bytes or metadata between operations, including across clones
+and user changes. The callable has no URL operation, so URL lookups download the file to
+obtain `publicUri` / `downloadUri` from its metadata. This increases network requests, and
+URL lookup requires download permission. `clear_cache` remains a compatibility no-op.
 
 An `upload` whose local path is already a URL (`http…`) returns it unchanged, as in Flutter.
