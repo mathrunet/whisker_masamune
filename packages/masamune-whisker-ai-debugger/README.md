@@ -67,7 +67,9 @@ captures the whole app. Screenshots use `masamune-whisker-view-capture` (Android
 - **Panel**: tap the button to open it, long-press to take a screenshot and open it, drag to move
   it (the panel moves by its title row). Type an instruction, attach up to six screenshots, and
   pick the request type (`不具合修正` / `要件修正`, which prefixes `/dev:kiwame:edit`), the mode
-  (`Plan` / `bypassPermissions`) and the model (`Astra` / `Sol` / `Terra` / `Luna`). The settings
+  (`Plan` / `bypassPermissions`) and the model (`Astra` / `Sol` / `Terra` / `Luna`) with the
+  bottom-row icon buttons (each selector shows its value as a tinted Lucide icon; the accessibility
+  labels keep the text names, e.g. `Mode Plan`, `Model Sol`). The settings
   dialog chooses the provider, the model and mode for error and performance incidents, and the
   slow-operation thresholds. Settings are saved per project with `whisker-local-store`.
 - **Unexpected errors**: panics (`install_panic_hook`) and `report_error` calls (through the

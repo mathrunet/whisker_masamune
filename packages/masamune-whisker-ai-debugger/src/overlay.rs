@@ -12,12 +12,13 @@ use futures_channel::oneshot;
 use masamune_whisker_view_capture::ViewCapture;
 use regex::Regex;
 use whisker::css::{
-    AlignItems, Color, Display, FlexDirection, FlexWrap, FontWeight, JustifyContent, Overflow,
-    PositionKind,
+    AlignItems, Border, Color, Display, FlexDirection, FlexWrap, FontWeight, JustifyContent,
+    Overflow, PositionKind,
 };
 use whisker::event::{CustomEvent, TouchEvent};
 use whisker::prelude::*;
 use whisker::{Accessibility, AccessibilityRole, ElementRef, Owner, WhiskerValue};
+use whisker_icons::{Icon, lucide};
 use whisker_image::Image;
 use whisker_input::{AutoCapitalize, Input, KeyboardType};
 use whisker_safe_area::safe_area_insets;
@@ -31,6 +32,8 @@ use crate::types::{
 };
 
 const TOGGLE_SIZE: f32 = 52.0;
+const CONTROL_SIZE: f32 = 40.0;
+const CONTROL_ICON_SIZE: &str = "22";
 const PANEL_HEIGHT: f32 = 360.0;
 const KIWAME_EDIT: &str = "/dev:kiwame:edit";
 
@@ -63,6 +66,84 @@ impl RequestType {
             Self::BugFix => "不具合修正",
             Self::RequirementsEdit => "要件修正",
         }
+    }
+
+    fn icon(self) -> &'static str {
+        match self {
+            Self::BugFix => lucide::Bug,
+            Self::RequirementsEdit => lucide::NotebookPen,
+        }
+    }
+
+    fn tone(self) -> Tone {
+        match self {
+            Self::BugFix => RED,
+            Self::RequirementsEdit => TEAL,
+        }
+    }
+}
+
+/// A selector color: the Material base color and its lighter shade 300 for the icon.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Tone {
+    base: (u8, u8, u8),
+    light: &'static str,
+}
+
+const RED: Tone = Tone {
+    base: (244, 67, 54),
+    light: "#E57373",
+};
+const TEAL: Tone = Tone {
+    base: (0, 150, 136),
+    light: "#4DB6AC",
+};
+const BLUE: Tone = Tone {
+    base: (33, 150, 243),
+    light: "#64B5F6",
+};
+const ORANGE: Tone = Tone {
+    base: (255, 152, 0),
+    light: "#FFB74D",
+};
+const PURPLE: Tone = Tone {
+    base: (156, 39, 176),
+    light: "#BA68C8",
+};
+const GREEN: Tone = Tone {
+    base: (76, 175, 80),
+    light: "#81C784",
+};
+
+fn mode_icon(mode: AiDebugPermissionMode) -> &'static str {
+    match mode {
+        AiDebugPermissionMode::Plan => lucide::ClipboardList,
+        AiDebugPermissionMode::BypassPermissions => lucide::Zap,
+    }
+}
+
+fn mode_tone(mode: AiDebugPermissionMode) -> Tone {
+    match mode {
+        AiDebugPermissionMode::Plan => BLUE,
+        AiDebugPermissionMode::BypassPermissions => ORANGE,
+    }
+}
+
+fn model_icon(model: AiDebugModel) -> &'static str {
+    match model {
+        AiDebugModel::Astra => lucide::Award,
+        AiDebugModel::Sol => lucide::Star,
+        AiDebugModel::Terra => lucide::Zap,
+        AiDebugModel::Luna => lucide::Wind,
+    }
+}
+
+fn model_tone(model: AiDebugModel) -> Tone {
+    match model {
+        AiDebugModel::Astra => RED,
+        AiDebugModel::Sol => PURPLE,
+        AiDebugModel::Terra => ORANGE,
+        AiDebugModel::Luna => GREEN,
     }
 }
 
@@ -837,7 +918,30 @@ fn prompt_panel(ctx: Ctx) -> Element {
     let request_label = computed(move || ui.request_type.get().label().to_owned());
     let mode_label = computed(move || ui.settings.get().manual_permission_mode.label().to_owned());
     let model_label = computed(move || ui.settings.get().manual_model.label().to_owned());
-    let send_text = computed(move || if ui.sending.get() { "…" } else { "➤" }.to_owned());
+    let request_icon = computed(move || ui.request_type.get().icon().to_owned());
+    let request_color = computed(move || ui.request_type.get().tone().light.to_owned());
+    let request_style = computed(move || control_button(Some(ui.request_type.get().tone())));
+    let mode_icon_svg =
+        computed(move || mode_icon(ui.settings.get().manual_permission_mode).to_owned());
+    let mode_color = computed(move || {
+        mode_tone(ui.settings.get().manual_permission_mode)
+            .light
+            .to_owned()
+    });
+    let mode_style =
+        computed(move || control_button(Some(mode_tone(ui.settings.get().manual_permission_mode))));
+    let model_icon_svg = computed(move || model_icon(ui.settings.get().manual_model).to_owned());
+    let model_color = computed(move || model_tone(ui.settings.get().manual_model).light.to_owned());
+    let model_style =
+        computed(move || control_button(Some(model_tone(ui.settings.get().manual_model))));
+    let send_icon = computed(move || {
+        if ui.sending.get() {
+            lucide::LoaderCircle
+        } else {
+            lucide::SendHorizontal
+        }
+        .to_owned()
+    });
     render! {
         Fragment {
             PanelHeader(ctx: ctx, title: "AI Debugger")
@@ -863,14 +967,14 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 flex_direction: FlexDirection::Row,
                 flex_wrap: FlexWrap::Wrap,
                 align_items: AlignItems::Center,
-                gap: px(4),
+                gap: px(6),
             )) {
                 View(
                     accessibility: button_a11y("スクリーンショット"),
-                    style: icon_button(),
+                    style: control_button(None),
                     on_tap: move |_| capture_screenshot(&ctx, false),
                 ) {
-                    Text(value: "📷", style: label(TEXT_COLOR, 16.0, false))
+                    Icon(svg: lucide::MonitorSmartphone, color: "#FFFFFF", size: CONTROL_ICON_SIZE)
                 }
                 ForEach(
                     each: move || ui.shots.get(),
@@ -911,14 +1015,14 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 View(style: css!(flex_grow: 1.0)) {}
                 View(
                     accessibility: button_a11y("設定"),
-                    style: icon_button(),
+                    style: control_button(None),
                     on_tap: move |_| open_settings(&ctx),
                 ) {
-                    Text(value: "⚙", style: label(TEXT_COLOR, 16.0, false))
+                    Icon(svg: lucide::Settings, color: "#FFFFFF", size: CONTROL_ICON_SIZE)
                 }
                 View(
                     accessibility: computed(move || button_a11y(&request_label.get())),
-                    style: chip_style(false),
+                    style: request_style,
                     on_tap: move |_| ui.request_type.update(|t| {
                         *t = match t {
                             RequestType::BugFix => RequestType::RequirementsEdit,
@@ -926,32 +1030,32 @@ fn prompt_panel(ctx: Ctx) -> Element {
                         }
                     }),
                 ) {
-                    Text(value: request_label, style: label(TEXT_COLOR, 11.0, false))
+                    Icon(svg: request_icon, color: request_color, size: CONTROL_ICON_SIZE)
                 }
                 View(
                     accessibility: computed(move || button_a11y(&format!("Mode {}", mode_label.get()))),
-                    style: chip_style(false),
+                    style: mode_style,
                     on_tap: move |_| update_manual(&ctx, |s| {
                         s.manual_permission_mode = s.manual_permission_mode.next();
                     }),
                 ) {
-                    Text(value: mode_label, style: label(TEXT_COLOR, 11.0, false))
+                    Icon(svg: mode_icon_svg, color: mode_color, size: CONTROL_ICON_SIZE)
                 }
                 View(
                     accessibility: computed(move || button_a11y(&format!("Model {}", model_label.get()))),
-                    style: chip_style(false),
+                    style: model_style,
                     on_tap: move |_| update_manual(&ctx, |s| {
                         s.manual_model = s.manual_model.next();
                     }),
                 ) {
-                    Text(value: model_label, style: label(TEXT_COLOR, 11.0, false))
+                    Icon(svg: model_icon_svg, color: model_color, size: CONTROL_ICON_SIZE)
                 }
                 View(
                     accessibility: button_a11y("送信"),
-                    style: icon_button(),
+                    style: control_button(None),
                     on_tap: move |_| send(&ctx),
                 ) {
-                    Text(value: send_text, style: label(ACCENT_COLOR, 16.0, true))
+                    Icon(svg: send_icon, color: "#B2FF59", size: CONTROL_ICON_SIZE)
                 }
             }
         }
@@ -1964,6 +2068,29 @@ fn icon_button() -> Css {
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
     )
+}
+
+/// The square buttons of the prompt's bottom row; `tone` adds the tinted selector frame.
+fn control_button(tone: Option<Tone>) -> Css {
+    let style = css!(
+        width: px(CONTROL_SIZE),
+        height: px(CONTROL_SIZE),
+        border_radius: px(10),
+        display: Display::Flex,
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+    );
+    match tone {
+        Some(Tone {
+            base: (r, g, b), ..
+        }) => style.background_color(Color::rgba(r, g, b, 0.16)).border(
+            Border::new()
+                .width(px(1))
+                .solid()
+                .color(Color::rgba(r, g, b, 0.75)),
+        ),
+        None => style,
+    }
 }
 
 fn chip_style(selected: bool) -> Css {

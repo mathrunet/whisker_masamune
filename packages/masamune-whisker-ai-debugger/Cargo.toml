@@ -25,6 +25,7 @@ whisker.workspace = true
 masamune-whisker-adapter.workspace = true
 whisker-input.workspace = true
 whisker-image.workspace = true
+whisker-icons.workspace = true
 whisker-local-store.workspace = true
 whisker-safe-area.workspace = true
 masamune-whisker-logger.workspace = true
