@@ -192,8 +192,9 @@ pub fn tab_scaffold(
             BottomNavigationBar(items: items, selected: selected, on_tap: on_tap, background: bar_color)
         }
     };
+    // Tab screens run edge to edge; their own scaffolds keep content clear of the side insets.
     render! {
-        Scaffold(safe_area_top: false, bottom_navigation_bar: bar, bottom_navigation_bar_color: bar_color) {
+        Scaffold(safe_area_top: false, safe_area_horizontal: false, bottom_navigation_bar: bar, bottom_navigation_bar_color: bar_color) {
             View(style: body_style) {
                 Outlet {}
             }

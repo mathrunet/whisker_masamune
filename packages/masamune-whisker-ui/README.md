@@ -26,6 +26,9 @@ the body shrinks when the keyboard opens, `bottom_sheet` rises with it, and
 Safe areas take the color of the bar next to them: `AppBar` paints the top one with its own
 color, and the bottom one is painted with `bottom_navigation_bar_color` (default: the
 `BottomNavigationBar` background) or `bottom_sheet_color` (default: transparent).
+The body is padded by the side safe areas (landscape notches and cutouts); pass
+`safe_area_horizontal: false` to draw it edge to edge and pad the content yourself with
+`use_scaffold_insets` or `SafeArea`.
 
 ```rust
 render! {
@@ -40,6 +43,8 @@ render! {
 `TabScaffold` is the layout component of a route that wraps a `Switch` of tab groups.
 The body fades only when the tab changes (not when returning from a screen pushed on the outer
 stack), and the bar hides while the keyboard is open.
+Tab screens are not padded by the side safe areas, so each screen's own `Scaffold` decides
+whether its background runs edge to edge in landscape.
 
 ```rust
 fn tabs() -> Vec<TabItem> {

@@ -119,6 +119,10 @@ pub fn scaffold(
     /// Without bottom areas, pads the body by the bottom safe area.
     #[prop(default = false)]
     safe_area_bottom: bool,
+    /// Pads the body by the side safe areas. Pass `false` to draw the body edge to edge and
+    /// hand the side insets down (read them with `use_scaffold_insets` or `SafeArea`).
+    #[prop(default = true)]
+    safe_area_horizontal: bool,
     /// Body (shrinks when the keyboard opens).
     children: Children,
 ) -> Element {
@@ -166,9 +170,22 @@ pub fn scaffold(
                 free_bottom.get()
             }
         }),
-        // The body, sheet and navigation bar below are padded by the side safe areas.
-        left: computed(|| 0.0),
-        right: computed(|| 0.0),
+        // The sheet and navigation bar below are padded by the side safe areas; the body too
+        // unless `safe_area_horizontal` is off.
+        left: computed(move || {
+            if safe_area_horizontal {
+                0.0
+            } else {
+                parent.left.get()
+            }
+        }),
+        right: computed(move || {
+            if safe_area_horizontal {
+                0.0
+            } else {
+                parent.right.get()
+            }
+        }),
         keyboard: computed(move || {
             if resize_to_avoid_bottom_inset {
                 0.0
@@ -193,8 +210,16 @@ pub fn scaffold(
             .flex_basis(px(0))
             .padding_top(px(if pad_top { parent.top.get() } else { 0.0 }))
             .padding_bottom(px(if pad_bottom { free_bottom.get() } else { 0.0 }))
-            .padding_left(px(parent.left.get()))
-            .padding_right(px(parent.right.get()))
+            .padding_left(px(if safe_area_horizontal {
+                parent.left.get()
+            } else {
+                0.0
+            }))
+            .padding_right(px(if safe_area_horizontal {
+                parent.right.get()
+            } else {
+                0.0
+            }))
     });
     let sheet_style = computed(move || {
         column()

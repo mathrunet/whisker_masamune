@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `Scaffold`: added `safe_area_horizontal` (default `true`). With `false` the body runs edge to
+  edge in landscape and the side safe areas are handed down through `use_scaffold_insets`.
+- `TabScaffold`: tab screens are no longer padded by the side safe areas; each screen's own
+  `Scaffold` keeps its content clear of them, so tab backgrounds reach the screen edges.
+
 ## 0.4.0
 
 - Added `masamune-whisker-webview`: `MasamuneWebView` (`WKWebView` / `android.webkit.WebView`)
