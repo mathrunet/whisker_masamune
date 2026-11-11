@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- `masamune-whisker-billing`: upgrade Google Play Billing from 7.1.1 to 8.3.0 and adapt product queries to `QueryProductDetailsResult`, preserving the subscription bridge API.
+
 ## 0.5.0
 
 - **Breaking** `masamune-whisker-ai-debugger`: `ai_debugger_config!` reads the

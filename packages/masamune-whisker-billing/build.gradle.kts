@@ -40,5 +40,5 @@ ksp {
 dependencies {
     implementation("rs.whisker:whisker-module-android:0.1.21")
     ksp("rs.whisker:ksp:0.1.21")
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.android.billingclient:billing-ktx:8.3.0")
 }
