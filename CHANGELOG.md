@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - **Breaking** `masamune-whisker-ai-debugger`: `ai_debugger_config!` reads the
   `MASAMUNE_AI_DEBUGGER_*` values only when the app crate is compiled with the
