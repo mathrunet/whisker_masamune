@@ -20,6 +20,18 @@ Compile-time values, read in the app crate by `ai_debugger_config!`:
 | `MASAMUNE_AI_DEBUGGER_API_KEY` | Sent as `x-api-key` |
 | `MASAMUNE_AI_DEBUGGER_ACCOUNTS` | Optional `id1:pass1,id2:pass2` debug accounts |
 
+The values are read only when the app crate opts in with the `masamune_ai_debugger` cfg in a
+debug build. Emit it from the app's `build.rs` for dev builds only, so production binaries never
+contain the API key or the accounts, even when the variables are set in the build environment:
+
+```rust,ignore
+// build.rs
+println!("cargo::rustc-check-cfg=cfg(masamune_ai_debugger)");
+if std::env::var("MY_APP_FLAVOR").as_deref() == Ok("dev") {
+    println!("cargo::rustc-cfg=masamune_ai_debugger");
+}
+```
+
 The API key is compiled into dev builds: never distribute them. Set `<APP>_FLAVOR=prod` for
 production builds. Development requires an explicit `<APP>_FLAVOR=dev`.
 

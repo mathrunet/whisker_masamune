@@ -47,3 +47,7 @@ log.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
 wiremock.workspace = true
+
+[lints.rust]
+# `ai_debugger_config!` checks the app crate's `masamune_ai_debugger` cfg; the tests expand it here.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(masamune_ai_debugger)"] }

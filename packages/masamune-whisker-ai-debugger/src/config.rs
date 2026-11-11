@@ -23,24 +23,38 @@ pub type AiDebugSpawner = Rc<dyn Fn(LocalBoxFuture<'static, ()>)>;
 ///
 /// It must expand in the app crate, because a dependency cannot read the app's `option_env!`.
 ///
+/// The values are read only in debug builds of an app crate compiled with the
+/// `masamune_ai_debugger` cfg. Emit it from the app's `build.rs` for dev builds only, so
+/// production binaries never contain the API key or the accounts, even when the variables are
+/// set in the build environment. Without the cfg, the debugger is disabled.
+///
 /// ```ignore
+/// // build.rs
+/// println!("cargo::rustc-check-cfg=cfg(masamune_ai_debugger)");
+/// if std::env::var("MY_APP_FLAVOR").as_deref() == Ok("dev") {
+///     println!("cargo::rustc-cfg=masamune_ai_debugger");
+/// }
+///
+/// // src
 /// let flavor = Flavor::from_env(option_env!("MY_APP_FLAVOR"))?;
 /// let config = masamune_whisker_ai_debugger::ai_debugger_config!(flavor);
 /// ```
 #[macro_export]
 macro_rules! ai_debugger_config {
     ($flavor:expr) => {{
-        let flavor = $flavor;
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, masamune_ai_debugger))]
         let config = $crate::AiDebuggerConfig::from_values(
-            flavor,
+            $flavor,
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_PROJECT_ID"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_ENDPOINT"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_API_KEY"),
             ::core::option_env!("MASAMUNE_AI_DEBUGGER_ACCOUNTS"),
         );
-        #[cfg(not(debug_assertions))]
-        let config = $crate::AiDebuggerConfig::new(flavor);
+        #[cfg(not(all(debug_assertions, masamune_ai_debugger)))]
+        let config = {
+            let _ = $flavor;
+            $crate::AiDebuggerConfig::new($crate::__private::Flavor::Prod)
+        };
         config
     }};
 }

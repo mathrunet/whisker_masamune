@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Breaking** `masamune-whisker-ai-debugger`: `ai_debugger_config!` reads the
+  `MASAMUNE_AI_DEBUGGER_*` values only when the app crate is compiled with the
+  `masamune_ai_debugger` cfg. Emit it from `build.rs` for dev builds only; without it the
+  debugger is disabled. Production debug builds no longer embed the API key or the accounts when
+  the variables are set in the build environment.
+- `masamune-whisker-ai-debugger`: when disabled, `AiDebugger` wraps its children in a flex
+  container instead of a fragment, so it can stay the app root in production builds (a fragment
+  root left the screen blank).
 - `Scaffold`: added `safe_area_horizontal` (default `true`). With `false` the body runs edge to
   edge in landscape and the side safe areas are handed down through `use_scaffold_insets`.
 - `TabScaffold`: tab screens are no longer padded by the side safe areas; each screen's own

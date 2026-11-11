@@ -26,3 +26,9 @@ pub use types::{
     AiDebugCameraPicture, AiDebugContextProvider, AiDebugContextSnapshot, AiDebugModel,
     AiDebugPermissionMode, AiDebugPurchase, AiDebugPurchaseProduct,
 };
+
+/// Paths used by [`ai_debugger_config!`]; not part of the public API.
+#[doc(hidden)]
+pub mod __private {
+    pub use masamune_whisker_logger::Flavor;
+}

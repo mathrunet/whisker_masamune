@@ -222,7 +222,17 @@ impl Ctx {
 pub fn ai_debugger(controller: AiDebugController, children: Children) -> Element {
     let children = children.clone();
     if !controller.enabled() {
-        return render! { Fragment { {children()} } };
+        // A fragment cannot be a surface root, so keep the same container as the enabled tree.
+        return render! {
+            View(style: css!(
+                flex_grow: 1.0,
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                position: PositionKind::Relative,
+            )) {
+                {children()}
+            }
+        };
     }
     let settings = controller.settings();
     let ui = Ui {

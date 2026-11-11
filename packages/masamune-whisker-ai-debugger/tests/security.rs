@@ -33,8 +33,11 @@ impl AiDebugSettingsStore for ForbiddenIo {
 fn requires_both_debug_profile_and_explicit_dev_flavor() {
     assert!(!ai_debugger_config!(Flavor::Prod).enabled());
     assert!(!ai_debugger_config!(Flavor::from_env(None).unwrap()).enabled());
+    // The macro reads the values only when the app crate opts in with the cfg; this test crate
+    // does not, so even a debug dev build stays disabled.
+    assert!(!ai_debugger_config!(Flavor::Dev).enabled());
     assert_eq!(
-        ai_debugger_config!(Flavor::Dev).enabled(),
+        AiDebuggerConfig::from_values(Flavor::Dev, None, None, None, None).enabled(),
         cfg!(debug_assertions)
     );
 }
