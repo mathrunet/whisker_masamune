@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3
+
+- `masamune-whisker-functions`, `masamune-whisker-ai-debugger`: use the OS TLS stack (`native-tls`, Security.framework) on iOS and macOS instead of rustls, so Apple builds contain no non-OS encryption. Other targets keep rustls. The workspace `reqwest` dependency no longer enables a TLS backend.
+
 ## 0.5.2
 
 - `masamune-whisker-billing`: depend on the Java Billing 8.3.0 artifact instead of unused Kotlin extensions, keeping Kotlin 2.0 consumers compatible. Remove the module metadata-check bypass.
