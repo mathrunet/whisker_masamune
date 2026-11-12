@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- **FIX** `masamune-whisker-billing`: preserve Android store failures as versioned status/code errors without SDK debug messages. Startup product loading tolerates unavailable stores and temporary connectivity failures while still reporting invalid requests and unknown errors. Existing native API signatures are unchanged; `StoreFailure` lets apps classify failures and retry product loading after recovery.
+
 ## 0.7.0
 
 - **Breaking** `masamune-whisker-screen`: the CNG plugin uses the project protocol. Register it

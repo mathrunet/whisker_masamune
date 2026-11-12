@@ -32,10 +32,10 @@
 mod adapter;
 mod debug;
 
-pub use adapter::{BillingMasamuneAdapter, load_products, products};
+pub use adapter::{load_products, products, BillingMasamuneAdapter};
 pub use debug::{
-    DEBUG_PURCHASE_TOKEN, debug_force_purchase, debug_force_unpurchase, debug_is_purchased,
-    debug_purchases,
+    debug_force_purchase, debug_force_unpurchase, debug_is_purchased, debug_purchases,
+    DEBUG_PURCHASE_TOKEN,
 };
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
@@ -91,6 +91,63 @@ pub enum Status {
     #[default]
     #[serde(other)]
     Unknown,
+}
+
+/// A structured store failure carried by the existing [`NativeError`] API.
+///
+/// Android uses a versioned JSON error envelope so callers never have to parse SDK messages.
+/// Transport failures and errors from older native modules remain unclassified and must still
+/// be reported. No product ids, purchase tokens or SDK debug messages are included.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreFailure {
+    /// Wire format version. Currently `1`.
+    pub billing_error: u8,
+    /// The operation rejected by the store (for example `connect` or `queryProducts`).
+    pub operation: String,
+    pub status: Status,
+    /// Platform response code.
+    pub code: i64,
+}
+
+impl StoreFailure {
+    /// Decodes a structured failure without interpreting human-readable error text.
+    pub fn from_native(error: &NativeError) -> Option<Self> {
+        let failure: Self = serde_json::from_str(&error.0).ok()?;
+        (failure.billing_error == 1).then_some(failure)
+    }
+
+    /// The store cannot be used on this device/account, or is temporarily unreachable.
+    /// Invalid requests and unknown failures deliberately remain unexpected errors.
+    pub fn is_unavailable(&self) -> bool {
+        matches!(
+            self.status,
+            Status::BillingUnavailable | Status::NotSupported
+        )
+    }
+
+    /// A later user action can retry after connectivity has recovered.
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self.status,
+            Status::ServiceUnavailable | Status::ServiceDisconnected | Status::NetworkError
+        )
+    }
+
+    /// Expected store availability failures that do not prevent normal app startup.
+    pub fn is_availability_failure(&self) -> bool {
+        self.is_unavailable() || self.is_retryable()
+    }
+}
+
+impl std::fmt::Display for StoreFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "billing {:?} (code {}, operation {})",
+            self.status, self.code, self.operation
+        )
+    }
 }
 
 /// Result of [`purchase`]: whether the purchase sheet could be shown.

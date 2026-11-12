@@ -2,11 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use masamune_whisker_adapter::MasamuneAdapters;
-use masamune_whisker_billing::{BillingMasamuneAdapter, load_products, products};
-use whisker::WhiskerValue;
-use whisker::runtime::module::{ModuleHost, with_module_host};
+use masamune_whisker_billing::{load_products, products, BillingMasamuneAdapter};
+use whisker::runtime::module::{with_module_host, ModuleHost};
 use whisker::runtime::{RuntimeContext, RuntimeWakeHandle};
-use whisker::{Owner, spawn_local};
+use whisker::WhiskerValue;
+use whisker::{spawn_local, Owner};
 
 type Calls = Rc<RefCell<Vec<(String, String)>>>;
 
@@ -99,4 +99,76 @@ fn does_not_load_when_disabled_and_fails_without_an_adapter() {
         root.dispose();
     });
     assert!(calls.borrow().is_empty());
+}
+
+/// Store availability is optional at startup; invalid requests and bridge failures are not.
+#[test]
+fn unavailable_startup_can_reload_products_and_unexpected_errors_are_reported() {
+    use masamune_whisker_billing::{NativeError, StoreFailure};
+    use masamune_whisker_logger::{Flavor, LogEntry, LoggerConfig, RuntimeLoggerAdapter};
+    use std::collections::VecDeque;
+
+    let logger = RuntimeLoggerAdapter::default();
+    LoggerConfig::new(Flavor::Dev)
+        .adapter(logger.clone())
+        .init()
+        .unwrap();
+    for (status, code, expected) in [
+        ("billing_unavailable", 3, true),
+        ("service_unavailable", 2, true),
+        ("service_disconnected", -1, true),
+        ("network_error", 12, true),
+        ("not_supported", -2, true),
+        ("developer_error", 5, false),
+        ("unknown", 99, false),
+    ] {
+        logger.clear();
+        let error = serde_json::json!({
+            "billingError": 1, "operation": "connect", "status": status, "code": code,
+        })
+        .to_string();
+        let failure = StoreFailure::from_native(&NativeError(error.clone())).unwrap();
+        assert_eq!(failure.is_availability_failure(), expected);
+        let replies = Rc::new(RefCell::new(VecDeque::from([
+            WhiskerValue::Error(error),
+            WhiskerValue::String(r#"{"value":[{"id":"monthly","price":"¥500"}]}"#.into()),
+        ])));
+        let host = ModuleHost::new(
+            move |_, method, _, _, result| {
+                assert_eq!(method, "queryProducts");
+                result(replies.borrow_mut().pop_front().unwrap());
+                true
+            },
+            |_, _, _| {},
+        );
+        let runtime = RuntimeContext::new(RuntimeWakeHandle::new(|| {}));
+        runtime.enter(|| with_module_host(&host, || {
+            let root = Owner::new(None);
+            root.with(|| {
+                MasamuneAdapters::new().adapter(BillingMasamuneAdapter::new(["monthly"])).install();
+            });
+            whisker::run_until_stalled();
+            assert!(ids().is_empty());
+            let reported = logger.entries().iter().any(|entry| matches!(entry,
+                LogEntry::Error { context: Some(context), .. } if context.starts_with("masamune.adapter.start|")));
+            assert_eq!(reported, !expected, "{status}");
+            root.with(|| spawn_local(async {
+                let loaded = load_products().await.unwrap();
+                assert_eq!(loaded[0].price, "¥500");
+            }));
+            whisker::run_until_stalled();
+            assert_eq!(ids(), ["monthly"]);
+            root.dispose();
+        }));
+        runtime.shutdown();
+    }
+    for message in [
+        "billing setup failed: 3 Billing service unavailable on device.",
+        "no context",
+        "{}",
+        r#"{"billingError":2,"operation":"connect","status":"billing_unavailable","code":3}"#,
+        r#"{"billingError":1,"status":"billing_unavailable","code":3}"#,
+    ] {
+        assert!(StoreFailure::from_native(&NativeError(message.into())).is_none());
+    }
 }

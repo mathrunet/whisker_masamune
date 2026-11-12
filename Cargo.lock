@@ -999,10 +999,11 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-billing"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
+ "masamune-whisker-logger",
  "serde",
  "serde_json",
  "whisker",

@@ -1,7 +1,7 @@
 use masamune_whisker_adapter::{AdapterError, MasamuneAdapter, StartFuture};
 use whisker::prelude::*;
 
-use crate::{NativeError, NativeResult, Product, query_products};
+use crate::{query_products, NativeError, NativeResult, Product, StoreFailure};
 
 /// Billing settings for [`masamune_whisker_adapter::MasamuneAdapters`] (Masamune's
 /// `PurchaseMasamuneAdapter`): the app's products, loaded after startup into [`products`].
@@ -31,7 +31,15 @@ impl MasamuneAdapter for BillingMasamuneAdapter {
             return None;
         }
         Some(Box::pin(async {
-            load_products().await?;
+            if let Err(error) = load_products().await {
+                if let Some(failure) =
+                    StoreFailure::from_native(&error).filter(StoreFailure::is_availability_failure)
+                {
+                    masamune_whisker_logger::info!("billing products unavailable: {failure}");
+                } else {
+                    return Err(error.into());
+                }
+            }
             Ok::<(), AdapterError>(())
         }))
     }

@@ -111,7 +111,7 @@ class BillingModule : Module() {
                     QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.SUBS).build(),
                 ) { result, purchases ->
                     if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                        Bridge.reject(promise, "queryPurchases failed: ${result.responseCode} ${result.debugMessage}")
+                        rejectStore(promise, "queryPurchases", result)
                     } else {
                         Bridge.resolve(promise, purchases.map(::encode))
                     }
@@ -133,7 +133,7 @@ class BillingModule : Module() {
                     if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                         Bridge.resolve(promise, null)
                     } else {
-                        Bridge.reject(promise, "acknowledge failed: ${result.responseCode} ${result.debugMessage}")
+                        rejectStore(promise, "finish", result)
                     }
                 }
             }
@@ -155,7 +155,7 @@ class BillingModule : Module() {
         ).build()
         client!!.queryProductDetailsAsync(params) { result, response ->
             if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                Bridge.reject(promise, "queryProducts failed: ${result.responseCode} ${result.debugMessage}")
+                rejectStore(promise, "queryProducts", result)
                 return@queryProductDetailsAsync
             }
             val products = response.productDetailsList
@@ -193,8 +193,7 @@ class BillingModule : Module() {
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     callers.forEach { (_, next) -> next() }
                 } else {
-                    val message = "billing setup failed: ${result.responseCode} ${result.debugMessage}"
-                    callers.forEach { (waiter, _) -> Bridge.reject(waiter, message) }
+                    callers.forEach { (waiter, _) -> rejectStore(waiter, "connect", result) }
                 }
             }
 
@@ -202,6 +201,17 @@ class BillingModule : Module() {
                 Log.i("MasamuneWhiskerBilling", "billing service disconnected")
             }
         })
+    }
+
+    // Keep the existing rejected-promise API, with a versioned, machine-readable store error.
+    // SDK debug messages are intentionally excluded from the error and production reports.
+    private fun rejectStore(promise: WhiskerPromise, operation: String, result: BillingResult) {
+        Bridge.reject(promise, Bridge.wrap(mapOf(
+            "billingError" to 1,
+            "operation" to operation,
+            "status" to status(result.responseCode),
+            "code" to result.responseCode,
+        )).toString())
     }
 
     private fun encodeResult(result: BillingResult): Map<String, Any?> = mapOf(
