@@ -358,6 +358,7 @@ async fn incidents_are_deduplicated_and_throttled() {
         assert_eq!(incidents[0]["kind"], "exception");
         assert_eq!(incidents[0]["message"], "failed at item 12");
         assert_eq!(incidents[0]["model"], "sol");
+        assert_eq!(incidents[0]["permissionMode"], "bypassPermissions");
         assert!(incidents[0].get("metadata").is_none());
         assert_eq!(incidents[1]["message"], "other failure");
         assert_eq!(
@@ -502,6 +503,7 @@ async fn slow_traces_report_one_incident() {
         let incidents = transport.bodies("/incidents");
         assert_eq!(incidents.len(), 1);
         assert_eq!(incidents[0]["kind"], "performance");
+        assert_eq!(incidents[0]["permissionMode"], "bypassPermissions");
         assert_eq!(
             incidents[0]["message"],
             "Performance threshold exceeded: masamune.model.load|document|load|db.users"

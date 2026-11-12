@@ -86,8 +86,9 @@ captures the whole app. Screenshots use `masamune-whisker-view-capture` (Android
   (`Plan` / `bypassPermissions`) and the model (`Astra` / `Sol` / `Terra` / `Luna`) with the
   bottom-row icon buttons (each selector shows its value as a tinted Lucide icon; the accessibility
   labels keep the text names, e.g. `Mode Plan`, `Model Sol`). The settings
-  dialog chooses the provider, the model and mode for error and performance incidents, and the
-  slow-operation thresholds. Settings are saved per project with `whisker-local-store`.
+  dialog chooses the provider, the model and mode for error and performance incidents (the mode
+  defaults to `bypassPermissions`, so automatic sessions investigate and fix without waiting for
+  plan approval), and the slow-operation thresholds. Settings are saved per project with `whisker-local-store`.
 - **Unexpected errors**: panics (`install_panic_hook`) and `report_error` calls (through the
   logger adapter) become `exception` incidents with a screenshot. Set
   `report_handled_errors(false)` to send handled errors as `error` breadcrumbs only.

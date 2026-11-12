@@ -35,9 +35,9 @@ impl Default for AiDebugSettings {
             manual_model: AiDebugModel::Sol,
             manual_permission_mode: AiDebugPermissionMode::Plan,
             error_model: AiDebugModel::Sol,
-            error_permission_mode: AiDebugPermissionMode::Plan,
+            error_permission_mode: AiDebugPermissionMode::BypassPermissions,
             performance_model: AiDebugModel::Sol,
-            performance_permission_mode: AiDebugPermissionMode::Plan,
+            performance_permission_mode: AiDebugPermissionMode::BypassPermissions,
             model_load_timeout: Duration::from_secs(5),
             indicator_timeout: Duration::from_secs(10),
         }
@@ -184,6 +184,14 @@ mod tests {
         assert_eq!(migrated.error_model, AiDebugModel::Luna);
         assert_eq!(migrated.performance_model, AiDebugModel::Astra);
         assert_eq!(migrated.manual_permission_mode, AiDebugPermissionMode::Plan);
+        assert_eq!(
+            migrated.error_permission_mode,
+            AiDebugPermissionMode::BypassPermissions
+        );
+        assert_eq!(
+            migrated.performance_permission_mode,
+            AiDebugPermissionMode::BypassPermissions
+        );
         assert_eq!(migrated.model_load_timeout, Duration::from_secs(5));
         assert_eq!(migrated.indicator_timeout, Duration::from_secs(10));
         // A missing provider keeps the fallback; an explicit null means automatic.
