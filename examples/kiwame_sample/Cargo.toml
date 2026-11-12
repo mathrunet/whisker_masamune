@@ -1,0 +1,75 @@
+# Minimal Whisker app for Kiwame's Maestro E2E flow: a test flavor with runtime adapters and
+# accessibility identifiers on every control. Kept out of the whisker_masamune workspace.
+[workspace]
+
+[package]
+name = "kiwame_sample"
+version = "0.1.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "whisker-config"
+path = "whisker.rs"
+required-features = ["whisker-config"]
+test = false
+bench = false
+
+[features]
+whisker-config = ["whisker-cng/generate"]
+
+[dependencies]
+whisker = { version = "0.16", features = ["tokio"] }
+whisker-cng = { version = "0.16.0", default-features = false }
+whisker-router = "0.14"
+masamune-whisker-adapter = { path = "../../packages/masamune-whisker-adapter" }
+masamune-whisker-ai-debugger = { path = "../../packages/masamune-whisker-ai-debugger" }
+masamune-whisker-appearance = { path = "../../packages/masamune-whisker-appearance" }
+masamune-whisker-boot = { path = "../../packages/masamune-whisker-boot" }
+masamune-whisker-functions = { path = "../../packages/masamune-whisker-functions" }
+masamune-whisker-logger = { path = "../../packages/masamune-whisker-logger" }
+masamune-whisker-ui = { path = "../../packages/masamune-whisker-ui" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+log = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+
+# Every whisker crate comes from the mathrunet/whisker fork main (checked by
+# `../../scripts/whisker-fork.sh check`). Keep the source string identical on every line.
+[patch.crates-io]
+whisker = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-animation = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-cng = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-config = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-css = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-driver = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-driver-sys = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-engine = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-icons = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-image = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-input = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-keyboard = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-layout = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-local-store = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-macro-syntax = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-macros = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-plugin = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-protocol = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-router = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-runtime = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-safe-area = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-style = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-svg = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+whisker-value = { git = "https://github.com/mathrunet/whisker", branch = "main" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
