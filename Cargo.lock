@@ -2448,8 +2448,8 @@ dependencies = [
 
 [[package]]
 name = "whisker"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2465,8 +2465,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-animation"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker-css",
  "whisker-runtime",
@@ -2474,8 +2474,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-config"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2485,8 +2485,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-css"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker-macros",
  "whisker-style",
@@ -2494,8 +2494,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-driver"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker-driver-sys",
  "whisker-engine",
@@ -2504,16 +2504,16 @@ dependencies = [
 
 [[package]]
 name = "whisker-driver-sys"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "whisker-engine"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker-layout",
  "whisker-protocol",
@@ -2522,8 +2522,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "plist",
@@ -2539,8 +2539,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase-analytics"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2551,8 +2551,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase-auth"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
  "whisker-firebase-core",
@@ -2560,8 +2560,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase-core"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2571,8 +2571,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase-crashlytics"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2583,8 +2583,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-firebase-storage"
-version = "0.1.2"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.1.3"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
  "whisker-firebase-core",
@@ -2592,8 +2592,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-icons"
-version = "0.14.3"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.4"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
  "whisker-svg",
@@ -2601,8 +2601,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-image"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2611,8 +2611,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-input"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "serde",
  "whisker",
@@ -2620,16 +2620,16 @@ dependencies = [
 
 [[package]]
 name = "whisker-keyboard"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "whisker-layout"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "taffy",
  "whisker-protocol",
@@ -2638,16 +2638,16 @@ dependencies = [
 
 [[package]]
 name = "whisker-local-store"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "whisker-macro-syntax"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
@@ -2655,8 +2655,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-macros"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2666,16 +2666,16 @@ dependencies = [
 
 [[package]]
 name = "whisker-paths"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "whisker-plugin"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2684,16 +2684,16 @@ dependencies = [
 
 [[package]]
 name = "whisker-protocol"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker-value",
 ]
 
 [[package]]
 name = "whisker-router"
-version = "0.14.4"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.5"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "anyhow",
  "serde",
@@ -2704,8 +2704,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-runtime"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -2721,21 +2721,21 @@ dependencies = [
 
 [[package]]
 name = "whisker-safe-area"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "whisker-style"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 
 [[package]]
 name = "whisker-svg"
-version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.14.6"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "base64 0.22.1",
  "roxmltree",
@@ -2744,8 +2744,8 @@ dependencies = [
 
 [[package]]
 name = "whisker-value"
-version = "0.17.0"
-source = "git+https://github.com/mathrunet/whisker?branch=main#b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"
+version = "0.18.0"
+source = "git+https://github.com/mathrunet/whisker?branch=main#1fe19969ccd0f3e4d31da006327944b95adde9d6"
 dependencies = [
  "serde",
  "serde_json",

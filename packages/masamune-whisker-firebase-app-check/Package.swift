@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerFirebaseAppCheck", targets: ["MasamuneWhiskerFirebaseAppCheck"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mathrunet/whisker.git", revision: "b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "1fe19969ccd0f3e4d31da006327944b95adde9d6"),
         .package(url: "https://github.com/firebase/firebase-ios-sdk.git", exact: "12.19.2"),
     ],
     targets: [

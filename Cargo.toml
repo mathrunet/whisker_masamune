@@ -24,7 +24,7 @@ masamune-whisker-functions-firebase = { path = "packages/masamune-whisker-functi
 masamune-whisker-logger = { path = "packages/masamune-whisker-logger", version = "0.7.0" }
 masamune-whisker-logger-firebase = { path = "packages/masamune-whisker-logger-firebase", version = "0.7.0" }
 whisker-image = "0.14"
-whisker = "0.17"
+whisker = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 futures-channel = "0.3"
@@ -36,7 +36,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["time", "rt", "macros"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 whisker-paths = "0.14"
-whisker-plugin = "0.17"
+whisker-plugin = "0.18"
 anyhow = "1"
 whisker-firebase = { version = "0.1", default-features = false }
 wiremock = "0.6"
