@@ -87,8 +87,9 @@ masamune-whisker-model-functions = { path = "packages/masamune-whisker-model-fun
 masamune-whisker-storage-functions = { path = "packages/masamune-whisker-storage-functions", version = "0.8.0" }
 whisker-input = "0.14"
 regex = "1"
-# Native WebSocket client of the AI debugger voice input; TLS matches reqwest (rustls + webpki roots).
-tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+# Native WebSocket client of the AI debugger voice input. Like reqwest, the TLS backend is chosen per
+# target in the consumer crate: native-tls (Security.framework) on Apple, rustls elsewhere.
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
 
 # Every whisker crate comes from the mathrunet/whisker fork main (checked by
 # `scripts/whisker-fork.sh check`). Keep the source string identical on every line.
