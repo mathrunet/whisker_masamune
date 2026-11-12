@@ -2,8 +2,8 @@
 //!
 //! Android recreates the activity on rotation by default, and recreating the activity recreates
 //! the whole Whisker runtime (the app restarts). Declare the size-related changes in the
-//! activity's `configChanges` with [`android_main_activity_overlay`] so rotation and split screen
-//! only re-layout, then read [`screen_size`] / [`orientation`] in reactive closures.
+//! activity's `configChanges` with the [`cng::MasamuneScreen`] CNG plugin so rotation and split
+//! screen only re-layout, then read [`screen_size`] / [`orientation`] in reactive closures.
 
 pub mod cng;
 pub use cng::IosOrientation;
@@ -172,30 +172,6 @@ impl BitOr for ConfigChanges {
     }
 }
 
-/// Manifest overlay for `.MainActivity` declaring `changes` (and an optional
-/// `android:screenOrientation`). Add it with the `AndroidExtraFiles` CNG plugin as
-/// `app/src/debug/AndroidManifest.xml` and `app/src/release/AndroidManifest.xml`.
-pub fn android_main_activity_overlay(
-    changes: ConfigChanges,
-    screen_orientation: Option<&str>,
-) -> String {
-    let orientation = screen_orientation
-        .map(|o| format!("\n            android:screenOrientation=\"{o}\""))
-        .unwrap_or_default();
-    format!(
-        r#"<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <activity
-            android:name=".MainActivity"
-            android:configChanges="{changes}"{orientation} />
-    </application>
-</manifest>
-"#,
-        changes = changes.android_value(),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,11 +186,6 @@ mod tests {
             changes.android_value(),
             "orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|locale|layoutDirection"
         );
-        let xml = android_main_activity_overlay(ConfigChanges::RESIZE, Some("portrait"));
-        assert!(xml.contains(
-            r#"android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout""#
-        ));
-        assert!(xml.contains(r#"android:screenOrientation="portrait""#));
     }
 
     #[test]

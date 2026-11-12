@@ -13,9 +13,11 @@ include = ["Cargo.toml", "src/**", "bin/**"]
 [lib]
 crate-type = ["rlib"]
 
-# CNG plugin: `app.plugin::<MasamuneScreen>(|c| …)` in whisker.rs writes the activity's configChanges.
+# CNG plugin: `app.project_plugin::<MasamuneScreen>(|c| …)` in whisker.rs sets the main activity's
+# configChanges (and orientation) on Android and the supported orientations on iOS.
 [package.metadata.whisker.plugins.masamune-whisker-screen]
 bin = "masamune-whisker-screen-plugin"
+protocol = "project"
 
 [[bin]]
 name = "masamune-whisker-screen-plugin"

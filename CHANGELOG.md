@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- **Breaking** `masamune-whisker-screen`: the CNG plugin uses the project protocol. Register it
+  with `app.project_plugin::<MasamuneScreen>(|c| …)` instead of `app.plugin`. It sets
+  `android:configChanges` (and `android:screenOrientation`) on `MainActivity` in the generated
+  `AndroidManifest.xml` instead of writing `app/src/debug` / `app/src/release` manifest overlays,
+  which collided with the debug manifest whisker-cng 0.17 generates ("multiple owners for
+  generated output app/src/debug/AndroidManifest.xml"). It now also runs with the defaults
+  (`RESIZE | KEYBOARD`) when whisker.rs does not mention it. `android_main_activity_overlay` is
+  removed.
+
 ## 0.6.0
 
 - `masamune-whisker-billing`: upgrade Google Play Billing from 7.1.1 to the Java-only Billing 8.3.0 artifact and adapt product queries to `QueryProductDetailsResult`, preserving the subscription bridge API.
