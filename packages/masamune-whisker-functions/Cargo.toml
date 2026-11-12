@@ -18,6 +18,14 @@ reqwest.workspace = true
 tokio.workspace = true
 log.workspace = true
 
+
+# Apple platforms use the OS TLS stack (Security.framework) so apps ship no non-OS encryption.
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+reqwest = { workspace = true, features = ["native-tls"] }
+
+[target.'cfg(not(any(target_os = "ios", target_os = "macos")))'.dependencies]
+reqwest = { workspace = true, features = ["rustls-tls"] }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 wiremock.workspace = true

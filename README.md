@@ -108,7 +108,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.7.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.7.2" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]

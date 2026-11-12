@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- **FIX** `masamune-whisker-functions`, `masamune-whisker-ai-debugger`: use the OS TLS stack (`native-tls`, Security.framework) on iOS and macOS instead of rustls, so Apple builds contain no non-OS encryption. Other targets keep rustls. The workspace `reqwest` dependency no longer enables a TLS backend.
+
 ## 0.7.1
 
 - **FIX** `masamune-whisker-billing`: preserve Android store failures as versioned status/code errors without SDK debug messages. Startup product loading tolerates unavailable stores and temporary connectivity failures while still reporting invalid requests and unknown errors. Existing native API signatures are unchanged; `StoreFailure` lets apps classify failures and retry product loading after recovery.
