@@ -20,8 +20,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        // Newer Firebase / Play Services SDKs ship Kotlin 2.3 metadata.
-        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 
     sourceSets {
@@ -40,5 +38,5 @@ ksp {
 dependencies {
     implementation("rs.whisker:whisker-module-android:0.1.21")
     ksp("rs.whisker:ksp:0.1.21")
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.android.billingclient:billing:8.3.0")
 }

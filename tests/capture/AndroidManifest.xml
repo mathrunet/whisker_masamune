@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="net.mathru.whisker.capturetest">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <application android:debuggable="true" android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name=".CaptureTestActivity" android:exported="false" />
+    </application>
+    <instrumentation android:name=".CaptureTest" android:targetPackage="net.mathru.whisker.capturetest" />
+</manifest>

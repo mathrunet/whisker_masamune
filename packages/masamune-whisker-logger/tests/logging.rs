@@ -8,8 +8,21 @@ use std::process::Command;
 fn flavor_values() {
     assert_eq!(Flavor::from_env(None), Ok(Flavor::Prod));
     assert_eq!(Flavor::from_env(Some("dev")), Ok(Flavor::Dev));
+    assert_eq!(Flavor::from_env(Some("test")), Ok(Flavor::Test));
     assert_eq!(Flavor::from_env(Some("prod")), Ok(Flavor::Prod));
     assert!(Flavor::from_env(Some("production")).is_err());
+    assert!(Flavor::from_env(Some("Test")).is_err());
+    assert_eq!(
+        masamune_whisker_logger::InvalidFlavor.to_string(),
+        "expected dev, test or prod flavor"
+    );
+}
+
+#[test]
+fn flavor_levels() {
+    assert_eq!(Flavor::Dev.level(), LevelFilter::Debug);
+    assert_eq!(Flavor::Test.level(), LevelFilter::Debug);
+    assert_eq!(Flavor::Prod.level(), LevelFilter::Warn);
     assert!(Flavor::from_env(Some("")).is_err());
 }
 

@@ -6,6 +6,7 @@ package net.mathru.whisker.view_capture
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Build
 import android.widget.FrameLayout
 import rs.whisker.runtime.Module
 import rs.whisker.runtime.ModuleDefinition
@@ -37,6 +38,7 @@ class CaptureView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         val map = (params as? WhiskerValue.Map)?.value ?: emptyMap()
         val fileName = map["fileName"]?.asString() ?: "capture.png"
         val requestedHeightDp = map["heightDp"]?.asDouble()
+        val composited = map["composited"]?.asBool() ?: false
         post {
             try {
                 val file = captureFile(context.cacheDir, fileName)
@@ -53,17 +55,32 @@ class CaptureView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
                 val cropHeight = requestedHeightDp?.let { (it * density).toInt().coerceIn(1, fullHeight) } ?: fullHeight
                 check(file.parentFile!!.isDirectory || file.parentFile!!.mkdirs()) { "capture directory unavailable" }
                 val bitmap = Bitmap.createBitmap(width, cropHeight, Bitmap.Config.ARGB_8888)
-                try {
-                    target.draw(Canvas(bitmap))
-                    FileOutputStream(file).use {
-                        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) {
-                            "capture PNG could not be saved"
+                fun complete(error: Throwable?) {
+                    try {
+                        if (error != null) throw error
+                        FileOutputStream(file).use {
+                            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) {
+                                "capture PNG could not be saved"
+                            }
                         }
+                        emitWhiskerEvent("captured", WhiskerValue.Map(mapOf("path" to WhiskerValue.Str(file.absolutePath))))
+                    } catch (failure: Throwable) {
+                        emitWhiskerEvent("captured", WhiskerValue.Map(mapOf("error" to WhiskerValue.Str(failure.message ?: "capture failed"))))
+                    } finally {
+                        bitmap.recycle()
                     }
-                } finally {
-                    bitmap.recycle()
                 }
-                emitWhiskerEvent("captured", WhiskerValue.Map(mapOf("path" to WhiskerValue.Str(file.absolutePath))))
+                try {
+                    if (composited && Build.VERSION.SDK_INT >= 26) {
+                        captureComposited(target, bitmap, ::complete)
+                    } else {
+                        target.draw(Canvas(bitmap))
+                        complete(null)
+                    }
+                } catch (error: Throwable) {
+                    bitmap.recycle()
+                    throw error
+                }
             } catch (error: Throwable) {
                 emitWhiskerEvent("captured", WhiskerValue.Map(mapOf("error" to WhiskerValue.Str(error.message ?: "capture failed"))))
             }

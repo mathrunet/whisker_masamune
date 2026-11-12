@@ -204,7 +204,8 @@ impl Ctx {
 
 /// Wraps the app with the AI debugger.
 ///
-/// Renders only `children` outside [`masamune_whisker_logger::Flavor::Dev`]. In dev it adds the
+/// Renders only `children` outside [`masamune_whisker_logger::Flavor::Dev`] and
+/// [`masamune_whisker_logger::Flavor::Test`]. When enabled it adds the
 /// floating button (tap: open, long press: screenshot and open, drag: move), the panel and the
 /// `ai_debugger_auth_*` observation nodes, attaches the controller (breadcrumbs, incidents,
 /// heartbeat) and captures `children` for screenshots (Android and iOS).
@@ -363,7 +364,10 @@ impl Capturer {
         let (sender, receiver) = oneshot::channel();
         *self.pending.borrow_mut() = Some(sender);
         let file_name = format!("ai_debugger_{}.png", chrono::Utc::now().timestamp_millis());
-        let params = WhiskerValue::map([("fileName", WhiskerValue::String(file_name))]);
+        let params = WhiskerValue::map([
+            ("fileName", WhiskerValue::String(file_name)),
+            ("composited", WhiskerValue::Bool(true)),
+        ]);
         if let Err(error) = self.element.command("capture", params) {
             self.pending.borrow_mut().take();
             return Err(error.to_string());

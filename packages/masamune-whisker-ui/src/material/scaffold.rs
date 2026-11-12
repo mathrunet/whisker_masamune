@@ -4,7 +4,8 @@
 //! `bottom_navigation_bar`. The scaffold owns the keyboard and safe-area spacing:
 //!
 //! - Body: shrinks when the keyboard opens.
-//! - `bottom_sheet`: rises with the keyboard (input bars, "Next" buttons).
+//! - `bottom_sheet`: rises with the keyboard (input bars, "Next" buttons, sheets shown as a
+//!   page). It shrinks once the body is gone, so give long content a `ScrollView`.
 //! - `bottom_navigation_bar`: stays behind the keyboard (tab bars).
 //! - `overlay`: a layer over the whole screen (sheets, dialogs).
 //!
@@ -13,14 +14,15 @@
 //!
 //! Safe areas take the color of the bar next to them: `AppBar` paints the top safe area with
 //! its own color, and the bottom safe area is painted with `bottom_navigation_bar_color` or
-//! `bottom_sheet_color`.
+//! `bottom_sheet_color`. `bottom_sheet_radius` rounds the top corners of the sheet together with
+//! that background.
 //!
 //! Nested scaffolds (a screen inside a tab) do not reserve space their parent already used.
 
 use std::rc::Rc;
 
 use masamune_whisker_appearance::palette;
-use whisker::css::{Color, Display, PositionKind};
+use whisker::css::{Color, Display, Overflow, PositionKind};
 use whisker::prelude::*;
 use whisker_keyboard::keyboard_height;
 use whisker_safe_area::safe_area_insets;
@@ -99,6 +101,9 @@ pub fn scaffold(
     /// `background_color`.
     #[prop(default = Color::rgba(0, 0, 0, 0.0))]
     bottom_sheet_color: Color,
+    /// Radius of the top corners of `bottom_sheet` (clips its content and background).
+    #[prop(default = 0.0)]
+    bottom_sheet_radius: f32,
     /// Area that stays behind the keyboard (tab bars). Reserves the bottom safe area.
     #[prop(default = Slot::default())]
     bottom_navigation_bar: Slot,
@@ -221,13 +226,23 @@ pub fn scaffold(
                 0.0
             }))
     });
+    // The body has a zero basis, so it shrinks to nothing before the sheet does.
     let sheet_style = computed(move || {
-        column()
-            .flex_shrink(0.0)
+        let sheet = column()
+            .flex_shrink(1.0)
+            .min_height(px(0))
             .padding_bottom(px(if has_nav { 0.0 } else { free_bottom.get() }))
             .padding_left(px(parent.left.get()))
             .padding_right(px(parent.right.get()))
-            .background_color(bottom_sheet_color)
+            .background_color(bottom_sheet_color);
+        if bottom_sheet_radius > 0.0 {
+            sheet
+                .border_top_left_radius(px(bottom_sheet_radius))
+                .border_top_right_radius(px(bottom_sheet_radius))
+                .overflow(Overflow::Hidden)
+        } else {
+            sheet
+        }
     });
     let nav_style = computed(move || {
         let nav = column()

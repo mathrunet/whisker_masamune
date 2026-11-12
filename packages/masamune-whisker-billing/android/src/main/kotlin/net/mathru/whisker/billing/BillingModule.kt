@@ -158,7 +158,7 @@ class BillingModule : Module() {
                 Bridge.reject(promise, "queryProducts failed: ${result.responseCode} ${result.debugMessage}")
                 return@queryProductDetailsAsync
             }
-            val products: List<ProductDetails> = response
+            val products = response.productDetailsList
             products.forEach { product -> details[product.productId] = product }
             then(products)
         }

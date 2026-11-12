@@ -34,7 +34,7 @@ git repository or crates.io.
 
 ### Foundations
 
-Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logger/README.md): initialize with the app flavor before startup work; Debug/Info are disabled in prod. Register adapters with `LoggerConfig` to send records, events and errors to every output at once, such as Firebase Analytics/Crashlytics via [`masamune-whisker-logger-firebase`](packages/masamune-whisker-logger-firebase/README.md). Never log credentials or personal data.
+Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logger/README.md): initialize with the app flavor (`dev`, `test` or `prod`) before startup work; Debug/Info are disabled in prod. Register adapters with `LoggerConfig` to send records, events and errors to every output at once, such as Firebase Analytics/Crashlytics via [`masamune-whisker-logger-firebase`](packages/masamune-whisker-logger-firebase/README.md). Never log credentials or personal data.
 
 | Crate | Description |
 |---|---|
@@ -60,9 +60,9 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-adapter` | [Plugin settings and startup work registered in one place](packages/masamune-whisker-adapter/README.md) (Masamune's `MasamuneAdapter`) |
 | `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
 | `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
-| `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) |
+| `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) with accessibility labels, roles and `identifier` props for UI automation such as Maestro ([usage](packages/masamune-whisker-ui/README.md)) |
 | `masamune-whisker-shimmer` | Shimmer loading placeholders (`ShimmerBox`, `ShimmerMultiLine`) ([usage](packages/masamune-whisker-shimmer/README.md)) |
-| `masamune-whisker-ai-debugger` | [Dev-only AI debugger overlay](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases and camera |
+| `masamune-whisker-ai-debugger` | [AI debugger overlay for dev and test builds](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases and camera |
 
 Every native module is implemented for Android and iOS (iOS 15 or later) behind the same Rust
 API. Where a platform has no equivalent, the function's documentation says what it does there
@@ -108,7 +108,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.5.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.6.0" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]

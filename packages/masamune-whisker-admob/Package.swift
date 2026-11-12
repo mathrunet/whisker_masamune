@@ -16,7 +16,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerAdmob", targets: ["MasamuneWhiskerAdmob"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mathrunet/whisker.git", revision: "d7cbd957dac30f0b30b7eb31bf2a31d1b22ad2d5"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "b2de64ce70f0d412cb9dceeaeb3a1576cf27e821"),
         .package(url: "https://github.com/googleads/swift-package-manager-google-mobile-ads.git", from: "13.0.0"),
     ],
     targets: [

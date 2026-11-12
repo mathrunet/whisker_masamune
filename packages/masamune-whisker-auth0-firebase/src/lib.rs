@@ -7,7 +7,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use masamune_whisker_auth::{AuthAdapter, AuthFuture};
+use masamune_whisker_auth::{AuthAdapter, AuthError, AuthFuture, AuthResult};
 use masamune_whisker_auth_firebase::FirebaseAuthAdapter;
 pub use masamune_whisker_auth0::{Auth0, Auth0Credentials, Auth0Error};
 use masamune_whisker_functions::{
@@ -331,12 +331,18 @@ pub async fn logout(auth0: &Auth0) -> Auth0FirebaseResult<()> {
 
 /// Firebase ID tokens of the user signed in through the custom token (UID = Auth0 `sub`),
 /// for Firebase callables and other Firebase-authenticated requests.
+///
+/// Before the Firebase sign-in no token is returned (`Ok(None)`) instead of
+/// [`AuthError::NotSignedIn`], so requests are sent without credentials like the Firebase SDK
+/// does. The `auth0_custom_token` exchange that performs the sign-in needs this.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Auth0FirebaseAuthAdapter;
 
 impl AuthAdapter for Auth0FirebaseAuthAdapter {
     fn access_token(&self, force_refresh: bool) -> AuthFuture<'_> {
-        FirebaseAuthAdapter.access_token(force_refresh)
+        Box::pin(async move {
+            anonymous_when_signed_out(FirebaseAuthAdapter.access_token(force_refresh).await)
+        })
     }
 
     fn user_id(&self) -> Option<String> {
@@ -347,4 +353,37 @@ impl AuthAdapter for Auth0FirebaseAuthAdapter {
 /// [`masamune_whisker_auth::Auth`] backed by [`Auth0FirebaseAuthAdapter`].
 pub fn auth0_firebase_auth() -> masamune_whisker_auth::Auth {
     masamune_whisker_auth::Auth::new(Auth0FirebaseAuthAdapter)
+}
+
+/// Treats "nobody is signed in to Firebase" as "no token".
+fn anonymous_when_signed_out(result: AuthResult<Option<String>>) -> AuthResult<Option<String>> {
+    match result {
+        Err(AuthError::NotSignedIn) => Ok(None),
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signed_out_sends_no_token() {
+        assert_eq!(
+            anonymous_when_signed_out(Err(AuthError::NotSignedIn)),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn keeps_tokens_and_other_errors() {
+        assert_eq!(
+            anonymous_when_signed_out(Ok(Some("id-token".into()))),
+            Ok(Some("id-token".into()))
+        );
+        assert_eq!(
+            anonymous_when_signed_out(Err(AuthError::Other("boom".into()))),
+            Err(AuthError::Other("boom".into()))
+        );
+    }
 }

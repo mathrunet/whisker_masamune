@@ -30,22 +30,28 @@ impl AiDebugSettingsStore for ForbiddenIo {
 }
 
 #[test]
-fn requires_both_debug_profile_and_explicit_dev_flavor() {
+fn requires_both_debug_profile_and_explicit_dev_or_test_flavor() {
     assert!(!ai_debugger_config!(Flavor::Prod).enabled());
     assert!(!ai_debugger_config!(Flavor::from_env(None).unwrap()).enabled());
     // The macro reads the values only when the app crate opts in with the cfg; this test crate
     // does not, so even a debug dev build stays disabled.
     assert!(!ai_debugger_config!(Flavor::Dev).enabled());
+    assert!(!ai_debugger_config!(Flavor::Test).enabled());
     assert_eq!(
         AiDebuggerConfig::from_values(Flavor::Dev, None, None, None, None).enabled(),
         cfg!(debug_assertions)
     );
+    assert_eq!(
+        AiDebuggerConfig::from_values(Flavor::Test, None, None, None, None).enabled(),
+        cfg!(debug_assertions)
+    );
+    assert!(!AiDebuggerConfig::from_values(Flavor::Prod, None, None, None, None).enabled());
 }
 
 #[tokio::test]
 async fn disabled_controller_does_not_start_tasks_or_access_io() {
-    for flavor in [Flavor::Prod, Flavor::Dev] {
-        if cfg!(debug_assertions) && flavor == Flavor::Dev {
+    for flavor in [Flavor::Prod, Flavor::Dev, Flavor::Test] {
+        if cfg!(debug_assertions) && flavor != Flavor::Prod {
             continue;
         }
         let controller = AiDebugController::new(

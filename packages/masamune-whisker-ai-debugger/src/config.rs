@@ -24,14 +24,16 @@ pub type AiDebugSpawner = Rc<dyn Fn(LocalBoxFuture<'static, ()>)>;
 /// It must expand in the app crate, because a dependency cannot read the app's `option_env!`.
 ///
 /// The values are read only in debug builds of an app crate compiled with the
-/// `masamune_ai_debugger` cfg. Emit it from the app's `build.rs` for dev builds only, so
-/// production binaries never contain the API key or the accounts, even when the variables are
-/// set in the build environment. Without the cfg, the debugger is disabled.
+/// `masamune_ai_debugger` cfg. Emit it from the app's `build.rs` for every flavor except prod
+/// (dev and test), so production binaries never contain the API key or the accounts, even when
+/// the variables are set in the build environment. Without the cfg, the debugger is disabled.
 ///
 /// ```ignore
 /// // build.rs
 /// println!("cargo::rustc-check-cfg=cfg(masamune_ai_debugger)");
-/// if std::env::var("MY_APP_FLAVOR").as_deref() == Ok("dev") {
+/// println!("cargo::rerun-if-env-changed=MY_APP_FLAVOR");
+/// // Unset means prod, so only an explicit dev or test flavor opts in.
+/// if matches!(std::env::var("MY_APP_FLAVOR").as_deref(), Ok("dev" | "test")) {
 ///     println!("cargo::rustc-cfg=masamune_ai_debugger");
 /// }
 ///
@@ -59,7 +61,8 @@ macro_rules! ai_debugger_config {
     }};
 }
 
-/// Everything the AI debugger needs. Only debug builds with [`Flavor::Dev`] enable it.
+/// Everything the AI debugger needs. Only debug builds with [`Flavor::Dev`] or [`Flavor::Test`]
+/// enable it.
 /// Otherwise every operation does nothing and the overlay only renders its children.
 #[derive(Clone)]
 pub struct AiDebuggerConfig {
@@ -123,9 +126,9 @@ impl AiDebuggerConfig {
             .accounts(AiDebugAccount::parse(accounts.unwrap_or_default()))
     }
 
-    /// Whether the debugger runs (debug builds with explicit dev flavor only).
+    /// Whether the debugger runs (debug builds with an explicit dev or test flavor only).
     pub fn enabled(&self) -> bool {
-        cfg!(debug_assertions) && self.flavor == Flavor::Dev
+        cfg!(debug_assertions) && matches!(self.flavor, Flavor::Dev | Flavor::Test)
     }
 
     /// SamuraiAI project id (the app path with `/` replaced by `-`).

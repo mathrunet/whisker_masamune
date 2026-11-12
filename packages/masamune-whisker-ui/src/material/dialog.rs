@@ -7,8 +7,15 @@ use masamune_whisker_appearance::{TextKind, bold, palette, shape, text, text_wit
 use whisker::css::{AlignItems, Color, JustifyContent, PositionKind};
 use whisker::prelude::*;
 
+use crate::material::ink_well::InkWell;
 use crate::material::progress::CircularProgressIndicator;
+use crate::material::semantics;
 use crate::style::{center, column, fill, row};
+
+/// Accessibility identifier of the submit button of the dialog shown by [`DialogHost`].
+pub const DIALOG_SUBMIT_IDENTIFIER: &str = "dialog_submit";
+/// Accessibility identifier of the cancel button of the dialog shown by [`DialogHost`].
+pub const DIALOG_CANCEL_IDENTIFIER: &str = "dialog_cancel";
 
 /// An alert or confirmation dialog.
 #[derive(Clone)]
@@ -153,6 +160,9 @@ pub fn overlay_host(overlay: Overlay) -> Element {
 }
 
 /// Renders the dialog of `overlay`.
+///
+/// The buttons are exposed to UI automation as [`DIALOG_SUBMIT_IDENTIFIER`] and
+/// [`DIALOG_CANCEL_IDENTIFIER`] (only one dialog is shown at a time), labelled with their text.
 #[component]
 pub fn dialog_host(overlay: Overlay) -> Element {
     let dialog = overlay.dialog;
@@ -178,20 +188,29 @@ fn dialog_view(overlay: Overlay) -> Element {
         })
     });
     let cancel = computed(move || dialog.with(|d| d.as_ref().and_then(|d| d.cancel_text.clone())));
-    let on_submit = move |_| {
+    let on_submit = Callback::new(move |()| {
         let current = dialog.get_untracked();
         dialog.set(None);
         if let Some(callback) = current.and_then(|d| d.on_submit) {
             callback();
         }
-    };
-    let on_cancel = move |_| {
+    });
+    let on_cancel = Callback::new(move |()| {
         let current = dialog.get_untracked();
         dialog.set(None);
         if let Some(callback) = current.and_then(|d| d.on_cancel) {
             callback();
         }
-    };
+    });
+    let submit_accessibility =
+        computed(move || semantics::button(Some(DIALOG_SUBMIT_IDENTIFIER), submit.get(), false));
+    let cancel_accessibility = computed(move || {
+        semantics::button(
+            Some(DIALOG_CANCEL_IDENTIFIER),
+            cancel.get().unwrap_or_default(),
+            false,
+        )
+    });
     let palette = palette();
     render! {
         View(style: fill().z_index(1000).merge(center()).background_color(palette.barrier)) {
@@ -208,14 +227,22 @@ fn dialog_view(overlay: Overlay) -> Element {
                 Text(value: text_value, style: text_with(TextKind::BodyMedium, palette.sub_text))
                 View(style: row().justify_content(JustifyContent::FlexEnd).gap(px(8))) {
                     Show(when: move || cancel.get().is_some()) {
-                        View(style: css!(padding: (px(10), px(12))), on_tap: on_cancel) {
+                        InkWell(
+                            style: css!(padding: (px(10), px(12)), border_radius: px(shape().full)),
+                            accessibility: cancel_accessibility,
+                            on_tap: on_cancel,
+                        ) {
                             Text(
                                 value: computed(move || cancel.get().unwrap_or_default()),
                                 style: bold(TextKind::LabelLarge, palette.primary),
                             )
                         }
                     }
-                    View(style: css!(padding: (px(10), px(12))), on_tap: on_submit) {
+                    InkWell(
+                        style: css!(padding: (px(10), px(12)), border_radius: px(shape().full)),
+                        accessibility: submit_accessibility,
+                        on_tap: on_submit,
+                    ) {
                         Text(value: submit, style: bold(TextKind::LabelLarge, palette.primary))
                     }
                 }

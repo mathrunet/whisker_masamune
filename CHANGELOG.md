@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.6.0
+
+- `masamune-whisker-billing`: upgrade Google Play Billing from 7.1.1 to the Java-only Billing 8.3.0 artifact and adapt product queries to `QueryProductDetailsResult`, preserving the subscription bridge API.
+
+- `masamune-whisker-ui`: added `InkWell` (Flutter's `InkWell`): a tappable box that shows a
+  highlight and an ink splash growing from the touch point. `FilledButton`, `OutlinedButton`,
+  `TextButton`, the `AppBar` back/close button, `AppBarAction`, `BottomNavigationBar`, `TabBar`,
+  `SegmentedTabBar` and the dialog buttons now use it, so they show tap feedback.
+- **Breaking** whisker requirements are raised to 0.17 (mathrunet/whisker fork main), which
+  reports the pointer position inside the tapped element (`TouchEvent::offset` / `size`) and
+  lets a route transition be translucent with a fading barrier
+  (`RouteTransition::modal().barrier(color)`, whiskerrs/whisker#834). Swift Host SDK pins follow
+  the same fork revision.
+- `masamune-whisker-ui`: full-screen pages can be declared explicitly (Flutter's
+  `TransitionQuery.fullscreen`). Open the route with `fullscreen_transition()` and wrap the page
+  in `Fullscreen` (or call `provide_fullscreen()`); every `AppBar` inside shows a close button (X)
+  at the top start by default, also while the page is loading and even with `back: true`.
+  `use_fullscreen()` tells custom headers whether they are in a full-screen page, and the new
+  `AppBar` prop `hide_leading` hides the leading button.
+- **Breaking** `masamune-whisker-logger`: added `Flavor::Test` for automated test builds (E2E
+  runs such as Maestro). `Flavor::from_env(Some("test"))` returns it and it logs at Debug like
+  dev; `InvalidFlavor` now reads "expected dev, test or prod flavor". Exhaustive `match`es on
+  `Flavor` need a `Test` arm.
+- **Breaking** `masamune-whisker-ai-debugger`: the debugger is also enabled in debug builds with
+  `Flavor::Test`. Emit the `masamune_ai_debugger` cfg from `build.rs` for every flavor except prod
+  (dev and test).
+- **Breaking** `masamune-whisker-ui`: `BottomNavigationBarItem` and `TabItem` have a new
+  `identifier: Option<String>` field (set it with `.identifier(..)`); struct literals need it.
+- **Breaking** `masamune-whisker-ui`: `TabScaffold` is removed. Build the tab layout like
+  Flutter: create a `TabController` with `use_tab_controller(tabs)` (or `use_tab_controller_with`
+  and `TabOptions`), pass `BottomNavigationBar(items: tabs.items(), selected: tabs.selected(),
+  on_tap: tabs.on_tap())` to the `bottom_navigation_bar` of a `Scaffold` with
+  `ModalLayerHost(layer: tabs.modal_layer())` as its `overlay`, and put `TabView(controller:
+  tabs) { Outlet {} }` in its body. `TabItem::new` takes the URL of the tab's root screen as its
+  second argument. Selecting a tab now always shows its root screen, also when switching from
+  another tab (`TabOptions { reset_on_tab_change: false, .. }` keeps the screens left open in
+  the tab).
+- `masamune-whisker-ui`: widgets expose accessibility semantics for screen readers and UI
+  automation. `FilledButton`, `OutlinedButton` and `TextButton` take `identifier: Option<String>`
+  and are labelled with their text, with the button role and the disabled state. `AppBar` takes
+  `identifier` (the title is a header; the back button is `<identifier>_back`, labelled "Back"),
+  `AppBarAction` takes `identifier` and `label: Option<String>`, bottom navigation destinations
+  are tabs with their selected state, and the dialog buttons are `dialog_submit` /
+  `dialog_cancel` (`DIALOG_SUBMIT_IDENTIFIER` / `DIALOG_CANCEL_IDENTIFIER`).
+- `masamune-whisker-ui`: a `ModalBottomSheet` on a tab screen now slides up over
+  the bottom navigation bar instead of above it, and closes when the tab changes. Added
+  `ModalLayer`, `provide_modal_layer` and `ModalLayerHost` to draw sheets over a larger area.
+- `masamune-whisker-ui`: `Scaffold` takes `bottom_sheet_radius` to round the top corners of
+  `bottom_sheet` (with its background and the safe area below it), and the sheet now shrinks
+  when the body has no room left (for example with the keyboard open), so a sheet shown as a page
+  can scroll its content instead of overflowing the top of the screen.
+- `masamune-whisker-ui`: added `fade_upwards_transition()` (`FadeUpwardsTransition`), a
+  full-screen page transition for `whisker-router` routes like Flutter's
+  `FadeUpwardsPageTransitionsBuilder`: the screen rises slightly from below while fading in, and
+  the screen beneath it stays still.
+- Added `examples/kiwame_sample`: a minimal app with a test flavor, runtime adapters and
+  accessibility identifiers for Maestro E2E flows.
+
 ## 0.5.0
 
 - **Breaking** `masamune-whisker-ai-debugger`: `ai_debugger_config!` reads the

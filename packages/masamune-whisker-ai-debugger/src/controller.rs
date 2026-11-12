@@ -111,7 +111,7 @@ struct Inner {
 /// Talks to SamuraiAI: registers the run, keeps it alive, sends instructions and screenshots,
 /// reports incidents and uploads breadcrumbs. Clones share one run.
 ///
-/// Reporting and settings I/O run only in debug builds with explicit dev flavor.
+/// Reporting and settings I/O run only in debug builds with an explicit dev or test flavor.
 #[derive(Clone)]
 pub struct AiDebugController(Rc<Inner>);
 
@@ -161,7 +161,7 @@ impl AiDebugController {
         })))
     }
 
-    /// Whether the debugger runs (debug builds with explicit dev flavor).
+    /// Whether the debugger runs (debug builds with an explicit dev or test flavor).
     pub fn enabled(&self) -> bool {
         self.0.config.enabled()
     }

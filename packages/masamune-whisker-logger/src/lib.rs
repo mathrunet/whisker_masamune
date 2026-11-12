@@ -17,6 +17,8 @@ use std::sync::{Arc, OnceLock, RwLock};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flavor {
     Dev,
+    /// Automated tests (E2E runs such as Maestro): development logs with test-only backends.
+    Test,
     Prod,
 }
 
@@ -25,6 +27,7 @@ impl Flavor {
     pub fn from_env(value: Option<&str>) -> Result<Self, InvalidFlavor> {
         match value {
             Some("dev") => Ok(Self::Dev),
+            Some("test") => Ok(Self::Test),
             None | Some("prod") => Ok(Self::Prod),
             Some(_) => Err(InvalidFlavor),
         }
@@ -32,7 +35,7 @@ impl Flavor {
 
     pub const fn level(self) -> LevelFilter {
         match self {
-            Self::Dev => LevelFilter::Debug,
+            Self::Dev | Self::Test => LevelFilter::Debug,
             Self::Prod => LevelFilter::Warn,
         }
     }
@@ -44,7 +47,7 @@ pub struct InvalidFlavor;
 
 impl std::fmt::Display for InvalidFlavor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("expected dev or prod flavor")
+        f.write_str("expected dev, test or prod flavor")
     }
 }
 

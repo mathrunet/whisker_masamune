@@ -1,6 +1,6 @@
 //! Element that saves the screen, including its children, as a PNG image.
 //!
-//! `ElementRef::command("capture", {fileName, heightDp?})` saves it to the cache,
+//! `ElementRef::command("capture", {fileName, heightDp?, composited?})` saves it to the cache,
 //! then `captured` (`{path}` or `{error}`) is delivered. Passing `heightDp` crops from the top.
 //!
 //! The PNG has the element's size in physical pixels (dp × density on Android, points × screen
@@ -8,6 +8,11 @@
 //! On iOS an element inside the window is snapshotted as composited (`drawHierarchy`); an element
 //! placed outside the window, such as an off-screen share card, is rendered from its layer tree,
 //! which omits effects that only exist in the compositor (backdrop blur, video).
+//! On Android 8+ `composited: true` copies a fully visible, untransformed capture region from the
+//! window, including WebView video and accelerated layers. Sibling overlays are hidden for that
+//! frame and restored before completion. An off-screen region or copy failure reports an error;
+//! it does not silently fall back to an incomplete software image. The default and Android 7 use
+//! software subtree rendering, which also supports off-screen cards but cannot capture video.
 
 use whisker::event::CustomEvent;
 

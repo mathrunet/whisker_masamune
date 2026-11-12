@@ -1,12 +1,13 @@
 # masamune-whisker-ai-debugger
 
-Dev-only AI debugger for Whisker apps, ported from Flutter's `masamune_ai_debugger`. A floating
+AI debugger for dev and test builds of Whisker apps, ported from Flutter's `masamune_ai_debugger`. A floating
 button opens a panel that sends instructions and screenshots to SamuraiAI, and unexpected errors,
 panics and slow operations become AI sessions automatically. It speaks the same
 `/api/app-debug/*` API and exposes the same accessibility identifiers and labels as the Flutter
 package, so the existing SamuraiAI backend and Maestro flows work unchanged.
 
-Only debug builds with `Flavor::Dev` enable it. In release builds or prod the overlay renders only its children, the logger adapter
+Only debug builds with `Flavor::Dev` or `Flavor::Test` enable it (test builds keep it so automated
+E2E runs can report to SamuraiAI). In release builds or prod the overlay renders only its children, the logger adapter
 and panic hook drop everything, and nothing is sent.
 
 ## Setup
@@ -21,19 +22,22 @@ Compile-time values, read in the app crate by `ai_debugger_config!`:
 | `MASAMUNE_AI_DEBUGGER_ACCOUNTS` | Optional `id1:pass1,id2:pass2` debug accounts |
 
 The values are read only when the app crate opts in with the `masamune_ai_debugger` cfg in a
-debug build. Emit it from the app's `build.rs` for dev builds only, so production binaries never
+debug build. Emit it from the app's `build.rs` for every flavor except prod (dev and test), so production binaries never
 contain the API key or the accounts, even when the variables are set in the build environment:
 
 ```rust,ignore
 // build.rs
 println!("cargo::rustc-check-cfg=cfg(masamune_ai_debugger)");
-if std::env::var("MY_APP_FLAVOR").as_deref() == Ok("dev") {
+println!("cargo::rerun-if-env-changed=MY_APP_FLAVOR");
+// Unset means prod, so only an explicit dev or test flavor opts in.
+if matches!(std::env::var("MY_APP_FLAVOR").as_deref(), Ok("dev" | "test")) {
     println!("cargo::rustc-cfg=masamune_ai_debugger");
 }
 ```
 
-The API key is compiled into dev builds: never distribute them. Set `<APP>_FLAVOR=prod` for
-production builds. Development requires an explicit `<APP>_FLAVOR=dev`.
+The API key is compiled into dev and test builds: never distribute them. Set `<APP>_FLAVOR=prod` for
+production builds. Development requires an explicit `<APP>_FLAVOR=dev` (or `test` for automated
+test builds).
 
 ```rust,ignore
 use masamune_whisker_ai_debugger::{AiDebugController, AiDebugger, ai_debugger_config};
@@ -193,8 +197,8 @@ let config = ai_debugger_config!(flavor)
 
 ## Security boundary
 
-The debugger runs only in debug builds with an explicit `dev` flavor. Unset flavor is
+The debugger runs only in debug builds with an explicit `dev` or `test` flavor. Unset flavor is
 production. Release builds disable the controller, overlay, settings I/O and reporting
-even when passed `Flavor::Dev`. The configuration macro does not read compile-time API
+even when passed `Flavor::Dev` or `Flavor::Test`. The configuration macro does not read compile-time API
 keys or test accounts in release builds. Do not distribute development builds or pass
 credentials through separate literals in application code.
