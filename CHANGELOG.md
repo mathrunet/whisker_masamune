@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+- **Breaking** All crates: require whisker 0.18 on the mathrunet/whisker fork main (`1fe19969`), and pin the Swift Host SDKs to the same revision. Apps must raise their `whisker` requirements to `0.18`. Upstream 0.18 removes the wgpu Desktop Host and the `desktop` module platform. The fork revision adds opt-in managed image caching with sized decoding (whiskerrs/whisker#784), the ScrollView `show_scroll_indicator` option (whiskerrs/whisker#839), correct layout paths after `routes!` spreads (whiskerrs/whisker#838) and Android first frames that wait for window insets (whiskerrs/whisker#840).
+- **Breaking** `masamune-whisker-ai-debugger`: automatic error and performance incidents default to the `bypassPermissions` mode, so they investigate and fix without waiting for plan approval. Choose another mode in the settings dialog to keep plan approval.
+- **FIX** `masamune-whisker-functions`, `masamune-whisker-ai-debugger`: include the 0.7.2 Apple TLS change (the OS TLS stack on iOS and macOS).
+
 ## 0.7.2
 
 - **FIX** `masamune-whisker-functions`, `masamune-whisker-ai-debugger`: use the OS TLS stack (`native-tls`, Security.framework) on iOS and macOS instead of rustls, so Apple builds contain no non-OS encryption. Other targets keep rustls. The workspace `reqwest` dependency no longer enables a TLS backend.
