@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1
+
+- **NEW** `masamune-whisker-speech-recognition`: streaming speech recognition with partial results
+  on Android (`SpeechRecognizer`, preferring `createOnDeviceSpeechRecognizer` and falling back to
+  the default service when the on-device model lacks the language). A session listens to the
+  microphone, or on Android 13+ to PCM16 mono audio passed with `feed` (`EXTRA_AUDIO_SOURCE`, one
+  segmented session) so that an app that already records the microphone does not start a second
+  capture. Each `Text` event carries the whole text so far. iOS ships a stub that reports the
+  recognizer as unavailable. Function-only native module without a CNG plugin; the app declares
+  `RECORD_AUDIO`.
+
 ## 0.9.0
 
 - **NEW** `masamune-whisker-audio-capture`: microphone capture as PCM16 little-endian mono chunks

@@ -1,0 +1,27 @@
+[package]
+name = "masamune-whisker-speech-recognition"
+description = "On-device streaming speech recognition with partial results for Whisker apps (Android)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+# Function-only native module. It has no CNG plugin: the app declares the microphone permission
+# (Android `RECORD_AUDIO`) itself. iOS ships a stub that reports the recognizer as unavailable.
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-bridge.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true

@@ -22,6 +22,7 @@ git repository or crates.io.
 | `masamune-whisker-youtube` | [YouTube player (IFrame Player API in a native web view) and a 16:9 `YouTube` box](packages/masamune-whisker-youtube/README.md) |
 | `masamune-whisker-image-picker` | Gallery / camera picker with resizing |
 | `masamune-whisker-audio-capture` | [Microphone capture as 16 kHz PCM16 chunks (iOS, Android, Web)](packages/masamune-whisker-audio-capture/README.md) |
+| `masamune-whisker-speech-recognition` | [On-device streaming speech recognition with partial results (Android)](packages/masamune-whisker-speech-recognition/README.md) |
 | `masamune-whisker-local-notification` | Daily scheduled local notifications |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
 | `masamune-whisker-billing` | In-app subscriptions |

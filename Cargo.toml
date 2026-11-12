@@ -78,6 +78,7 @@ masamune-whisker-billing = { path = "packages/masamune-whisker-billing", version
 masamune-whisker-image-picker = { path = "packages/masamune-whisker-image-picker", version = "0.9.0" }
 masamune-whisker-ai-debugger = { path = "packages/masamune-whisker-ai-debugger", version = "0.9.0" }
 masamune-whisker-audio-capture = { path = "packages/masamune-whisker-audio-capture", version = "0.9.0" }
+masamune-whisker-speech-recognition = { path = "packages/masamune-whisker-speech-recognition", version = "0.9.0" }
 masamune-whisker-webview = { path = "packages/masamune-whisker-webview", version = "0.9.0" }
 masamune-whisker-share-receive = { path = "packages/masamune-whisker-share-receive", version = "0.9.0" }
 masamune-whisker-auth0 = { path = "packages/masamune-whisker-auth0", version = "0.9.0" }

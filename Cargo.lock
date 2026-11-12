@@ -1429,6 +1429,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-speech-recognition"
+version = "0.9.0"
+dependencies = [
+ "base64 0.22.1",
+ "masamune-whisker-bridge",
+ "serde",
+ "serde_json",
+ "whisker",
+]
+
+[[package]]
 name = "masamune-whisker-storage"
 version = "0.9.0"
 dependencies = [
