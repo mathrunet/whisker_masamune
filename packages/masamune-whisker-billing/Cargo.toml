@@ -1,7 +1,7 @@
 [package]
 name = "masamune-whisker-billing"
 description = "In-app subscriptions with Google Play Billing and StoreKit 2 (products, purchase, entitlements, finishing) for Whisker apps"
-version = "0.8.0"
+version = "0.9.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

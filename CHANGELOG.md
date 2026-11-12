@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - **NEW** `masamune-whisker-audio-capture`: microphone capture as PCM16 little-endian mono chunks
   (default 16 kHz, 100 ms) on iOS (`AVAudioEngine` + `AVAudioConverter`), Android (`AudioRecord`

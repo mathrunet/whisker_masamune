@@ -12,7 +12,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/mathrunet/whisker_masamune"
@@ -20,13 +20,13 @@ homepage = "https://github.com/mathrunet/whisker_masamune"
 authors = ["mathru (https://mathru.net)"]
 
 [workspace.dependencies]
-masamune-whisker-auth = { path = "packages/masamune-whisker-auth", version = "0.8.0" }
-masamune-whisker-auth-firebase = { path = "packages/masamune-whisker-auth-firebase", version = "0.8.0" }
-masamune-whisker-functions = { path = "packages/masamune-whisker-functions", version = "0.8.0" }
-masamune-whisker-functions-cloudflare = { path = "packages/masamune-whisker-functions-cloudflare", version = "0.8.0" }
-masamune-whisker-functions-firebase = { path = "packages/masamune-whisker-functions-firebase", version = "0.8.0" }
-masamune-whisker-logger = { path = "packages/masamune-whisker-logger", version = "0.8.0" }
-masamune-whisker-logger-firebase = { path = "packages/masamune-whisker-logger-firebase", version = "0.8.0" }
+masamune-whisker-auth = { path = "packages/masamune-whisker-auth", version = "0.9.0" }
+masamune-whisker-auth-firebase = { path = "packages/masamune-whisker-auth-firebase", version = "0.9.0" }
+masamune-whisker-functions = { path = "packages/masamune-whisker-functions", version = "0.9.0" }
+masamune-whisker-functions-cloudflare = { path = "packages/masamune-whisker-functions-cloudflare", version = "0.9.0" }
+masamune-whisker-functions-firebase = { path = "packages/masamune-whisker-functions-firebase", version = "0.9.0" }
+masamune-whisker-logger = { path = "packages/masamune-whisker-logger", version = "0.9.0" }
+masamune-whisker-logger-firebase = { path = "packages/masamune-whisker-logger-firebase", version = "0.9.0" }
 whisker-image = "0.14"
 whisker = "0.18"
 serde = { version = "1", features = ["derive"] }
@@ -55,36 +55,36 @@ whisker-keyboard = "0.14"
 tempfile = "3"
 serde_yaml = "0.9"
 base64 = "0.22"
-masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.8.0" }
-masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.8.0" }
-masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.8.0" }
-masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.8.0" }
-masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.8.0" }
-masamune-whisker-shimmer = { path = "packages/masamune-whisker-shimmer", version = "0.8.0" }
-masamune-whisker-boot = { path = "packages/masamune-whisker-boot", version = "0.8.0" }
-masamune-whisker-adapter = { path = "packages/masamune-whisker-adapter", version = "0.8.0" }
-masamune-whisker-screen = { path = "packages/masamune-whisker-screen", version = "0.8.0" }
-masamune-whisker-localize = { path = "packages/masamune-whisker-localize", version = "0.8.0" }
-masamune-whisker-turso = { path = "packages/masamune-whisker-turso", version = "0.8.0" }
-masamune-whisker-tidb = { path = "packages/masamune-whisker-tidb", version = "0.8.0" }
-masamune-whisker-firestore = { path = "packages/masamune-whisker-firestore", version = "0.8.0" }
-masamune-whisker-firebase-firestore-db = { path = "packages/masamune-whisker-firebase-firestore-db", version = "0.8.0" }
-masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.8.0" }
-masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.8.0" }
-masamune-whisker-storage = { path = "packages/masamune-whisker-storage", version = "0.8.0" }
-masamune-whisker-storage-cloudflare = { path = "packages/masamune-whisker-storage-cloudflare", version = "0.8.0" }
-masamune-whisker-view-capture = { path = "packages/masamune-whisker-view-capture", version = "0.8.0" }
-masamune-whisker-billing = { path = "packages/masamune-whisker-billing", version = "0.8.0" }
-masamune-whisker-image-picker = { path = "packages/masamune-whisker-image-picker", version = "0.8.0" }
-masamune-whisker-ai-debugger = { path = "packages/masamune-whisker-ai-debugger", version = "0.8.0" }
-masamune-whisker-audio-capture = { path = "packages/masamune-whisker-audio-capture", version = "0.8.0" }
-masamune-whisker-webview = { path = "packages/masamune-whisker-webview", version = "0.8.0" }
-masamune-whisker-share-receive = { path = "packages/masamune-whisker-share-receive", version = "0.8.0" }
-masamune-whisker-auth0 = { path = "packages/masamune-whisker-auth0", version = "0.8.0" }
-masamune-whisker-auth0-firebase = { path = "packages/masamune-whisker-auth0-firebase", version = "0.8.0" }
-masamune-whisker-youtube = { path = "packages/masamune-whisker-youtube", version = "0.8.0" }
-masamune-whisker-model-functions = { path = "packages/masamune-whisker-model-functions", version = "0.8.0" }
-masamune-whisker-storage-functions = { path = "packages/masamune-whisker-storage-functions", version = "0.8.0" }
+masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.9.0" }
+masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.9.0" }
+masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.9.0" }
+masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.9.0" }
+masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.9.0" }
+masamune-whisker-shimmer = { path = "packages/masamune-whisker-shimmer", version = "0.9.0" }
+masamune-whisker-boot = { path = "packages/masamune-whisker-boot", version = "0.9.0" }
+masamune-whisker-adapter = { path = "packages/masamune-whisker-adapter", version = "0.9.0" }
+masamune-whisker-screen = { path = "packages/masamune-whisker-screen", version = "0.9.0" }
+masamune-whisker-localize = { path = "packages/masamune-whisker-localize", version = "0.9.0" }
+masamune-whisker-turso = { path = "packages/masamune-whisker-turso", version = "0.9.0" }
+masamune-whisker-tidb = { path = "packages/masamune-whisker-tidb", version = "0.9.0" }
+masamune-whisker-firestore = { path = "packages/masamune-whisker-firestore", version = "0.9.0" }
+masamune-whisker-firebase-firestore-db = { path = "packages/masamune-whisker-firebase-firestore-db", version = "0.9.0" }
+masamune-whisker-device-info = { path = "packages/masamune-whisker-device-info", version = "0.9.0" }
+masamune-whisker-app-control = { path = "packages/masamune-whisker-app-control", version = "0.9.0" }
+masamune-whisker-storage = { path = "packages/masamune-whisker-storage", version = "0.9.0" }
+masamune-whisker-storage-cloudflare = { path = "packages/masamune-whisker-storage-cloudflare", version = "0.9.0" }
+masamune-whisker-view-capture = { path = "packages/masamune-whisker-view-capture", version = "0.9.0" }
+masamune-whisker-billing = { path = "packages/masamune-whisker-billing", version = "0.9.0" }
+masamune-whisker-image-picker = { path = "packages/masamune-whisker-image-picker", version = "0.9.0" }
+masamune-whisker-ai-debugger = { path = "packages/masamune-whisker-ai-debugger", version = "0.9.0" }
+masamune-whisker-audio-capture = { path = "packages/masamune-whisker-audio-capture", version = "0.9.0" }
+masamune-whisker-webview = { path = "packages/masamune-whisker-webview", version = "0.9.0" }
+masamune-whisker-share-receive = { path = "packages/masamune-whisker-share-receive", version = "0.9.0" }
+masamune-whisker-auth0 = { path = "packages/masamune-whisker-auth0", version = "0.9.0" }
+masamune-whisker-auth0-firebase = { path = "packages/masamune-whisker-auth0-firebase", version = "0.9.0" }
+masamune-whisker-youtube = { path = "packages/masamune-whisker-youtube", version = "0.9.0" }
+masamune-whisker-model-functions = { path = "packages/masamune-whisker-model-functions", version = "0.9.0" }
+masamune-whisker-storage-functions = { path = "packages/masamune-whisker-storage-functions", version = "0.9.0" }
 whisker-input = "0.14"
 regex = "1"
 # Native WebSocket client of the AI debugger voice input. Like reqwest, the TLS backend is chosen per
