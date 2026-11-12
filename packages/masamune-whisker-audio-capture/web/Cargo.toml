@@ -8,8 +8,8 @@ description = "Web Host implementation for masamune-whisker-audio-capture."
 publish = false
 
 [dependencies]
-whisker = "0.17"
-whisker-web = "0.17"
+whisker = "0.18"
+whisker-web = "0.18"
 serde_json = "1"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
