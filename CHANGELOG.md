@@ -11,7 +11,9 @@
   `POST /api/app-debug/runs/{runId}/speech-token`, accessibility label `AI debugger voice input`).
   Enable the feature for development builds only; without it neither the recording code nor the
   native module is linked. `AiDebugController::speech_token` / `voice_input_available`,
-  `AiDebuggerConfig::voice_input` and `insert_transcript` are new.
+  `AiDebuggerConfig::voice_input` and `insert_transcript` are new. Like `reqwest` since 0.7.2, the
+  WebSocket uses the OS TLS stack (`native-tls`, Security.framework) on iOS and macOS and rustls
+  elsewhere, so Apple builds with the feature contain no rustls.
 - **NEW** `masamune-whisker-ai-debugger`: CNG plugin `cng::MasamuneAiDebuggerPlugin`
   (`app.plugin::<MasamuneAiDebuggerPlugin>(|c| c.voice_input(true) …)`) writes iOS
   `NSMicrophoneUsageDescription` and Android `RECORD_AUDIO`. It writes nothing by default.
