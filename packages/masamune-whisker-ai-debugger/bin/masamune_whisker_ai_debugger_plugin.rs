@@ -1,0 +1,3 @@
+fn main() -> anyhow::Result<()> {
+    whisker_plugin::run_as_subprocess(masamune_whisker_ai_debugger::cng::MasamuneAiDebuggerPlugin)
+}

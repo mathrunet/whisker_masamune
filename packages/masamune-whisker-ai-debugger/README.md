@@ -104,6 +104,65 @@ Identical incidents (digits ignored) are sent once per launch, and incidents les
 apart are dropped. Instructions, messages, stack traces and context values are redacted (bearer
 tokens, `token=` / `password=`-style assignments and email addresses) and truncated before sending.
 
+## Voice input (development builds only)
+
+With the `voice` feature the prompt panel gets a microphone button (accessibility label
+`AI debugger voice input`, shared with the Flutter package). Tap it to dictate into the
+instruction field and tap again to stop: SamuraiAI issues a single-use ElevenLabs Scribe v3 Live
+token (`POST /api/app-debug/runs/{runId}/speech-token`), the app streams 16 kHz PCM16 straight
+to ElevenLabs (SamuraiAI never relays audio), the interim transcript is shown faintly under the
+field and committed sentences are appended to it (a space is added only between ASCII words).
+Register the ElevenLabs API key in SamuraiAI (Settings → ElevenLabs) first; without it the panel
+says so.
+
+The feature pulls in `masamune-whisker-audio-capture` (the microphone native module) and a
+WebSocket client (tokio-tungstenite on iOS / Android, `web_sys::WebSocket` on the web).
+whisker-cng links native modules only for crates in the app's dependency graph, so enable the
+feature for development builds only and production builds contain neither the recording code nor
+the native module.
+
+1. Forward an app feature to the debugger's `voice` feature:
+
+   ```toml
+   # Cargo.toml of the app
+   [features]
+   voice = ["masamune-whisker-ai-debugger/voice"]
+   ```
+
+2. Run development builds with it (`whisker run ios --features voice`, the same for `android`;
+   `cargo run --bin whisker-config --features whisker-config -- ios --features voice` to only
+   generate `gen/`). Build prod without it.
+
+3. Declare the microphone permission for the same flavors in `whisker.rs`. The CNG plugin of this
+   crate writes iOS `NSMicrophoneUsageDescription` and Android `RECORD_AUDIO`; it writes nothing
+   unless `voice_input(true)` is set:
+
+   ```rust,ignore
+   use masamune_whisker_ai_debugger::cng::MasamuneAiDebuggerPlugin;
+
+   let flavor = std::env::var("MY_APP_FLAVOR").unwrap_or_default();
+   if matches!(flavor.as_str(), "dev" | "test") {
+       app.plugin::<MasamuneAiDebuggerPlugin>(|c| {
+           c.voice_input(true)
+               .microphone_usage("Used for voice input of the AI debugger (development builds only).");
+       });
+   }
+   ```
+
+   The plugin belongs to this crate rather than `masamune-whisker-audio-capture` because
+   whisker-cng builds plugin binaries without the app's features.
+
+The button appears only when the crate is built with the feature, the debugger is enabled (debug
+build with the dev or test flavor and the `masamune_ai_debugger` cfg) and
+`AiDebuggerConfig::voice_input` was not set to false. The whisker-input field does not expose its
+selection, so transcripts are appended at the end of the instruction.
+
+| | Without `voice` | With `voice` |
+|---|---|---|
+| Microphone button, recording and WebSocket code | not compiled | compiled |
+| `masamune-whisker-audio-capture` native module (iOS `WhiskerModules`, Android `native-graph.json`) | not linked | linked |
+| Microphone permission | only if `whisker.rs` enables the plugin | written by the plugin (dev / test) |
+
 ## Context
 
 Whisker has no widget tree to walk; supply the page, route and selected state yourself:
@@ -177,6 +236,7 @@ let config = ai_debugger_config!(flavor)
 | `ai_debugger_auth_{schema_version,state,identity,restore_state,boot_state,boot_id,login_count}` | 1×1 observation nodes whose label is the value, present while collapsed |
 | `AI Debugger auth unknown\|authenticated\|unauthenticated` | Panel label when debug login is configured |
 | `AIデバッガー指示入力`, `スクリーンショット`, `設定`, `送信`, `Mode <mode>`, `Model <model>` | Prompt panel |
+| `AI debugger voice input` | Microphone button (feature `voice`) |
 | `デバッグログイン メールアドレス` / `パスワード` / `実行`, `デバッグ匿名ログイン実行`, `デバッグアカウントログイン <alias or id>` | Login panel |
 | `デバッグ課金 商品選択`, `デバッグ強制課金実行`, `課金解除 <id>` | Purchase panel |
 | `デバッグカメラ 画像選択`, `デバッグカメラ画像設定実行`, `カメラ画像解除 <id>` | Camera panel |

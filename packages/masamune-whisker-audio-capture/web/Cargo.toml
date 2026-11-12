@@ -1,0 +1,33 @@
+[package]
+name = "masamune-whisker-audio-capture-web"
+version = "0.7.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/mathrunet/whisker_masamune"
+description = "Web Host implementation for masamune-whisker-audio-capture."
+publish = false
+
+[dependencies]
+whisker = "0.17"
+whisker-web = "0.17"
+serde_json = "1"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "AudioBuffer",
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioParam",
+    "AudioProcessingEvent",
+    "BaseAudioContext",
+    "DomException",
+    "GainNode",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamConstraints",
+    "MediaStreamTrack",
+    "Navigator",
+    "ScriptProcessorNode",
+    "Window",
+] }

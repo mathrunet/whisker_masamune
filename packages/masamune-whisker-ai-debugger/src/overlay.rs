@@ -182,6 +182,11 @@ struct Ui {
     refresh: RwSignal<u64>,
     selected_product: RwSignal<Option<String>>,
     selected_picture: RwSignal<Option<String>>,
+    #[cfg(feature = "voice")]
+    voice_state: RwSignal<crate::voice::session::VoiceState>,
+    /// Interim transcript of the voice input.
+    #[cfg(feature = "voice")]
+    voice_partial: RwSignal<String>,
 }
 
 /// Everything the overlay's parts need.
@@ -262,6 +267,10 @@ pub fn ai_debugger(controller: AiDebugController, children: Children) -> Element
         refresh: signal(0),
         selected_product: signal(None),
         selected_picture: signal(None),
+        #[cfg(feature = "voice")]
+        voice_state: signal(crate::voice::session::VoiceState::Idle),
+        #[cfg(feature = "voice")]
+        voice_partial: signal(String::new()),
     };
     let capture = Rc::new(Capturer::new());
     let ctx = Ctx {
@@ -948,6 +957,23 @@ fn prompt_panel(ctx: Ctx) -> Element {
     let model_color = computed(move || model_tone(ui.settings.get().manual_model).light.to_owned());
     let model_style =
         computed(move || control_button(Some(model_tone(ui.settings.get().manual_model))));
+    // The voice input exists only with the `voice` feature (development builds).
+    #[cfg(feature = "voice")]
+    let (voice_button, voice_partial) = if controller.voice_input_available() {
+        let partial = computed(move || ui.voice_partial.get());
+        (
+            render! { VoiceButton(ctx: ctx) },
+            render! {
+                Show(when: move || ui.voice_partial.with(|text| !text.is_empty())) {
+                    Text(value: partial, style: label(SUB_TEXT_COLOR, 12.0, false).opacity(0.7))
+                }
+            },
+        )
+    } else {
+        (render! { Fragment {} }, render! { Fragment {} })
+    };
+    #[cfg(not(feature = "voice"))]
+    let (voice_button, voice_partial) = (render! { Fragment {} }, render! { Fragment {} });
     let send_icon = computed(move || {
         if ui.sending.get() {
             lucide::LoaderCircle
@@ -973,6 +999,7 @@ fn prompt_panel(ctx: Ctx) -> Element {
                     caret_color: "#FFFFFF",
                 )
             }
+            Fragment { {voice_partial} }
             Show(when: move || ui.status.with(Option::is_some)) {
                 Text(value: status, style: label(SUB_TEXT_COLOR, 11.0, false))
             }
@@ -1064,6 +1091,7 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 ) {
                     Icon(svg: model_icon_svg, color: model_color, size: CONTROL_ICON_SIZE)
                 }
+                Fragment { {voice_button} }
                 View(
                     accessibility: button_a11y("送信"),
                     style: control_button(None),
@@ -1073,6 +1101,155 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 }
             }
         }
+    }
+}
+
+// ---- Voice input --------------------------------------------------------------------------------
+
+/// The running voice input of the panel; callbacks of an older session are ignored.
+#[cfg(feature = "voice")]
+#[derive(Default)]
+struct VoiceInput {
+    active: Cell<u64>,
+    next: Cell<u64>,
+    handle: RefCell<Option<crate::voice::session::VoiceHandle>>,
+}
+
+#[cfg(feature = "voice")]
+impl VoiceInput {
+    fn is_active(&self, generation: u64) -> bool {
+        self.active.get() == generation
+    }
+
+    /// Forgets the current session (cancelling it when it still runs).
+    fn release(&self) {
+        self.active.set(0);
+        let handle = self.handle.borrow_mut().take();
+        drop(handle);
+    }
+}
+
+/// Microphone button: starts the voice input, stops it (the last transcript is still inserted)
+/// or cancels it while connecting.
+#[cfg(feature = "voice")]
+#[component]
+fn voice_button(ctx: Ctx) -> Element {
+    use crate::voice::session::VoiceState;
+
+    let ui = ctx.ui;
+    let input = Rc::new(VoiceInput::default());
+    {
+        // Closing the panel cancels the voice input.
+        let input = input.clone();
+        on_cleanup(move || {
+            input.release();
+            ui.voice_state.set(VoiceState::Idle);
+            ui.voice_partial.set(String::new());
+        });
+    }
+    let icon = computed(move || {
+        match ui.voice_state.get() {
+            VoiceState::Idle => lucide::Mic,
+            VoiceState::Recording => lucide::CircleStop,
+            VoiceState::Connecting | VoiceState::Stopping => lucide::LoaderCircle,
+        }
+        .to_owned()
+    });
+    let color = computed(move || {
+        if ui.voice_state.get() == VoiceState::Recording {
+            RED.light
+        } else {
+            "#FFFFFF"
+        }
+        .to_owned()
+    });
+    let style = computed(move || {
+        control_button((ui.voice_state.get() == VoiceState::Recording).then_some(RED))
+    });
+    render! {
+        View(
+            accessibility: button_a11y(crate::VOICE_INPUT_LABEL),
+            style: style,
+            on_tap: move |_| toggle_voice(&ctx, &input),
+        ) {
+            Icon(svg: icon, color: color, size: CONTROL_ICON_SIZE)
+        }
+    }
+}
+
+#[cfg(feature = "voice")]
+fn toggle_voice(ctx: &Ctx, input: &Rc<VoiceInput>) {
+    use crate::voice::session::{self, VoiceCallbacks, VoiceState};
+
+    let ui = ctx.ui;
+    match ui.voice_state.get_untracked() {
+        VoiceState::Recording => {
+            if let Some(handle) = input.handle.borrow().as_ref() {
+                handle.stop();
+            }
+            return;
+        }
+        VoiceState::Connecting => {
+            input.release();
+            ui.voice_state.set(VoiceState::Idle);
+            ui.voice_partial.set(String::new());
+            return;
+        }
+        VoiceState::Stopping => return,
+        VoiceState::Idle => {}
+    }
+    if ui.sending.get_untracked() {
+        return;
+    }
+    let generation = input.next.get() + 1;
+    input.next.set(generation);
+    input.active.set(generation);
+    ui.status.set(None);
+    ui.voice_partial.set(String::new());
+    let callbacks = VoiceCallbacks {
+        state: Rc::new({
+            let input = input.clone();
+            move |state| {
+                if !input.is_active(generation) {
+                    return;
+                }
+                ui.voice_state.set(state);
+                if state == VoiceState::Idle {
+                    input.release();
+                }
+            }
+        }),
+        partial: Rc::new({
+            let input = input.clone();
+            move |text| {
+                if input.is_active(generation) {
+                    ui.voice_partial.set(text);
+                }
+            }
+        }),
+        committed: Rc::new({
+            let input = input.clone();
+            move |text: String| {
+                if input.is_active(generation) {
+                    // whisker-input does not expose the selection, so the text goes to the end.
+                    ui.text.update(|value| {
+                        *value = crate::insert_transcript(value, None, None, &text).0
+                    });
+                }
+            }
+        }),
+        error: Rc::new({
+            let input = input.clone();
+            move |message| {
+                if input.is_active(generation) {
+                    ui.status.set(Some(message));
+                }
+            }
+        }),
+    };
+    let handle = session::start(&ctx.controller(), callbacks);
+    if input.is_active(generation) {
+        *input.handle.borrow_mut() = Some(handle);
     }
 }
 

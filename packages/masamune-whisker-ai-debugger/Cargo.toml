@@ -8,10 +8,22 @@ repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
 publish = false
-include = ["Cargo.toml", "src/**", "README.md"]
+include = ["Cargo.toml", "src/**", "bin/**", "README.md"]
 
 [lib]
 crate-type = ["rlib"]
+
+# CNG plugin: `app.plugin::<MasamuneAiDebuggerPlugin>(|c| …)` in whisker.rs declares the microphone
+# permission of the voice input (iOS `NSMicrophoneUsageDescription`, Android `RECORD_AUDIO`). It
+# writes nothing unless `voice_input(true)` is set, so call it for dev / test flavors only.
+[package.metadata.whisker.plugins.masamune-whisker-ai-debugger]
+bin = "masamune-whisker-ai-debugger-plugin"
+
+[[bin]]
+name = "masamune-whisker-ai-debugger-plugin"
+path = "bin/masamune_whisker_ai_debugger_plugin.rs"
+test = false
+bench = false
 
 [features]
 default = []
@@ -19,6 +31,15 @@ default = []
 billing = ["dep:masamune-whisker-billing"]
 # `AiDebugCamera::image_picker`: debug camera pictures through masamune-whisker-image-picker.
 image-picker = ["dep:masamune-whisker-image-picker"]
+# Real-time voice input of the instruction field (microphone → ElevenLabs Scribe). Enable it for
+# development builds only: whisker-cng links the microphone native module only when this feature
+# pulls masamune-whisker-audio-capture into the dependency graph.
+voice = [
+    "dep:masamune-whisker-audio-capture",
+    "dep:tokio-tungstenite",
+    "dep:web-sys",
+    "dep:wasm-bindgen",
+]
 
 [dependencies]
 whisker.workspace = true
@@ -33,6 +54,7 @@ masamune-whisker-view-capture.workspace = true
 masamune-whisker-device-info.workspace = true
 masamune-whisker-billing = { workspace = true, optional = true }
 masamune-whisker-image-picker = { workspace = true, optional = true }
+masamune-whisker-audio-capture = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
@@ -43,6 +65,21 @@ reqwest.workspace = true
 base64.workspace = true
 regex.workspace = true
 log.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", optional = true, features = [
+    "CloseEvent",
+    "Event",
+    "MessageEvent",
+    "WebSocket",
+    "Window",
+] }
+wasm-bindgen = { version = "0.2", optional = true }
 
 
 # Apple platforms use the OS TLS stack (Security.framework) so apps ship no non-OS encryption.

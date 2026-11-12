@@ -84,6 +84,7 @@ pub struct AiDebuggerConfig {
     pub(crate) auth_snapshot: Option<Rc<dyn Fn() -> AiDebugCallbackResult<AiDebugAuthSnapshot>>>,
     pub(crate) purchase: Option<AiDebugPurchase>,
     pub(crate) camera: Option<AiDebugCamera>,
+    pub(crate) voice_input: bool,
 }
 
 impl AiDebuggerConfig {
@@ -108,6 +109,7 @@ impl AiDebuggerConfig {
             auth_snapshot: None,
             purchase: None,
             camera: None,
+            voice_input: true,
         }
     }
 
@@ -239,6 +241,14 @@ impl AiDebuggerConfig {
     /// Adds the debug camera panel.
     pub fn camera(mut self, camera: AiDebugCamera) -> Self {
         self.camera = Some(camera);
+        self
+    }
+
+    /// Whether the panel shows the voice input button (default true). The button exists only
+    /// when the crate is built with the `voice` feature, which the app enables for development
+    /// builds only; see the crate README.
+    pub fn voice_input(mut self, enabled: bool) -> Self {
+        self.voice_input = enabled;
         self
     }
 }

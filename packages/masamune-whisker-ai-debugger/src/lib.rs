@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 mod adapter;
+pub mod cng;
 mod config;
 mod controller;
 mod logger_adapter;
@@ -9,6 +10,7 @@ mod redact;
 mod settings;
 mod transport;
 mod types;
+mod voice;
 
 pub use adapter::AiDebuggerMasamuneAdapter;
 pub use config::{AiDebugConfigError, AiDebugSpawner, AiDebuggerConfig};
@@ -26,6 +28,7 @@ pub use types::{
     AiDebugCameraPicture, AiDebugContextProvider, AiDebugContextSnapshot, AiDebugModel,
     AiDebugPermissionMode, AiDebugPurchase, AiDebugPurchaseProduct,
 };
+pub use voice::protocol::{AiDebugSpeechToken, VOICE_INPUT_LABEL, insert_transcript};
 
 /// Paths used by [`ai_debugger_config!`]; not part of the public API.
 #[doc(hidden)]

@@ -22,6 +22,7 @@ use crate::redact::{redact, truncate};
 use crate::settings::{AiDebugSettings, settings_key};
 use crate::transport::AiDebugError;
 use crate::types::{AiDebugContextSnapshot, AiDebugModel, AiDebugPermissionMode};
+use crate::voice::protocol::AiDebugSpeechToken;
 
 /// Log target of the debugger's own diagnostics; the logger adapter ignores it so failures do
 /// not feed back into breadcrumbs.
@@ -174,6 +175,13 @@ impl AiDebugController {
         &self.0.config.project_id
     }
 
+    /// Whether the overlay shows the voice input button: the crate was built with the `voice`
+    /// feature, the debugger is enabled (debug build, dev or test flavor) and
+    /// [`AiDebuggerConfig::voice_input`] was not turned off.
+    pub fn voice_input_available(&self) -> bool {
+        cfg!(feature = "voice") && self.enabled() && self.0.config.voice_input
+    }
+
     /// Provider choices after trimming and removing duplicates.
     pub fn providers(&self) -> &[String] {
         &self.0.config.providers
@@ -229,7 +237,7 @@ impl AiDebugController {
         self.enabled().then(|| self.0.sender.clone())
     }
 
-    fn spawn(&self, future: impl std::future::Future<Output = ()> + 'static) {
+    pub(crate) fn spawn(&self, future: impl std::future::Future<Output = ()> + 'static) {
         let spawner = self.0.spawner.borrow().clone();
         if let Some(spawner) = spawner {
             spawner(future.boxed_local());
@@ -565,6 +573,32 @@ impl AiDebugController {
             .get("sessionId")
             .and_then(Value::as_str)
             .map(str::to_owned))
+    }
+
+    /// Issues a single-use ElevenLabs Scribe token for the voice input
+    /// (`POST /api/app-debug/runs/{runId}/speech-token`). A run the server forgot (404/410) is
+    /// recreated once. The server answers 412 while no ElevenLabs API key is registered in
+    /// SamuraiAI.
+    pub async fn speech_token(&self) -> Result<AiDebugSpeechToken, AiDebugError> {
+        if !self.enabled() {
+            return Err(AiDebugError::Config(
+                "AI Debugger is only available in debug builds with the dev or test flavor".into(),
+            ));
+        }
+        match self.post_speech_token().await {
+            Err(error) if matches!(error.status(), Some(404 | 410)) => {
+                self.rotate_run();
+                self.post_speech_token().await
+            }
+            result => result,
+        }
+    }
+
+    async fn post_speech_token(&self) -> Result<AiDebugSpeechToken, AiDebugError> {
+        self.register().await?;
+        let path = format!("/api/app-debug/runs/{}/speech-token", self.run_id());
+        let result = self.post(&path, json!({})).await?;
+        AiDebugSpeechToken::from_json(&result)
     }
 
     /// The app's context, or `None` when it supplied nothing.

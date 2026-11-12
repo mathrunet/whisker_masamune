@@ -21,6 +21,7 @@ git repository or crates.io.
 | `masamune-whisker-share` | OS share sheet |
 | `masamune-whisker-youtube` | [YouTube player (IFrame Player API in a native web view) and a 16:9 `YouTube` box](packages/masamune-whisker-youtube/README.md) |
 | `masamune-whisker-image-picker` | Gallery / camera picker with resizing |
+| `masamune-whisker-audio-capture` | [Microphone capture as 16 kHz PCM16 chunks (iOS, Android, Web)](packages/masamune-whisker-audio-capture/README.md) |
 | `masamune-whisker-local-notification` | Daily scheduled local notifications |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
 | `masamune-whisker-billing` | In-app subscriptions |
@@ -62,7 +63,7 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
 | `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) with accessibility labels, roles and `identifier` props for UI automation such as Maestro ([usage](packages/masamune-whisker-ui/README.md)) |
 | `masamune-whisker-shimmer` | Shimmer loading placeholders (`ShimmerBox`, `ShimmerMultiLine`) ([usage](packages/masamune-whisker-shimmer/README.md)) |
-| `masamune-whisker-ai-debugger` | [AI debugger overlay for dev and test builds](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases and camera |
+| `masamune-whisker-ai-debugger` | [AI debugger overlay for dev and test builds](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases, camera and dev-only voice input (feature `voice`) |
 
 Every native module is implemented for Android and iOS (iOS 15 or later) behind the same Rust
 API. Where a platform has no equivalent, the function's documentation says what it does there

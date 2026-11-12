@@ -47,17 +47,20 @@ pub trait AiDebugTransport {
     ) -> LocalBoxFuture<'static, Result<Map<String, Value>, AiDebugError>>;
 }
 
-/// reqwest with a shared client (connect timeout 10 s, overall timeout 30 s).
+/// reqwest with a shared client (connect timeout 10 s, overall timeout 30 s; the browser's own
+/// timeouts on the web).
 pub struct HttpTransport;
 
 fn client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
+        let builder = reqwest::Client::builder();
+        // reqwest's wasm client (`fetch`) has no timeouts.
+        #[cfg(not(target_arch = "wasm32"))]
+        let builder = builder
             .connect_timeout(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .expect("http client")
+            .timeout(std::time::Duration::from_secs(30));
+        builder.build().expect("http client")
     })
 }
 

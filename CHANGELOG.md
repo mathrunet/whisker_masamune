@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **NEW** `masamune-whisker-audio-capture`: microphone capture as PCM16 little-endian mono chunks
+  (default 16 kHz, 100 ms) on iOS (`AVAudioEngine` + `AVAudioConverter`), Android (`AudioRecord`
+  `VOICE_RECOGNITION`) and the web (`getUserMedia` + `ScriptProcessorNode`). Function-only native
+  module without a CNG plugin; the app declares the microphone permission.
+- **NEW** `masamune-whisker-ai-debugger`: real-time voice input for the instruction field behind
+  the `voice` feature (ElevenLabs Scribe v3 Live through a single-use token from
+  `POST /api/app-debug/runs/{runId}/speech-token`, accessibility label `AI debugger voice input`).
+  Enable the feature for development builds only; without it neither the recording code nor the
+  native module is linked. `AiDebugController::speech_token` / `voice_input_available`,
+  `AiDebuggerConfig::voice_input` and `insert_transcript` are new.
+- **NEW** `masamune-whisker-ai-debugger`: CNG plugin `cng::MasamuneAiDebuggerPlugin`
+  (`app.plugin::<MasamuneAiDebuggerPlugin>(|c| c.voice_input(true) …)`) writes iOS
+  `NSMicrophoneUsageDescription` and Android `RECORD_AUDIO`. It writes nothing by default.
+- **FIX** `masamune-whisker-ai-debugger`: builds for `wasm32-unknown-unknown` again (reqwest's
+  wasm client has no connect / overall timeouts).
+
 ## 0.8.0
 
 - **Breaking** All crates: require whisker 0.18 on the mathrunet/whisker fork main (`1fe19969`), and pin the Swift Host SDKs to the same revision. Apps must raise their `whisker` requirements to `0.18`. Upstream 0.18 removes the wgpu Desktop Host and the `desktop` module platform. The fork revision adds opt-in managed image caching with sized decoding (whiskerrs/whisker#784), the ScrollView `show_scroll_indicator` option (whiskerrs/whisker#839), correct layout paths after `routes!` spreads (whiskerrs/whisker#838) and Android first frames that wait for window insets (whiskerrs/whisker#840).
