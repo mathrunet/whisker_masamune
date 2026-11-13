@@ -26,3 +26,6 @@ log.workspace = true
 masamune-whisker-ui.workspace = true
 masamune-whisker-app-control.workspace = true
 masamune-whisker-functions = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
