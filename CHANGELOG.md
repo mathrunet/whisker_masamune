@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.2
+
+- **NEW** `masamune-whisker-ui`: `RefreshScrollView`, pull to refresh (Flutter's `RefreshIndicator`
+  / `UniversalListView.onRefresh`). A vertical `ScrollView` whose native control (iOS
+  `UIRefreshControl`, Android `SwipeRefreshLayout`) runs the async `on_refresh`
+  (`RefreshCallback`, made from `move || async move { … }`) and keeps the spinner up until its
+  future finishes; pulls while it runs are ignored, and a `masamune.indicator.show|refresh` trace
+  is held meanwhile so the AI debugger can spot spinners that never stop. The children sit in a
+  column (`content_style`) at least as tall as the viewport, so empty states stay pullable.
+  Without `on_refresh`, and on other hosts, it is a plain `ScrollView`. Requires the whisker fork
+  main with `ScrollView::on_refresh` / `refreshing` (whiskerrs/whisker#847); the lock and the
+  Swift Host SDK pins now point to fork revision `72840203`.
+
 ## 0.9.1
 
 - **Breaking** `masamune-whisker-ai-debugger`: the `voice` input speaks the OpenAI Realtime
