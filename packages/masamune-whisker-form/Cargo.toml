@@ -1,0 +1,25 @@
+[package]
+name = "masamune-whisker-form"
+description = "Form widgets for Whisker apps: FormController, FormStyle, text fields, select / number / date fields, checkbox, switch and buttons (the Whisker version of katana_form)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+whisker-icons.workspace = true
+whisker-image.workspace = true
+whisker-input.workspace = true
+masamune-whisker-appearance.workspace = true
+masamune-whisker-ui.workspace = true
+masamune-whisker-date-picker.workspace = true
+chrono.workspace = true
+log.workspace = true

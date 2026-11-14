@@ -63,6 +63,7 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
 | `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
 | `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, Material 3 time picker) with accessibility labels, roles and `identifier` props for UI automation such as Maestro ([usage](packages/masamune-whisker-ui/README.md)) |
+| `masamune-whisker-form` | Form widgets in the style of katana_form: `FormController` validation and saving, a shared `FormStyle`, text fields sized from the line height, enum / map / number / multi-select sheets, date, month, duration, date-time and date-range fields, chips and tags, media, rating, PIN, checkbox, switch, buttons and custom fields (`FormFutureField`, `FormBuilder`, `FormContainer`, `FormListBuilder`) ([usage](packages/masamune-whisker-form/README.md)) |
 | `masamune-whisker-shimmer` | Shimmer loading placeholders (`ShimmerBox`, `ShimmerMultiLine`) ([usage](packages/masamune-whisker-shimmer/README.md)) |
 | `masamune-whisker-ai-debugger` | [AI debugger overlay for dev and test builds](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases, camera and dev-only voice input (feature `voice`) |
 

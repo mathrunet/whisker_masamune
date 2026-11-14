@@ -1236,6 +1236,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-form"
+version = "0.9.0"
+dependencies = [
+ "chrono",
+ "log",
+ "masamune-whisker-appearance",
+ "masamune-whisker-date-picker",
+ "masamune-whisker-ui",
+ "whisker",
+ "whisker-icons",
+ "whisker-image",
+ "whisker-input",
+]
+
+[[package]]
 name = "masamune-whisker-functions"
 version = "0.9.0"
 dependencies = [
