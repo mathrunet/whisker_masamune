@@ -2,6 +2,25 @@
 
 ## 0.9.1
 
+- **Breaking** `masamune-whisker-ai-debugger`: the `voice` input speaks the OpenAI Realtime
+  transcription protocol (`gpt-live-transcribe`, 24 kHz PCM16) that SamuraiAI's
+  `POST /api/app-debug/runs/{runId}/speech-token` now returns, instead of ElevenLabs Scribe, which
+  OpenAI rejected with `invalid_request_error`. `AiDebugSpeechToken` loses `keyterm_library` and
+  gains `protocols` (the ephemeral key travels as the `openai-insecure-api-key.…` WebSocket
+  subprotocol), `session_update` and `client` (the new `AiDebugSpeechClientConfig`); the default
+  `sample_rate` is 24000 and the type no longer implements `Eq`. Like SamuraiAI's web client the app
+  sends `session.update` after connecting, ends turns with client-side silence detection, applies
+  the noise gate, the automatic stop and the reading → spelling replacements, and commits the
+  transcripts in turn order. Register the OpenAI API key in SamuraiAI (Settings → Voice input).
+- **FIX** `masamune-whisker-ai-debugger`: `redact` also masks OpenAI ephemeral keys
+  (`openai-insecure-api-key.…`, `ek_…`).
+- **FIX** `masamune-whisker-ai-debugger`: `HttpTransport` no longer fails with a bare
+  `error sending request for url (…)` after the app sat idle behind a tunnel such as Tailscale
+  Serve. Idle connections are dropped after 15 s, a request that fails before it is sent is sent
+  once more, and transport errors carry the whole cause chain (connection closed, DNS, TLS, …).
+- **FIX** `masamune-whisker-youtube`: on Android the player no longer takes focus, so the first tap
+  on the video no longer scrolls an enclosing `ScrollView`.
+
 - **NEW** `masamune-whisker-speech-recognition`: streaming speech recognition with partial results
   on Android (`SpeechRecognizer`, preferring `createOnDeviceSpeechRecognizer` and falling back to
   the default service when the on-device model lacks the language). A session listens to the
@@ -10,6 +29,23 @@
   capture. Each `Text` event carries the whole text so far. iOS ships a stub that reports the
   recognizer as unavailable. Function-only native module without a CNG plugin; the app declares
   `RECORD_AUDIO`.
+- **NEW** `masamune-whisker-form`: form widgets modeled on katana_form. `FormController` runs every
+  field's validator (each field shows its own error) and then each field's `on_saved`, which turns
+  the field value into the new form value (`form.field(move |v| …)`); `reset`, `value` and
+  `set_value` are included. One `FormStyle` (`provide_form_style` / `use_form_style`) styles every
+  field: border (outline / underline / none), paddings, colors, text roles and a floating or top
+  label. `FormTextField` sizes itself from the line height of its text style (one line,
+  `min_lines`…`max_lines` growing then scrolling, or `expands`), so apps no longer set input
+  heights. Also `FormFieldFrame`, `SelectSheet`, `FormEnumModalField` / `FormMapModalField` (and
+  the same widgets as `FormEnumDropdownField` / `FormMapDropdownField`), `FormNumModalField`,
+  `FormDateField` (year / month / day columns), `FormDateTimeField` (OS pickers),
+  `FormCheckbox`, `FormSwitch`, `FormButton`, `FormLabel`, `FormMonthModalField` (year / month
+  columns), `FormDurationField` (day / hour / minute / second columns), `FormDateTimeRangeField`
+  (the OS date picker for the start, then the end), `FormChipsField` (free-text chips with
+  `max_chips` and suggestions), `FormMapTagDropdownField` (multi-select `SelectSheet`, keys shown as
+  chips), `FormMedia` / `FormMultiMedia` (URI + media type, picked by the app through the ref's
+  `update`), `FormRatingBar`, `FormPinField`, `FormFutureField` (async `on_tap`), `FormBuilder`,
+  `FormContainer` and `FormListBuilder`.
 
 ## 0.9.0
 
