@@ -34,7 +34,9 @@ use crate::types::{
 const TOGGLE_SIZE: f32 = 52.0;
 const CONTROL_SIZE: f32 = 40.0;
 const CONTROL_ICON_SIZE: &str = "22";
-const PANEL_HEIGHT: f32 = 360.0;
+const HEADER_BUTTON_SIZE: f32 = 48.0;
+const HEADER_ICON_SIZE: &str = "24";
+const PANEL_HEIGHT: f32 = 376.0;
 const KIWAME_EDIT: &str = "/dev:kiwame:edit";
 
 const PANEL_COLOR: Color = Color::rgba(34, 34, 34, 0.9);
@@ -799,9 +801,14 @@ fn panel(ctx: Ctx) -> Element {
     }
 }
 
-/// Title row: drag handle, optional back button and the close button.
+/// Title row: drag handle, optional back button, optional settings button and the close button.
 #[component]
-fn panel_header(ctx: Ctx, title: &'static str, #[prop(default = false)] back: bool) -> Element {
+fn panel_header(
+    ctx: Ctx,
+    title: &'static str,
+    #[prop(default = false)] back: bool,
+    #[prop(default = false)] settings: bool,
+) -> Element {
     let ui = ctx.ui;
     let drag = Drag::default();
     let on_touchstart = {
@@ -817,7 +824,7 @@ fn panel_header(ctx: Ctx, title: &'static str, #[prop(default = false)] back: bo
         render! {
             View(
                 accessibility: button_a11y("AI入力へ戻る"),
-                style: icon_button(),
+                style: header_icon_button(),
                 on_tap: move |_| {
                     if !ui.busy.get_untracked() {
                         ui.error.set(None);
@@ -825,11 +832,28 @@ fn panel_header(ctx: Ctx, title: &'static str, #[prop(default = false)] back: bo
                     }
                 },
             ) {
-                Text(value: "←", style: label(TEXT_COLOR, 16.0, false))
+                Icon(svg: lucide::ArrowLeft, color: "#FFFFFF", size: HEADER_ICON_SIZE)
             }
         }
     } else {
-        render! { Text(value: "✦", style: label(TEXT_COLOR, 16.0, false)) }
+        render! { Icon(svg: lucide::Sparkles, color: "#FFFFFF", size: "20") }
+    };
+    let settings_button = if settings {
+        render! {
+            View(
+                accessibility: button_a11y("設定"),
+                style: header_icon_button(),
+                on_tap: move |_| {
+                    if !ui.sending.get_untracked() {
+                        open_settings(&ctx);
+                    }
+                },
+            ) {
+                Icon(svg: lucide::Settings, color: "#FFFFFF", size: HEADER_ICON_SIZE)
+            }
+        }
+    } else {
+        render! { Fragment {} }
     };
     render! {
         View(
@@ -844,19 +868,21 @@ fn panel_header(ctx: Ctx, title: &'static str, #[prop(default = false)] back: bo
             on_touchend: on_touchend,
         ) {
             Fragment { {leading} }
-            Text(value: title, style: label(TEXT_COLOR, 15.0, true).flex_grow(1.0))
+            Text(value: title, style: label(TEXT_COLOR, 18.0, true).flex_grow(1.0))
+            Fragment { {settings_button} }
             View(
                 accessibility: Accessibility::new()
                     .identifier("ai_debugger_close")
                     .label("閉じる")
                     .role(AccessibilityRole::Button),
-                style: icon_button(),
+                style: header_icon_button(),
+                // Collapsing unmounts the prompt panel, whose cleanup cancels the voice input.
                 on_tap: move |_| {
                     ui.view.set(PanelView::Prompt);
                     ui.expanded.set(false);
                 },
             ) {
-                Text(value: "×", style: label(TEXT_COLOR, 18.0, false))
+                Icon(svg: lucide::X, color: "#FFFFFF", size: HEADER_ICON_SIZE)
             }
         }
     }
@@ -984,7 +1010,7 @@ fn prompt_panel(ctx: Ctx) -> Element {
     });
     render! {
         Fragment {
-            PanelHeader(ctx: ctx, title: "AI Debugger")
+            PanelHeader(ctx: ctx, title: "AI Debugger", settings: true)
             Fragment { {tools} }
             View(
                 accessibility: Accessibility::new().label("AIデバッガー指示入力"),
@@ -1010,6 +1036,7 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 align_items: AlignItems::Center,
                 gap: px(6),
             )) {
+                Fragment { {voice_button} }
                 View(
                     accessibility: button_a11y("スクリーンショット"),
                     style: control_button(None),
@@ -1055,13 +1082,6 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 )
                 View(style: css!(flex_grow: 1.0)) {}
                 View(
-                    accessibility: button_a11y("設定"),
-                    style: control_button(None),
-                    on_tap: move |_| open_settings(&ctx),
-                ) {
-                    Icon(svg: lucide::Settings, color: "#FFFFFF", size: CONTROL_ICON_SIZE)
-                }
-                View(
                     accessibility: computed(move || button_a11y(&request_label.get())),
                     style: request_style,
                     on_tap: move |_| ui.request_type.update(|t| {
@@ -1091,7 +1111,6 @@ fn prompt_panel(ctx: Ctx) -> Element {
                 ) {
                     Icon(svg: model_icon_svg, color: model_color, size: CONTROL_ICON_SIZE)
                 }
-                Fragment { {voice_button} }
                 View(
                     accessibility: button_a11y("送信"),
                     style: control_button(None),
@@ -2255,6 +2274,18 @@ fn icon_button() -> Css {
         height: px(32),
         padding: (px(0), px(6)),
         border_radius: px(16),
+        display: Display::Flex,
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+    )
+}
+
+/// The round icon buttons of the panel header (larger touch target than `icon_button`).
+fn header_icon_button() -> Css {
+    css!(
+        width: px(HEADER_BUTTON_SIZE),
+        height: px(HEADER_BUTTON_SIZE),
+        border_radius: px(HEADER_BUTTON_SIZE / 2.0),
         display: Display::Flex,
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
