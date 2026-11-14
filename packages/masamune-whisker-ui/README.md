@@ -13,6 +13,7 @@ Material-style widgets for [Whisker](https://whisker.rs) apps. Colors and text s
 | `showModalBottomSheet` | `ModalBottomSheet` |
 | `showDialog` / `AlertDialog` | `Overlay` + `OverlayHost` |
 | `CircularProgressIndicator` | `CircularProgressIndicator` |
+| `RefreshIndicator` / `UniversalListView.onRefresh` | `RefreshScrollView` (`RefreshCallback`) |
 | `FilledButton` / `OutlinedButton` / `TextButton` | same names |
 | `Divider` | `Divider`, `LabeledDivider` |
 | `FadeUpwardsPageTransitionsBuilder` | `fade_upwards_transition()` (`FadeUpwardsTransition`) for a route's `transition:` |
@@ -207,6 +208,55 @@ render! {
     TabBarView(controller: tabs) {
         TabPage(controller: tabs) { OrderList() }
         TabPage(controller: tabs) { HistoryList() }
+    }
+}
+```
+
+## Pull to refresh
+
+`RefreshScrollView` is Flutter's `RefreshIndicator` (or `UniversalListView` with `onRefresh`): a
+vertical `ScrollView` that shows the native pull-to-refresh control (iOS `UIRefreshControl`,
+Android `SwipeRefreshLayout`). `on_refresh` is an async closure; the spinner stays up until its
+future finishes, and pulls while it runs are ignored. While refreshing it holds a
+`masamune.indicator.show|refresh` trace, so `masamune-whisker-ai-debugger` notices spinners that
+never stop. Without `on_refresh`, and on hosts other than iOS and Android, it behaves as a plain
+`ScrollView`.
+
+The children sit in a column (`content_style`) that is at least as tall as the viewport, so put
+the list and its empty state in the same `RefreshScrollView`: a centered empty message fills
+the screen and can still be pulled.
+
+```rust
+let items = RwSignal::new(Vec::<Item>::new());
+render! {
+    RefreshScrollView(
+        style: css!(flex_grow: 1.0),
+        content_style: css!(padding: px(16), gap: px(8)),
+        on_refresh: move || async move { items.set(load_items().await) },
+    ) {
+        Show(when: move || items.with(Vec::is_empty)) {
+            View(style: css!(flex_grow: 1.0, justify_content: JustifyContent::Center, align_items: AlignItems::Center)) {
+                Text(value: "No items")
+            }
+        }
+        ForEach(
+            each: move || items.get(),
+            key: |item: &Item| item.id.clone(),
+            children: |item: ReadSignal<Item>| render! { ItemRow(item: item) },
+        )
+    }
+}
+```
+
+With swipeable tabs, put one `RefreshScrollView` in each `TabPage` instead of the `ScrollView`:
+
+```rust
+TabBarView(controller: tabs) {
+    TabPage(controller: tabs) {
+        RefreshScrollView(style: css!(flex_grow: 1.0), on_refresh: move || async move { stock.reload().await }) { StockList() }
+    }
+    TabPage(controller: tabs) {
+        RefreshScrollView(style: css!(flex_grow: 1.0), on_refresh: move || async move { trading.reload().await }) { TradingList() }
     }
 }
 ```

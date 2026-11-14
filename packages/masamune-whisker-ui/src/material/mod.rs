@@ -10,6 +10,7 @@ pub mod ink_well;
 pub mod navigation;
 pub mod page_transition;
 pub mod progress;
+pub mod refresh;
 pub mod scaffold;
 pub(crate) mod semantics;
 pub mod tab_bar;

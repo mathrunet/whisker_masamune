@@ -14,6 +14,7 @@
 //! | `showModalBottomSheet` | [`ModalBottomSheet`] (+ [`ModalLayer`], [`ModalLayerHost`]) |
 //! | `showDialog` / `AlertDialog` | [`Overlay`] + [`OverlayHost`] |
 //! | `CircularProgressIndicator` | [`CircularProgressIndicator`] |
+//! | `RefreshIndicator` / `UniversalListView.onRefresh` | [`RefreshScrollView`] ([`RefreshCallback`]) |
 //! | `FilledButton` / `OutlinedButton` / `TextButton` | [`FilledButton`], [`OutlinedButton`], [`TextButton`] |
 //! | `InkWell` | [`InkWell`] |
 //! | `Divider` | [`Divider`], [`LabeledDivider`] |
@@ -46,6 +47,7 @@ pub use material::page_transition::{
     FADE_UPWARDS_MS, FADE_UPWARDS_OFFSET_PCT, FadeUpwardsTransition, fade_upwards_transition,
 };
 pub use material::progress::CircularProgressIndicator;
+pub use material::refresh::{REFRESH_TRACE_NAME, RefreshCallback, RefreshScrollView};
 pub use material::scaffold::{SafeArea, Scaffold, ScaffoldInsets, Slot, use_scaffold_insets};
 pub use material::tab_bar::{
     PageTabController, SegmentedTab, SegmentedTabBar, TabBar, TabBarView, TabPage,
