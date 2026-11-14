@@ -49,19 +49,66 @@ pub trait AiDebugTransport {
 
 /// reqwest with a shared client (connect timeout 10 s, overall timeout 30 s; the browser's own
 /// timeouts on the web).
+///
+/// Idle connections are dropped after 15 s, and a request that fails before it is sent (a refused
+/// connection or a pooled connection the tunnel already closed) is sent once more.
 pub struct HttpTransport;
 
 fn client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         let builder = reqwest::Client::builder();
-        // reqwest's wasm client (`fetch`) has no timeouts.
+        // reqwest's wasm client (`fetch`) has no timeouts and no connection pool.
         #[cfg(not(target_arch = "wasm32"))]
         let builder = builder
             .connect_timeout(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(30));
+            .timeout(std::time::Duration::from_secs(30))
+            // Tunnels such as Tailscale Serve close idle keep-alive connections; reusing one
+            // fails with "error sending request".
+            .pool_idle_timeout(std::time::Duration::from_secs(15));
         builder.build().expect("http client")
     })
+}
+
+/// The error message followed by its `source()` chain, so that the cause (connection closed,
+/// DNS, TLS, …) is not lost behind reqwest's "error sending request for url (…)".
+pub(crate) fn error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let text = cause.to_string();
+        if !message.contains(&text) {
+            message.push_str(": ");
+            message.push_str(&text);
+        }
+        source = cause.source();
+    }
+    message
+}
+
+/// Whether the request failed before the server could answer it, so sending it again is safe.
+fn is_retryable(error: &reqwest::Error) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        !error.is_timeout() && (error.is_connect() || error.is_request())
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = error;
+        false
+    }
+}
+
+async fn send(
+    url: &str,
+    headers: &[(String, String)],
+    body: &Value,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let mut request = client().post(url).json(body);
+    for (name, value) in headers {
+        request = request.header(name, value);
+    }
+    request.send().await
 }
 
 impl AiDebugTransport for HttpTransport {
@@ -72,19 +119,27 @@ impl AiDebugTransport for HttpTransport {
         body: Value,
     ) -> LocalBoxFuture<'static, Result<Map<String, Value>, AiDebugError>> {
         async move {
-            let mut request = client().post(&url).json(&body);
-            for (name, value) in headers {
-                request = request.header(name, value);
+            let response = match send(&url, &headers, &body).await {
+                Err(error) if is_retryable(&error) => {
+                    log::debug!(
+                        target: crate::controller::LOG_TARGET,
+                        "AI Debugger request failed, retrying once: {}",
+                        error_chain(&error)
+                    );
+                    send(&url, &headers, &body).await
+                }
+                result => result,
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|e| AiDebugError::Transport(e.to_string()))?;
+            .map_err(|e| {
+                let message = error_chain(&e);
+                log::warn!(target: crate::controller::LOG_TARGET, "AI Debugger request failed: {message}");
+                AiDebugError::Transport(message)
+            })?;
             let status = response.status().as_u16();
             let text = response
                 .text()
                 .await
-                .map_err(|e| AiDebugError::Transport(e.to_string()))?;
+                .map_err(|e| AiDebugError::Transport(error_chain(&e)))?;
             decode(status, &text)
         }
         .boxed_local()
@@ -143,5 +198,76 @@ mod tests {
             })
         );
         assert!(matches!(decode(200, "[]"), Err(AiDebugError::Transport(_))));
+    }
+
+    #[test]
+    fn error_chain_appends_causes() {
+        #[derive(Debug)]
+        struct Outer(std::io::Error);
+        impl std::fmt::Display for Outer {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("error sending request")
+            }
+        }
+        impl std::error::Error for Outer {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        let error = Outer(std::io::Error::other("connection closed"));
+        assert_eq!(
+            error_chain(&error),
+            "error sending request: connection closed"
+        );
+    }
+
+    /// The first connection is closed without an answer (a stale pooled connection); the
+    /// retry gets the answer.
+    #[tokio::test]
+    async fn retries_a_connection_closed_before_the_answer() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://{}/api/app-debug/runs",
+            listener.local_addr().unwrap()
+        );
+        let server = std::thread::spawn(move || {
+            let mut buffer = [0u8; 4096];
+            let (mut first, _) = listener.accept().unwrap();
+            let _ = first.read(&mut buffer);
+            drop(first);
+            let (mut second, _) = listener.accept().unwrap();
+            let _ = second.read(&mut buffer);
+            let body = r#"{"ok":true}"#;
+            write!(
+                second,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let answer = HttpTransport
+            .post(url, vec![], serde_json::json!({}))
+            .await
+            .unwrap();
+        assert_eq!(answer["ok"], true);
+        server.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn transport_errors_keep_the_cause() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        drop(listener);
+        let Err(AiDebugError::Transport(message)) =
+            HttpTransport.post(url, vec![], serde_json::json!({})).await
+        else {
+            panic!("expected a transport error");
+        };
+        assert!(message.starts_with("error sending request"), "{message}");
+        assert!(
+            message.len() > "error sending request for url ()".len() + 20,
+            "{message}"
+        );
     }
 }

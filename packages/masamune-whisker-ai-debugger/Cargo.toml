@@ -31,7 +31,7 @@ default = []
 billing = ["dep:masamune-whisker-billing"]
 # `AiDebugCamera::image_picker`: debug camera pictures through masamune-whisker-image-picker.
 image-picker = ["dep:masamune-whisker-image-picker"]
-# Real-time voice input of the instruction field (microphone → ElevenLabs Scribe). Enable it for
+# Real-time voice input of the instruction field (microphone → OpenAI Realtime). Enable it for
 # development builds only: whisker-cng links the microphone native module only when this feature
 # pulls masamune-whisker-audio-capture into the dependency graph.
 voice = [

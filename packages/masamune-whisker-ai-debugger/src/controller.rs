@@ -575,10 +575,10 @@ impl AiDebugController {
             .map(str::to_owned))
     }
 
-    /// Issues a single-use ElevenLabs Scribe token for the voice input
+    /// Issues an ephemeral OpenAI Realtime transcription key for the voice input
     /// (`POST /api/app-debug/runs/{runId}/speech-token`). A run the server forgot (404/410) is
-    /// recreated once. The server answers 412 while no ElevenLabs API key is registered in
-    /// SamuraiAI.
+    /// recreated once. The server answers 412 while no OpenAI API key is registered in SamuraiAI
+    /// and 502 when OpenAI rejects the key or the credits are exhausted.
     pub async fn speech_token(&self) -> Result<AiDebugSpeechToken, AiDebugError> {
         if !self.enabled() {
             return Err(AiDebugError::Config(

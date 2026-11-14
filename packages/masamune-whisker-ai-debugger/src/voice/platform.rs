@@ -25,7 +25,7 @@ pub(crate) fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-/// Error text without the single-use token of the URL.
+/// Error text without the ephemeral key.
 fn safe(error: impl std::fmt::Display) -> String {
     redact(&error.to_string())
 }
@@ -40,6 +40,8 @@ mod native {
     use futures_util::stream::SplitSink;
     use futures_util::{FutureExt, SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::http::HeaderValue;
     use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
     use super::*;
@@ -55,13 +57,23 @@ mod native {
     }
 
     impl Socket {
-        /// Opens the socket; `on_event` receives the frames from a spawned task.
+        /// Opens the socket with the `Sec-WebSocket-Protocol` subprotocols; `on_event` receives
+        /// the frames from a spawned task.
         pub(crate) async fn connect(
             url: &str,
+            protocols: &[String],
             on_event: impl Fn(SocketEvent) + 'static,
             spawn: Spawn<'_>,
         ) -> Result<Self, String> {
-            let (stream, _) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(url))
+            let mut request = url.into_client_request().map_err(safe)?;
+            if !protocols.is_empty() {
+                let value = HeaderValue::from_str(&protocols.join(", "))
+                    .map_err(|_| "invalid WebSocket subprotocol".to_owned())?;
+                request
+                    .headers_mut()
+                    .insert("Sec-WebSocket-Protocol", value);
+            }
+            let (stream, _) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request))
                 .await
                 .map_err(|_| "timed out".to_owned())?
                 .map_err(safe)?;
@@ -160,13 +172,22 @@ mod web {
     }
 
     impl Socket {
+        /// Opens the socket with the subprotocols (the browser sends `Sec-WebSocket-Protocol`).
         pub(crate) async fn connect(
             url: &str,
+            protocols: &[String],
             on_event: impl Fn(SocketEvent) + 'static,
             _spawn: Spawn<'_>,
         ) -> Result<Self, String> {
-            let socket =
-                web_sys::WebSocket::new(url).map_err(|error| safe(format!("{error:?}")))?;
+            let socket = if protocols.is_empty() {
+                web_sys::WebSocket::new(url)
+            } else {
+                web_sys::WebSocket::new_with_str_sequence(
+                    url,
+                    &wasm_bindgen::JsValue::from(protocols.to_vec()),
+                )
+            }
+            .map_err(|error| safe(format!("{error:?}")))?;
             let on_event = Rc::new(on_event);
             let (sender, receiver) = oneshot::channel();
             let pending: Pending = Rc::new(RefCell::new(Some(sender)));

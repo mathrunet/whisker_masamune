@@ -11,6 +11,13 @@ static BEARER: LazyLock<Regex> =
 static ASSIGNMENT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(token|api[_-]?key|password|secret)\s*[:=]\s*\S+").expect("secret pattern")
 });
+/// OpenAI Realtime ephemeral keys, alone (`ek_…`) or as the WebSocket subprotocol
+/// (`openai-insecure-api-key.…`).
+static OPENAI_SUBPROTOCOL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"openai-insecure-api-key\.[^\s,;\x22']+").expect("subprotocol pattern")
+});
+static EPHEMERAL_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\bek_[A-Za-z0-9_-]+").expect("ephemeral key pattern"));
 static EMAIL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}").expect("email pattern")
 });
@@ -19,12 +26,14 @@ static SENSITIVE_KEY: LazyLock<Regex> = LazyLock::new(|| {
         .expect("sensitive key pattern")
 });
 
-/// Masks bearer tokens, `token=…`-style assignments and email addresses.
+/// Masks bearer tokens, `token=…`-style assignments, OpenAI ephemeral keys and email addresses.
 ///
 /// Unlike the Flutter package, which writes a literal `$1`, the assignment keeps its key
 /// (`password=[REDACTED]`).
 pub fn redact(value: &str) -> String {
     let value = BEARER.replace_all(value, "Bearer [REDACTED]");
+    let value = OPENAI_SUBPROTOCOL.replace_all(&value, "openai-insecure-api-key.[REDACTED]");
+    let value = EPHEMERAL_KEY.replace_all(&value, "[REDACTED]");
     let value = ASSIGNMENT.replace_all(&value, "${1}=[REDACTED]");
     EMAIL.replace_all(&value, "[REDACTED_EMAIL]").into_owned()
 }
@@ -103,6 +112,24 @@ mod tests {
         assert_eq!(redact("password=hunter2 ok"), "password=[REDACTED] ok");
         assert_eq!(redact("API_KEY: xyz"), "API_KEY=[REDACTED]");
         assert_eq!(redact("mail me@example.com"), "mail [REDACTED_EMAIL]");
+    }
+
+    #[test]
+    fn redacts_openai_ephemeral_keys() {
+        assert_eq!(
+            redact("protocols: realtime, openai-insecure-api-key.ek_abc-123_X, other"),
+            "protocols: realtime, openai-insecure-api-key.[REDACTED], other"
+        );
+        assert_eq!(
+            redact(r#"["openai-insecure-api-key.sk-proj.x/y"]"#),
+            r#"["openai-insecure-api-key.[REDACTED]"]"#
+        );
+        assert_eq!(
+            redact("key ek_68f1a2B_c-d rejected"),
+            "key [REDACTED] rejected"
+        );
+        // Words that merely contain `ek_` are kept.
+        assert_eq!(redact("week_day"), "week_day");
     }
 
     #[test]

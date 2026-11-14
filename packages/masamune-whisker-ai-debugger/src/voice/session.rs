@@ -1,9 +1,9 @@
 //! One voice input from the microphone button to the last committed transcript
 //! (`AIDebugVoiceSession` of the Flutter package).
 //!
-//! SamuraiAI issues a single-use token; the app captures the microphone with
-//! `masamune-whisker-audio-capture` and streams it straight to ElevenLabs Scribe. SamuraiAI never
-//! relays audio.
+//! SamuraiAI issues an ephemeral OpenAI key; the app captures the microphone with
+//! `masamune-whisker-audio-capture` and streams 24 kHz PCM16 straight to the OpenAI Realtime
+//! transcription session (`gpt-live-transcribe`). SamuraiAI never relays audio.
 
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -154,6 +154,7 @@ impl Session {
         let controller = self.controller.clone();
         let mut socket = Socket::connect(
             &token.url,
+            &token.protocols,
             move |event| {
                 let _ = socket_events.unbounded_send(Event::Socket(event));
             },
@@ -175,12 +176,22 @@ impl Session {
             .boxed_local(),
         );
 
-        let mut core = VoiceCore::new(token.sample_rate, token.keyterm_library.clone());
+        let mut core = VoiceCore::new(
+            token.sample_rate,
+            token.session_update.clone(),
+            token.client.clone(),
+        );
         let mut outputs = core.connected(now_ms());
         (self.callbacks.state)(VoiceState::Recording);
         loop {
-            if self.carry_out(&mut socket, outputs).await {
-                break;
+            match self.carry_out(&mut socket, outputs).await {
+                Carried::Finish => break,
+                // The text stayed the same for a while: stop as if the user did.
+                Carried::AutoStop => {
+                    outputs = self.stop(&mut core, &mut capture).await;
+                    continue;
+                }
+                Carried::Continue => {}
             }
             let event = match self.backlog.pop_front() {
                 Some(event) => event,
@@ -193,27 +204,11 @@ impl Session {
             outputs = match event {
                 Event::Audio(pcm) => core.audio(&pcm, now),
                 Event::AudioFailed(message) => core.audio_failed(&message),
-                Event::Socket(SocketEvent::Message(text)) => core.server(&text),
+                Event::Socket(SocketEvent::Message(text)) => core.server(&text, now),
                 Event::Socket(SocketEvent::Closed(reason)) => core.closed(reason),
                 Event::Tick => core.tick(now),
                 Event::Cancel => vec![Output::Finish],
-                Event::Stop if core.is_stopping() => Vec::new(),
-                Event::Stop => {
-                    (self.callbacks.state)(VoiceState::Stopping);
-                    let mut rest = Vec::new();
-                    if let Some(capture) = capture.take() {
-                        let tail = capture.stop().await.unwrap_or_default();
-                        // Chunks delivered before the stop result belong before its tail.
-                        while let Ok(event) = self.receiver.try_recv() {
-                            match event {
-                                Event::Audio(pcm) => rest.extend_from_slice(&pcm),
-                                other => self.backlog.push_back(other),
-                            }
-                        }
-                        rest.extend_from_slice(&tail);
-                    }
-                    core.stop(&rest, now_ms())
-                }
+                Event::Stop => self.stop(&mut core, &mut capture).await,
             };
         }
         drop(capture);
@@ -221,8 +216,33 @@ impl Session {
         Ok(())
     }
 
-    /// Carries out the core's outputs; returns true when the session is over.
-    async fn carry_out(&mut self, socket: &mut Socket, outputs: Vec<Output>) -> bool {
+    /// Stops the microphone and hands its remaining audio to the core (user stop and auto stop).
+    async fn stop(
+        &mut self,
+        core: &mut VoiceCore,
+        capture: &mut Option<AudioCapture>,
+    ) -> Vec<Output> {
+        if core.is_stopping() {
+            return Vec::new();
+        }
+        (self.callbacks.state)(VoiceState::Stopping);
+        let mut rest = Vec::new();
+        if let Some(capture) = capture.take() {
+            let tail = capture.stop().await.unwrap_or_default();
+            // Chunks delivered before the stop result belong before its tail.
+            while let Ok(event) = self.receiver.try_recv() {
+                match event {
+                    Event::Audio(pcm) => rest.extend_from_slice(&pcm),
+                    other => self.backlog.push_back(other),
+                }
+            }
+            rest.extend_from_slice(&tail);
+        }
+        core.stop(&rest, now_ms())
+    }
+
+    /// Carries out the core's outputs and tells how the session goes on.
+    async fn carry_out(&mut self, socket: &mut Socket, outputs: Vec<Output>) -> Carried {
         for output in outputs {
             match output {
                 Output::Send(text) => {
@@ -230,17 +250,26 @@ impl Session {
                         (self.callbacks.error)(format!(
                             "音声認識サーバーへ送信できませんでした: {error}"
                         ));
-                        return true;
+                        return Carried::Finish;
                     }
                 }
                 Output::Partial(text) => (self.callbacks.partial)(text),
                 Output::Committed(text) => (self.callbacks.committed)(text),
                 Output::Error(message) => (self.callbacks.error)(message),
-                Output::Finish => return true,
+                Output::AutoStop => return Carried::AutoStop,
+                Output::Finish => return Carried::Finish,
             }
         }
-        false
+        Carried::Continue
     }
+}
+
+/// What [`Session::carry_out`] leaves for the event loop.
+enum Carried {
+    Continue,
+    /// The core asked to stop (auto stop); outputs after it are not produced.
+    AutoStop,
+    Finish,
 }
 
 fn capture_error_message(error: &NativeError) -> String {

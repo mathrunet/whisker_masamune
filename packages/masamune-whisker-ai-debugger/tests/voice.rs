@@ -83,12 +83,26 @@ fn config(transport: &MockTransport, flavor: Flavor) -> AiDebuggerConfig {
 fn token_answer() -> Value {
     json!({
         "success": true,
-        "url": "wss://api.elevenlabs.io/v1/speech-to-text/realtime?token=single-use",
-        "modelId": "scribe_v3_live",
-        "sampleRate": 16000,
+        "provider": "openai",
+        "url": "wss://api.openai.com/v1/realtime?intent=transcription",
+        "protocols": ["realtime", "openai-insecure-api-key.ek_single_use"],
+        "sessionUpdate": {
+            "type": "session.update",
+            "session": { "type": "transcription" },
+        },
+        "modelId": "gpt-live-transcribe",
+        "sampleRate": 24000,
         "keytermCount": 1,
-        "keytermLibrary": ["Whisker"],
         "skippedKeyterms": [],
+        "client": {
+            "autoStopSilenceSec": 5,
+            "sounds": true,
+            "localPreview": true,
+            "commitSilenceMs": 700,
+            "noiseGateDb": null,
+            "languageCode": "ja",
+            "replacements": [{ "from": "ウィスカー", "to": "Whisker" }],
+        },
         "expiresAt": "2026-11-12T10:15:00.000Z",
     })
 }
@@ -100,9 +114,20 @@ async fn issues_speech_tokens_for_the_run() {
     let controller = AiDebugController::new(config(&transport, Flavor::Dev)).unwrap();
     let token = controller.speech_token().await.unwrap();
     assert!(token.url.starts_with("wss://"));
-    assert_eq!(token.model_id.as_deref(), Some("scribe_v3_live"));
-    assert_eq!(token.sample_rate, 16_000);
-    assert_eq!(token.keyterm_library, vec!["Whisker"]);
+    assert_eq!(
+        token.protocols,
+        vec!["realtime", "openai-insecure-api-key.ek_single_use"]
+    );
+    assert!(token.session_update.is_some());
+    assert_eq!(token.model_id.as_deref(), Some("gpt-live-transcribe"));
+    assert_eq!(token.sample_rate, 24_000);
+    assert_eq!(token.client.commit_silence_ms, 700);
+    assert_eq!(token.client.noise_gate_db, None);
+    assert_eq!(
+        token.client.replacements,
+        vec![("ウィスカー".to_owned(), "Whisker".to_owned())]
+    );
+    assert!(!format!("{token:?}").contains("ek_single_use"));
     let run_id = controller.run_id();
     assert_eq!(
         transport.paths(),
@@ -150,7 +175,7 @@ async fn passes_server_errors_through() {
         "/speech-token",
         Err(AiDebugError::Http {
             status: 412,
-            message: "ElevenLabs API key is not configured".into(),
+            message: "OpenAI API key is not configured".into(),
         }),
     );
     let controller = AiDebugController::new(config(&transport, Flavor::Dev)).unwrap();

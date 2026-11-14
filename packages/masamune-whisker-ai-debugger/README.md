@@ -108,12 +108,20 @@ tokens, `token=` / `password=`-style assignments and email addresses) and trunca
 
 With the `voice` feature the prompt panel gets a microphone button (accessibility label
 `AI debugger voice input`, shared with the Flutter package). Tap it to dictate into the
-instruction field and tap again to stop: SamuraiAI issues a single-use ElevenLabs Scribe v3 Live
-token (`POST /api/app-debug/runs/{runId}/speech-token`), the app streams 16 kHz PCM16 straight
-to ElevenLabs (SamuraiAI never relays audio), the interim transcript is shown faintly under the
-field and committed sentences are appended to it (a space is added only between ASCII words).
-Register the ElevenLabs API key in SamuraiAI (Settings → ElevenLabs) first; without it the panel
-says so.
+instruction field and tap again to stop: SamuraiAI issues an ephemeral OpenAI key for a Realtime
+transcription session with `gpt-live-transcribe`
+(`POST /api/app-debug/runs/{runId}/speech-token`), the app connects to OpenAI with the key as a
+WebSocket subprotocol and streams 24 kHz PCM16 straight to it (SamuraiAI never relays audio). The
+interim transcript is shown faintly under the field and committed sentences are appended to it (a
+space is added only between ASCII words). Register the OpenAI API key in SamuraiAI
+(Settings → Voice input) first; without it the panel says so.
+
+Like SamuraiAI's web client, the app ends each turn itself (`gpt-live-transcribe` has no server
+VAD): after speech, a silence of `commitSilenceMs` sends `input_audio_buffer.commit`. The other
+settings of SamuraiAI's voice input apply as well: the noise gate (`noiseGateDb`), the automatic
+stop when the text has not changed for `autoStopSilenceSec` seconds (0 disables it) and the
+reading → spelling replacements of the key terms (`Flutter = フラッター`). Stopping commits the
+last turn and waits up to 3 seconds for the outstanding transcripts.
 
 The feature pulls in `masamune-whisker-audio-capture` (the microphone native module) and a
 WebSocket client (tokio-tungstenite on iOS / Android, `web_sys::WebSocket` on the web).
