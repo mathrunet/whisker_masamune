@@ -10,6 +10,9 @@
 //
 // WhiskerUI calls createView() from its constructor, before the properties of this class are
 // initialized, so createView() only builds the container and the WebView is created in `init`.
+//
+// The WebView never takes focus: a native ScrollView around the player scrolls to a child that
+// gains focus, which moved the page on the first tap on the video.
 
 package net.mathru.whisker.youtube
 
@@ -18,6 +21,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -73,8 +77,14 @@ class YouTubePlayerView(context: WhiskerContext) : WhiskerUI<FrameLayout>(contex
         replaceWebView()
     }
 
-    override fun createView(context: Context): FrameLayout = FrameLayout(context).apply {
+    override fun createView(context: Context): FrameLayout = object : FrameLayout(context) {
+        // Keep the WebView's focus and "show this rectangle" requests away from an enclosing
+        // ScrollView, which would otherwise scroll on the first tap on the player.
+        override fun requestChildRectangleOnScreen(child: View, rectangle: Rect, immediate: Boolean): Boolean =
+            false
+    }.apply {
         setBackgroundColor(Color.BLACK)
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
     }
 
     // ---- props ------------------------------------------------------------------------------
@@ -192,6 +202,9 @@ class YouTubePlayerView(context: WhiskerContext) : WhiskerUI<FrameLayout>(contex
         wv.isVerticalScrollBarEnabled = false
         wv.isHorizontalScrollBarEnabled = false
         wv.overScrollMode = View.OVER_SCROLL_NEVER
+        // The player has no text input; touches work without focus.
+        wv.isFocusable = false
+        wv.isFocusableInTouchMode = false
         wv.addJavascriptInterface(Bridge(generation), BRIDGE_NAME)
         wv.webViewClient = Client()
         wv.webChromeClient = ChromeClient()
