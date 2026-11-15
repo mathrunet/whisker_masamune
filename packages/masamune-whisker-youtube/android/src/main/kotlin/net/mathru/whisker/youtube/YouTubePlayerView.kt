@@ -13,6 +13,12 @@
 //
 // The WebView never takes focus: a native ScrollView around the player scrolls to a child that
 // gains focus, which moved the page on the first tap on the video.
+//
+// When the focused node of the page changes (the first tap on the player), Chromium asks to show
+// that node with View.requestRectangleOnScreen on the WebView. The request walks every ancestor
+// whatever they return, and whisker places elements with translations that the request does not
+// include, so an enclosing ScrollView scrolled to an unrelated offset. The container keeps the
+// enclosing scroll views where they were when such a request passes through it.
 
 package net.mathru.whisker.youtube
 
@@ -35,6 +41,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.ScrollView
 import org.json.JSONObject
 import rs.whisker.runtime.WhiskerContext
 import rs.whisker.runtime.WhiskerCustomEvent
@@ -78,10 +86,11 @@ class YouTubePlayerView(context: WhiskerContext) : WhiskerUI<FrameLayout>(contex
     }
 
     override fun createView(context: Context): FrameLayout = object : FrameLayout(context) {
-        // Keep the WebView's focus and "show this rectangle" requests away from an enclosing
-        // ScrollView, which would otherwise scroll on the first tap on the player.
-        override fun requestChildRectangleOnScreen(child: View, rectangle: Rect, immediate: Boolean): Boolean =
-            false
+        // Called before the enclosing scroll views receive the same request.
+        override fun requestChildRectangleOnScreen(child: View, rectangle: Rect, immediate: Boolean): Boolean {
+            holdEnclosingScroll(this)
+            return false
+        }
     }.apply {
         setBackgroundColor(Color.BLACK)
         descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
@@ -209,6 +218,33 @@ class YouTubePlayerView(context: WhiskerContext) : WhiskerUI<FrameLayout>(contex
         wv.webViewClient = Client()
         wv.webChromeClient = ChromeClient()
         return wv
+    }
+
+    /**
+     * Keeps the scroll views enclosing [container] at their current offsets: right after the
+     * running message (before the next frame), cancels the scroll they started and puts them back.
+     */
+    private fun holdEnclosingScroll(container: View) {
+        val held = mutableListOf<Triple<View, Int, Int>>()
+        var parent = container.parent
+        while (parent is View) {
+            if (parent is ScrollView || parent is HorizontalScrollView) {
+                held += Triple(parent, parent.scrollX, parent.scrollY)
+            }
+            parent = parent.parent
+        }
+        if (held.isEmpty()) return
+        mainHandler.postAtFrontOfQueue {
+            for ((view, x, y) in held) {
+                // Called within the scroll gap of the request, smoothScrollBy stops the started
+                // animation instead of starting a new one.
+                when (view) {
+                    is ScrollView -> view.smoothScrollBy(0, 0)
+                    is HorizontalScrollView -> view.smoothScrollBy(0, 0)
+                }
+                if (view.scrollX != x || view.scrollY != y) view.scrollTo(x, y)
+            }
+        }
     }
 
     private fun destroy(wv: WebView) {
