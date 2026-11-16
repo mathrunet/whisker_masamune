@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **NEW** `masamune-whisker-ui`: `SliverAppBarScrollView` and `AvatarSliverAppBarScrollView`,
+  collapsing app bars over a scroll view (Flutter's `SliverAppBar` + `FlexibleSpaceBar`, masamune's
+  `UniversalSliverAppBar` / `UniversalAvatarSliverAppBar`). The background stays almost still
+  (parallax at a quarter of the scroll) while the content scrolls over it, fades into `bar_color`
+  over the last toolbar height, and a toolbar-high bar with the leading button and the actions stays
+  pinned. The avatar variant adds a band below the background whose avatar shrinks with the scroll
+  and moves behind the bar at half size, plus `under_bottom_actions`. The layout is computed by
+  `SliverAppBarLayout::compute` from the scroll offset.
+- **NEW** `masamune-whisker-ui`: `RefreshScrollView` takes `on_scroll`.
+
 ## 0.9.2
 
 - **NEW** `masamune-whisker-ui`: `RefreshScrollView`, pull to refresh (Flutter's `RefreshIndicator`

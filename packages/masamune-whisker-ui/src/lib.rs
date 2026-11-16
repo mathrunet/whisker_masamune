@@ -15,6 +15,8 @@
 //! | `showDialog` / `AlertDialog` | [`Overlay`] + [`OverlayHost`] |
 //! | `CircularProgressIndicator` | [`CircularProgressIndicator`] |
 //! | `RefreshIndicator` / `UniversalListView.onRefresh` | [`RefreshScrollView`] ([`RefreshCallback`]) |
+//! | `SliverAppBar` + `FlexibleSpaceBar` / `UniversalSliverAppBar` | [`SliverAppBarScrollView`] ([`SliverAppBarLayout`]) |
+//! | `UniversalAvatarSliverAppBar` | [`AvatarSliverAppBarScrollView`] |
 //! | `FilledButton` / `OutlinedButton` / `TextButton` | [`FilledButton`], [`OutlinedButton`], [`TextButton`] |
 //! | `InkWell` | [`InkWell`] |
 //! | `Divider` | [`Divider`], [`LabeledDivider`] |
@@ -49,6 +51,10 @@ pub use material::page_transition::{
 pub use material::progress::CircularProgressIndicator;
 pub use material::refresh::{REFRESH_TRACE_NAME, RefreshCallback, RefreshScrollView};
 pub use material::scaffold::{SafeArea, Scaffold, ScaffoldInsets, Slot, use_scaffold_insets};
+pub use material::sliver_app_bar::{
+    AvatarSliverAppBarScrollView, DEFAULT_EXPANDED_HEIGHT, DEFAULT_UNDER_BOTTOM_HEIGHT,
+    SliverAppBarLayout, SliverAppBarScrollView,
+};
 pub use material::tab_bar::{
     PageTabController, SegmentedTab, SegmentedTabBar, TabBar, TabBarView, TabPage,
     use_page_tab_controller,

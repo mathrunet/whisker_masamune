@@ -13,5 +13,6 @@ pub mod progress;
 pub mod refresh;
 pub mod scaffold;
 pub(crate) mod semantics;
+pub mod sliver_app_bar;
 pub mod tab_bar;
 pub mod time_picker;

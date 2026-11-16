@@ -13,6 +13,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 
+use whisker::event::ScrollEvent;
 use whisker::prelude::*;
 
 use crate::style::column;
@@ -97,9 +98,17 @@ pub fn refresh_scroll_view(
     /// Shows the platform scroll indicator.
     #[prop(default = Signal::from(true))]
     show_scroll_indicator: Signal<bool>,
+    /// Called on every scroll position change (Flutter's `ScrollController` listener), for
+    /// example to drive a [`SliverAppBarScrollView`](super::sliver_app_bar::SliverAppBarScrollView).
+    on_scroll: Option<Callback<ScrollEvent>>,
     children: Children,
 ) -> Element {
     let projected = children.clone();
+    let scrolled = move |event: ScrollEvent| {
+        if let Some(on_scroll) = on_scroll {
+            on_scroll.run(event);
+        }
+    };
     let style = computed(move || style.get());
     let content_style = computed(move || {
         column()
@@ -109,7 +118,11 @@ pub fn refresh_scroll_view(
     });
     let Some(callback) = on_refresh.clone() else {
         return render! {
-            ScrollView(style: style, show_scroll_indicator: show_scroll_indicator) {
+            ScrollView(
+                style: style,
+                show_scroll_indicator: show_scroll_indicator,
+                on_scroll: scrolled,
+            ) {
                 View(style: content_style) {
                     {projected()}
                 }
@@ -135,6 +148,7 @@ pub fn refresh_scroll_view(
             show_scroll_indicator: show_scroll_indicator,
             refreshing: refreshing,
             on_refresh: pull,
+            on_scroll: scrolled,
         ) {
             View(style: content_style) {
                 {projected()}
