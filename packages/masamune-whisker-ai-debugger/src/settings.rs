@@ -33,7 +33,7 @@ impl Default for AiDebugSettings {
         Self {
             provider: None,
             manual_model: AiDebugModel::Sol,
-            manual_permission_mode: AiDebugPermissionMode::Plan,
+            manual_permission_mode: AiDebugPermissionMode::BypassPermissions,
             error_model: AiDebugModel::Sol,
             error_permission_mode: AiDebugPermissionMode::BypassPermissions,
             performance_model: AiDebugModel::Sol,
@@ -183,7 +183,10 @@ mod tests {
         assert_eq!(migrated.manual_model, AiDebugModel::Sol);
         assert_eq!(migrated.error_model, AiDebugModel::Luna);
         assert_eq!(migrated.performance_model, AiDebugModel::Astra);
-        assert_eq!(migrated.manual_permission_mode, AiDebugPermissionMode::Plan);
+        assert_eq!(
+            migrated.manual_permission_mode,
+            AiDebugPermissionMode::BypassPermissions
+        );
         assert_eq!(
             migrated.error_permission_mode,
             AiDebugPermissionMode::BypassPermissions

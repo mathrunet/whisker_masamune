@@ -176,7 +176,7 @@ async fn registers_once_and_sends_requests() {
         assert_eq!(request["screenshotNames"], json!(["stored.png"]));
         assert_eq!(request["provider"], "claude");
         assert_eq!(request["model"], "astra");
-        assert_eq!(request["permissionMode"], "plan");
+        assert_eq!(request["permissionMode"], "bypassPermissions");
         assert_eq!(request["context"]["route"], "/home");
         assert_eq!(request["context"]["values"]["apiToken"], "[REDACTED]");
         assert_eq!(request["context"]["values"]["email"], "[REDACTED_EMAIL]");

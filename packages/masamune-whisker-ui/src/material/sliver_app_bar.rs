@@ -14,6 +14,11 @@
 //!   once it is half its size, as in `UniversalAvatarSliverAppBar`.
 //!
 //! The background, avatar and bar ignore touches, so dragging on them scrolls the content.
+//!
+//! Scroll events arrive every frame, so everything that follows the offset (the bar, the
+//! background, the band actions and the toolbar) keeps a fixed layout and moves with
+//! `transform` and `opacity` only. Those are paint-only updates; changing `top` or `height`
+//! instead would relayout the whole surface on every frame and make scrolling stutter.
 
 use whisker::css::{Color, Overflow, PointerEvents, PositionKind, Transform, TransformFn};
 use whisker::event::ScrollEvent;
@@ -62,6 +67,11 @@ pub struct SliverAppBarLayout {
     pub background_height: f32,
     /// Opacity of the background.
     pub background_opacity: f32,
+    /// Height of the bar when it is fully expanded (the fixed layout height of the bar; it is
+    /// moved up by `expanded_bar_height - bar_height` to show [`bar_height`](Self::bar_height)).
+    pub expanded_bar_height: f32,
+    /// Bottom of the band when it is fully expanded (where the band is laid out).
+    pub expanded_extent: f32,
     /// Diameter of the avatar including its border.
     pub avatar_size: f32,
     /// Top of the avatar (its bottom sits on [`extent`](Self::extent)).
@@ -122,10 +132,32 @@ impl SliverAppBarLayout {
             background_offset,
             background_height: max_extent,
             background_opacity,
+            expanded_bar_height: expanded.max(min_extent),
+            expanded_extent: max_extent.max(min_extent),
             avatar_size,
             avatar_top: extent - avatar_size,
             avatar_front: percent >= 0.5,
         }
+    }
+
+    /// Vertical translation of the bar laid out at
+    /// [`expanded_bar_height`](Self::expanded_bar_height), so that its bottom edge sits at
+    /// `overlay_offset + bar_height`.
+    pub fn bar_translate(&self) -> f32 {
+        self.overlay_offset - (self.expanded_bar_height - self.bar_height)
+    }
+
+    /// Vertical translation of the background inside the bar (cancels the bar's translation and
+    /// adds the parallax), so that the background sits at `overlay_offset + background_offset`.
+    pub fn background_translate(&self) -> f32 {
+        (self.expanded_bar_height - self.bar_height) + self.background_offset
+    }
+
+    /// Vertical translation of the band laid out at
+    /// [`expanded_extent`](Self::expanded_extent), so that its bottom sits at
+    /// `overlay_offset + extent`.
+    pub fn band_translate(&self) -> f32 {
+        self.extent - self.expanded_extent + self.overlay_offset
     }
 }
 
@@ -316,6 +348,15 @@ fn build(props: SliverProps) -> Element {
             under_bottom_height,
         )
     });
+    // The layout at the top (offset 0); the scroll-dependent parts only translate from it.
+    let expanded_layout = computed(move || {
+        SliverAppBarLayout::compute(
+            0.0,
+            expanded_height,
+            insets.get().top as f32,
+            under_bottom_height,
+        )
+    });
     let root_style = computed(move || {
         css!(position: PositionKind::Relative, overflow: Overflow::Hidden).merge(style.get())
     });
@@ -323,25 +364,22 @@ fn build(props: SliverProps) -> Element {
     // The content starts below the expanded background and its band; the transparent space
     // shows the bar (drawn over it) and the scaffold background under the band.
     let content_style = computed(move || {
-        let top = SliverAppBarLayout::compute(
-            0.0,
-            expanded_height,
-            insets.get().top as f32,
-            under_bottom_height,
-        )
-        .background_height;
+        let top = expanded_layout.get().background_height;
         Css::new().padding_top(px(top)).merge(content_style.get())
     });
     let bar_style = computed(move || {
         let layout = layout.get();
         let style = css!(
             position: PositionKind::Absolute,
-            top: px(layout.overlay_offset),
+            top: px(0),
             left: px(0),
             right: px(0),
-            height: px(layout.bar_height),
+            height: px(layout.expanded_bar_height),
             overflow: Overflow::Hidden,
             background_color: bar_color,
+        )
+        .transform(
+            Transform::new().push(TransformFn::TranslateY(px(layout.bar_translate()).into())),
         )
         .z_index(2)
         .pointer_events(PointerEvents::None);
@@ -360,9 +398,9 @@ fn build(props: SliverProps) -> Element {
             height: px(layout.background_height),
             opacity: layout.background_opacity,
         )
-        .transform(
-            Transform::new().push(TransformFn::TranslateY(px(layout.background_offset).into())),
-        )
+        .transform(Transform::new().push(TransformFn::TranslateY(
+            px(layout.background_translate()).into(),
+        )))
     });
     let avatar_style = computed(move || {
         let layout = layout.get();
@@ -392,17 +430,23 @@ fn build(props: SliverProps) -> Element {
             .position(PositionKind::Absolute)
             .right(px(UNDER_BOTTOM_ACTIONS_RIGHT))
             .top(px(
-                layout.extent - under_bottom_height + layout.overlay_offset
+                expanded_layout.get().expanded_extent - under_bottom_height
             ))
             .height(px(under_bottom_height))
+            .transform(
+                Transform::new().push(TransformFn::TranslateY(px(layout.band_translate()).into())),
+            )
             .z_index(if layout.avatar_front { 3 } else { 1 })
     });
     let toolbar_style = move |left: bool| {
         computed(move || {
             let style = row()
                 .position(PositionKind::Absolute)
-                .top(px(insets.get().top as f32 + layout.get().overlay_offset))
+                .top(px(insets.get().top as f32))
                 .height(px(APP_BAR_HEIGHT))
+                .transform(Transform::new().push(TransformFn::TranslateY(
+                    px(layout.get().overlay_offset).into(),
+                )))
                 .z_index(4);
             if left {
                 style
@@ -538,6 +582,37 @@ mod tests {
         assert_eq!(layout.extent, 328.0);
         let collapsed = SliverAppBarLayout::compute(1000.0, EXPANDED, 40.0, BAND);
         assert_eq!(collapsed.bar_height, APP_BAR_HEIGHT + 40.0);
+    }
+
+    #[test]
+    fn translations_match_the_laid_out_positions() {
+        // The bar keeps its expanded height and is moved so its bottom edge, the background and
+        // the band end up where `top` / `height` used to put them.
+        for &(scroll_top, inset) in &[
+            (0.0, 0.0),
+            (100.0, 0.0),
+            (232.0, 40.0),
+            (500.0, 40.0),
+            (-30.0, 24.0),
+        ] {
+            let layout = SliverAppBarLayout::compute(scroll_top, EXPANDED, inset, BAND);
+            assert!(close(
+                layout.bar_translate() + layout.expanded_bar_height,
+                layout.overlay_offset + layout.bar_height,
+            ));
+            assert!(close(
+                layout.bar_translate() + layout.background_translate(),
+                layout.overlay_offset + layout.background_offset,
+            ));
+            assert!(close(
+                layout.expanded_extent + layout.band_translate(),
+                layout.overlay_offset + layout.extent,
+            ));
+        }
+        let top = at(0.0);
+        assert_eq!(top.bar_translate(), 0.0);
+        assert_eq!(top.background_translate(), 0.0);
+        assert_eq!(top.band_translate(), 0.0);
     }
 
     #[test]
