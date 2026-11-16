@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.3
 
 - **NEW** `masamune-whisker-ui`: `SliverAppBarScrollView` and `AvatarSliverAppBarScrollView`,
   collapsing app bars over a scroll view (Flutter's `SliverAppBar` + `FlexibleSpaceBar`, masamune's
@@ -11,6 +11,7 @@
   and moves behind the bar at half size, plus `under_bottom_actions`. The layout is computed by
   `SliverAppBarLayout::compute` from the scroll offset.
 - **NEW** `masamune-whisker-ui`: `RefreshScrollView` takes `on_scroll`.
+- **FIX** `masamune-whisker-youtube`: improve the Android player view behavior.
 
 ## 0.9.2
 
