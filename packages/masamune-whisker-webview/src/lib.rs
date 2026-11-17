@@ -195,6 +195,7 @@ pub fn native_masamune_webview(
     user_agent: Signal<String>,
     javascript_enabled: Signal<bool>,
     grant_media_permissions: Signal<bool>,
+    avoid_keyboard: Signal<bool>,
     allowed_origins: Signal<String>,
     user_scripts: Signal<String>,
     url: Signal<String>,
@@ -250,6 +251,12 @@ pub fn masamune_web_view(
     allowed_origins: Option<Vec<String>>,
     /// Grant camera / microphone requests of allowed origins (default: the adapter's).
     grant_media_permissions: Option<bool>,
+    /// Let the web view avoid the software keyboard itself (iOS only). Pass `false` when the
+    /// host already shrinks the view by the keyboard height (such as a `Scaffold` with
+    /// `resize_to_avoid_bottom_inset`); otherwise WKWebView subtracts the keyboard once more and
+    /// the page is drawn in a smaller area than the view.
+    #[prop(default = true)]
+    avoid_keyboard: bool,
     /// Page → Rust message (`window.whisker.postMessage(string)`).
     on_message: Option<Callback<String>>,
     /// A main-frame load started.
@@ -284,6 +291,7 @@ pub fn masamune_web_view(
         .user_agent(user_agent)
         .javascript_enabled(javascript_enabled)
         .grant_media_permissions(grant_media_permissions)
+        .avoid_keyboard(avoid_keyboard)
         .allowed_origins(json_array(&allowed_origins))
         .user_scripts(json_array(&user_scripts))
         .url(url.unwrap_or_default())
@@ -376,6 +384,7 @@ mod tests {
                 "user-agent",
                 "javascript-enabled",
                 "grant-media-permissions",
+                "avoid-keyboard",
                 "allowed-origins",
                 "user-scripts",
                 "url",

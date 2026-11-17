@@ -19,6 +19,9 @@ public final class WebViewModule: Module {
                 Prop("grant-media-permissions", clear: { (view: MasamuneWebView) in view.setGrantMediaPermissions(false) }) { (view: MasamuneWebView, value: WhiskerValue) in
                     view.setGrantMediaPermissions(value.asBool ?? false)
                 }
+                Prop("avoid-keyboard", clear: { (view: MasamuneWebView) in view.setAvoidKeyboard(true) }) { (view: MasamuneWebView, value: WhiskerValue) in
+                    view.setAvoidKeyboard(value.asBool ?? true)
+                }
                 // JSON array strings.
                 Prop("allowed-origins", clear: { (view: MasamuneWebView) in view.setAllowedOrigins("[]") }) { (view: MasamuneWebView, value: WhiskerValue) in
                     view.setAllowedOrigins(value.asString ?? "[]")

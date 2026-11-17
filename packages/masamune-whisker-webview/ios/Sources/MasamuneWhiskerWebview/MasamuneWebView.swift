@@ -72,6 +72,8 @@ public final class MasamuneWebView: WhiskerUI<UIView> {
     private var userAgent = ""
     private var javascriptEnabled = true
     private var grantMediaPermissions = false
+    /// False when the host resizes the view for the keyboard (see `setAvoidKeyboard`).
+    private var avoidKeyboard = true
     private var allowedOrigins: [String] = []
     private var userScripts: [String] = []
 
@@ -96,7 +98,13 @@ public final class MasamuneWebView: WhiskerUI<UIView> {
         wv.allowsLinkPreview = true
         wv.customUserAgent = userAgent.isEmpty ? nil : userAgent
         wv.scrollView.bouncesZoom = false
+        // The host lays the view out (safe area and keyboard included), so the scroll view must
+        // not add its own insets on top of that.
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
         webView = wv
+        if !avoidKeyboard {
+            Self.stopKeyboardAvoidance(of: wv)
+        }
         installUserScripts()
 
         progressObservation = wv.observe(\.estimatedProgress, options: [.new]) { [weak self] _, change in
@@ -140,6 +148,33 @@ public final class MasamuneWebView: WhiskerUI<UIView> {
 
     func setGrantMediaPermissions(_ grant: Bool) {
         grantMediaPermissions = grant
+    }
+
+    /// With `false`, WKWebView stops reacting to the keyboard by itself. It otherwise measures the
+    /// keyboard overlap against its frame before the host has shrunk it (the layout follows the
+    /// keyboard a frame or two later), keeps that overlap as an obscured inset, and draws the page
+    /// in an area smaller than the view until the next rotation. Turning it back on is not
+    /// supported; it applies to views created afterwards.
+    func setAvoidKeyboard(_ avoid: Bool) {
+        avoidKeyboard = avoid
+        if !avoid, let webView {
+            Self.stopKeyboardAvoidance(of: webView)
+        }
+    }
+
+    private static let keyboardNotifications: [Notification.Name] = [
+        UIResponder.keyboardWillShowNotification,
+        UIResponder.keyboardDidShowNotification,
+        UIResponder.keyboardWillHideNotification,
+        UIResponder.keyboardDidHideNotification,
+        UIResponder.keyboardWillChangeFrameNotification,
+        UIResponder.keyboardDidChangeFrameNotification,
+    ]
+
+    private static func stopKeyboardAvoidance(of webView: WKWebView) {
+        for name in keyboardNotifications {
+            NotificationCenter.default.removeObserver(webView, name: name, object: nil)
+        }
     }
 
     /// Malformed JSON keeps the previous list, so a bad value never opens navigation up.

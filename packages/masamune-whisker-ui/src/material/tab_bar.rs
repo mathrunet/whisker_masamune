@@ -138,6 +138,15 @@ fn page_position(scroll_left: f64, page_width: f32, length: usize) -> Option<f32
     Some(position.clamp(0.0, (length - 1) as f32))
 }
 
+/// Whether `event` comes from the scroll view whose listener is firing.
+///
+/// Scroll events bubble, so a scroll view also receives the scrolls of the scroll views nested
+/// in it (for example a vertical list, or its pull to refresh, inside a horizontal page). Their
+/// offsets are on another axis and must not move the outer view's state.
+pub(crate) fn is_own_scroll(event: &whisker::event::ScrollEvent) -> bool {
+    event.target.uid == event.current_target.uid
+}
+
 /// Page nearest to `position`.
 fn settled_index(position: f32, length: usize) -> usize {
     (position.round().max(0.0) as usize).min(length.saturating_sub(1))
@@ -472,7 +481,7 @@ pub fn tab_bar(
 ///
 /// It fills the remaining space of a column (`flex_grow: 1`). Swiping follows the finger and
 /// settles on the nearest page, one page per swipe. The pages stay mounted, so their state and
-/// scroll positions survive switching tabs.
+/// scroll positions survive switching tabs. No scroll indicator is shown.
 #[component]
 pub fn tab_bar_view(controller: PageTabController, children: Children) -> Element {
     let projected = children.clone();
@@ -482,10 +491,16 @@ pub fn tab_bar_view(controller: PageTabController, children: Children) -> Elemen
             axis: ScrollAxis::Horizontal,
             snap: ScrollSnap::start(),
             scroll_snap_stop: ScrollSnapStop::Always,
+            // The tab bar already shows the current page, so the scroll indicator is redundant.
+            show_scroll_indicator: false,
             // A ScrollView lays its children out as a column by default, even on the
             // horizontal axis; the pages must sit side by side to be scrollable.
             style: css!(flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Row),
-            on_scroll: move |event: whisker::event::ScrollEvent| controller.scrolled(&event.detail),
+            on_scroll: move |event: whisker::event::ScrollEvent| {
+                if is_own_scroll(&event) {
+                    controller.scrolled(&event.detail);
+                }
+            },
         ) {
             {projected()}
         }
@@ -549,6 +564,19 @@ mod tests {
         assert_eq!(page_position(150.0, 300.0, 3), Some(0.5));
         assert_eq!(page_position(-40.0, 300.0, 3), Some(0.0));
         assert_eq!(page_position(900.0, 300.0, 3), Some(2.0));
+    }
+
+    fn scroll_event(target: i64, current_target: i64) -> whisker::event::ScrollEvent {
+        let mut event = whisker::event::ScrollEvent::default();
+        event.target.uid = target;
+        event.current_target.uid = current_target;
+        event
+    }
+
+    #[test]
+    fn only_own_scrolls_are_handled() {
+        assert!(is_own_scroll(&scroll_event(4, 4)));
+        assert!(!is_own_scroll(&scroll_event(9, 4)));
     }
 
     #[test]

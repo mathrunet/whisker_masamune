@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.4
+
+- **FIX** `masamune-whisker-ui`: `TabBarView` no longer shows the horizontal scroll indicator while
+  swiping between pages (the tab bar already shows the current page).
+- **NEW** `masamune-whisker-webview`: `MasamuneWebView` takes `avoid_keyboard` (default `true`).
+  Pass `false` when the host already shrinks the view for the keyboard (a `Scaffold` with
+  `resize_to_avoid_bottom_inset`); on iOS the web view then stops avoiding the keyboard by itself.
+- **FIX** `masamune-whisker-webview`: on iOS the scroll view no longer adjusts its content insets
+  (`contentInsetAdjustmentBehavior = .never`), since the host lays the view out.
+
 ## 0.9.3
 
 - **NEW** `masamune-whisker-ui`: `SliverAppBarScrollView` and `AvatarSliverAppBarScrollView`,

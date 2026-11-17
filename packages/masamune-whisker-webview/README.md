@@ -55,6 +55,7 @@ view is not mounted.
 | `user_scripts` | `Vec<String>` | `[]` | Scripts run at document start in the main frame, after `window.whisker` is defined. Changes apply from the next navigation. |
 | `allowed_origins` | `Vec<String>` | adapter, else `[]` | Origins such as `https://host` the main frame may load. Empty allows every origin. |
 | `grant_media_permissions` | `bool` | adapter, else `false` | Grant camera / microphone requests of allowed origins. |
+| `avoid_keyboard` | `bool` | `true` | iOS: let WKWebView avoid the keyboard by itself. Pass `false` when the host already shrinks the view for the keyboard (such as a `Scaffold`), or the page is drawn in an area smaller than the view. |
 | `on_message` | `Fn(String)` | — | Page -> Rust message. |
 | `on_load_start` / `on_load` | `Fn(String)` | — | A main-frame load started / finished. |
 | `on_progress` | `Fn(f32)` | — | Load progress `0.0..=1.0`. |

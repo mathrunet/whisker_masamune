@@ -22,6 +22,8 @@ class WebViewModule : Module() {
             Prop("grant-media-permissions", clear = { view: MasamuneWebView -> view.setGrantMediaPermissions(false) }) { view: MasamuneWebView, value ->
                 view.setGrantMediaPermissions(value.asBool() ?: false)
             }
+            // iOS only: the activity already resizes the layout for the IME.
+            Prop("avoid-keyboard", clear = { _: MasamuneWebView -> }) { _: MasamuneWebView, _ -> }
             // JSON array strings.
             Prop("allowed-origins", clear = { view: MasamuneWebView -> view.setAllowedOrigins("[]") }) { view: MasamuneWebView, value ->
                 view.setAllowedOrigins(value.asString() ?: "[]")

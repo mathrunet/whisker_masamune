@@ -16,6 +16,7 @@ use std::rc::Rc;
 use whisker::event::ScrollEvent;
 use whisker::prelude::*;
 
+use crate::material::tab_bar::is_own_scroll;
 use crate::style::column;
 
 /// Trace held while a refresh runs.
@@ -105,6 +106,11 @@ pub fn refresh_scroll_view(
 ) -> Element {
     let projected = children.clone();
     let scrolled = move |event: ScrollEvent| {
+        // Ignore the scrolls of nested scroll views (such as a horizontal carousel) that bubble
+        // up here.
+        if !is_own_scroll(&event) {
+            return;
+        }
         if let Some(on_scroll) = on_scroll {
             on_scroll.run(event);
         }
