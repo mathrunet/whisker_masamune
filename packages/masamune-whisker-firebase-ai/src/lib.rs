@@ -223,13 +223,17 @@ pub struct GenerationConfig {
     pub max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_mime_type: Option<String>,
+    /// How deeply the model thinks: `minimal`, `low`, `medium` or `high` (case-insensitive).
+    /// `None` keeps the model default. Gemini 4 models reject `minimal`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<String>,
 }
 
 /// A single request.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateRequest {
-    /// Model name (e.g. `gemini-3.5-flash-lite`). Empty uses [`FirebaseAiMasamuneAdapter::model`].
+    /// Model name (e.g. `gemini-4-hydrogen`). Empty uses [`FirebaseAiMasamuneAdapter::model`].
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<String>,
@@ -249,6 +253,9 @@ pub struct Usage {
     pub prompt_token_count: u64,
     #[serde(default)]
     pub candidates_token_count: u64,
+    /// Thinking tokens, billed at the output rate but not included in `candidates_token_count`.
+    #[serde(default)]
+    pub thoughts_token_count: u64,
 }
 
 /// A response (or one chunk of it when streaming).

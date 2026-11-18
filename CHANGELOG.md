@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.5
+
+- **NEW** `masamune-whisker-firebase-ai`: `GenerationConfig::thinking_level` (`minimal` / `low` /
+  `medium` / `high`) sets the model's thinking depth through the host SDK's `ThinkingConfig`.
+  Gemini 4 models think at `high` by default and reject `minimal`.
+- **NEW** `masamune-whisker-firebase-ai`: `Usage::thoughts_token_count`, the thinking tokens
+  (billed at the output rate and not included in `candidates_token_count`).
+
 ## 0.9.4
 
 - **FIX** `masamune-whisker-ui`: `TabBarView` no longer shows the horizontal scroll indicator while

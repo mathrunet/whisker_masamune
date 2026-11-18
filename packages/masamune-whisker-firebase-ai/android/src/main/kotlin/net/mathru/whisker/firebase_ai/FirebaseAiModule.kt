@@ -8,7 +8,7 @@
 //   contents: [{ role, parts: [Part] }],
 //   tools?: [{ name, description, parameters: { name: Schema }, optionalParameters?: [name] }],
 //   functionCallingMode?: "auto" | "none" | "any",
-//   generationConfig?: { temperature?, maxOutputTokens?, responseMimeType? },
+//   generationConfig?: { temperature?, maxOutputTokens?, responseMimeType?, thinkingLevel?: "minimal" | "low" | "medium" | "high" },
 // }
 // Part: { text, thought?, thoughtSignature? } | { functionCall: { name, args, id? }, thoughtSignature? }
 //     | { functionResponse: { name, response, id? } }
@@ -31,9 +31,11 @@ import com.google.firebase.ai.type.Part
 import com.google.firebase.ai.type.PublicPreviewAPI
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.TextPart
+import com.google.firebase.ai.type.ThinkingLevel
 import com.google.firebase.ai.type.Tool
 import com.google.firebase.ai.type.ToolConfig
 import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.ai.type.thinkingConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,6 +108,14 @@ class FirebaseAiModule : Module() {
         }
     }
 
+    private fun thinkingLevel(value: String) = when (value.lowercase()) {
+        "minimal" -> ThinkingLevel.MINIMAL
+        "low" -> ThinkingLevel.LOW
+        "medium" -> ThinkingLevel.MEDIUM
+        "high" -> ThinkingLevel.HIGH
+        else -> null
+    }
+
     private fun model(request: JSONObject) = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
         modelName = request.getString("model"),
         generationConfig = request.optJSONObject("generationConfig")?.let { config ->
@@ -113,6 +123,7 @@ class FirebaseAiModule : Module() {
                 if (config.has("temperature")) temperature = config.getDouble("temperature").toFloat()
                 if (config.has("maxOutputTokens")) maxOutputTokens = config.getInt("maxOutputTokens")
                 if (config.has("responseMimeType")) responseMimeType = config.getString("responseMimeType")
+                thinkingLevel(config.optString("thinkingLevel"))?.let { level -> thinkingConfig = thinkingConfig { thinkingLevel = level } }
             }
         },
         tools = request.optJSONArray("tools")?.takeIf { it.length() > 0 }?.let { listOf(Tool.functionDeclarations(declarations(it))) },
@@ -206,6 +217,7 @@ class FirebaseAiModule : Module() {
             "usage" to mapOf(
                 "promptTokenCount" to (usage?.promptTokenCount ?: 0),
                 "candidatesTokenCount" to (usage?.candidatesTokenCount ?: 0),
+                "thoughtsTokenCount" to (usage?.thoughtsTokenCount ?: 0),
             ),
             "finishReason" to candidate?.finishReason?.name,
         )

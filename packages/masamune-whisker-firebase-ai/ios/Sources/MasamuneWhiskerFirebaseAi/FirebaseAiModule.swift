@@ -8,7 +8,7 @@
 //   contents: [{ role, parts: [Part] }],
 //   tools?: [{ name, description, parameters: { name: Schema }, optionalParameters?: [name] }],
 //   functionCallingMode?: "auto" | "none" | "any",
-//   generationConfig?: { temperature?, maxOutputTokens?, responseMimeType? },
+//   generationConfig?: { temperature?, maxOutputTokens?, responseMimeType?, thinkingLevel?: "minimal" | "low" | "medium" | "high" },
 // }
 // Part: { text, thought?, thoughtSignature? } | { functionCall: { name, args, id? }, thoughtSignature? }
 //     | { functionResponse: { name, response, id? } }
@@ -128,7 +128,9 @@ public final class FirebaseAiModule: Module {
             generationConfig = GenerationConfig(
                 temperature: (config["temperature"] as? NSNumber).map { $0.floatValue },
                 maxOutputTokens: (config["maxOutputTokens"] as? NSNumber).map { $0.intValue },
-                responseMIMEType: config["responseMimeType"] as? String
+                responseMIMEType: config["responseMimeType"] as? String,
+                thinkingConfig: Self.thinkingLevel(config["thinkingLevel"] as? String)
+                    .map { ThinkingConfig(thinkingLevel: $0) }
             )
         }
         var tools: [Tool]?
@@ -154,6 +156,16 @@ public final class FirebaseAiModule: Module {
             toolConfig: toolConfig,
             systemInstruction: systemInstruction
         )
+    }
+
+    private static func thinkingLevel(_ value: String?) -> ThinkingConfig.ThinkingLevel? {
+        switch value?.lowercased() {
+        case "minimal": return .minimal
+        case "low": return .low
+        case "medium": return .medium
+        case "high": return .high
+        default: return nil
+        }
     }
 
     private static func declarations(_ tools: [Any]) throws -> [FunctionDeclaration] {
@@ -263,6 +275,7 @@ public final class FirebaseAiModule: Module {
             "usage": [
                 "promptTokenCount": usage?.promptTokenCount ?? 0,
                 "candidatesTokenCount": usage?.candidatesTokenCount ?? 0,
+                "thoughtsTokenCount": usage?.thoughtsTokenCount ?? 0,
             ],
             "finishReason": candidate?.finishReason?.rawValue,
         ]

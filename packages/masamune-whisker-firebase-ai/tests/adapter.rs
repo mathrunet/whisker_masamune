@@ -47,7 +47,9 @@ where
     calls.take()
 }
 
-use masamune_whisker_firebase_ai::{Content, FirebaseAiMasamuneAdapter, GenerateRequest, generate};
+use masamune_whisker_firebase_ai::{
+    Content, FirebaseAiMasamuneAdapter, GenerateRequest, GenerationConfig, generate,
+};
 
 #[test]
 fn fills_in_the_adapter_model_only_when_the_request_names_none() {
@@ -73,4 +75,40 @@ fn fills_in_the_adapter_model_only_when_the_request_names_none() {
     );
     assert_eq!(calls[0].1["request"]["model"], "default-model");
     assert_eq!(calls[1].1["request"]["model"], "chosen");
+}
+
+#[test]
+fn sends_the_thinking_level_only_when_set_and_reads_thinking_tokens() {
+    let calls = run(
+        MasamuneAdapters::new(),
+        r#"{"parts":[],"usage":{"promptTokenCount":3,"candidatesTokenCount":5,"thoughtsTokenCount":7}}"#,
+        || async {
+            let request = GenerateRequest {
+                model: "m".into(),
+                contents: vec![Content::user_text("hi")],
+                generation_config: Some(GenerationConfig {
+                    thinking_level: Some("medium".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let response = generate(&request).await.unwrap();
+            assert_eq!(response.usage.thoughts_token_count, 7);
+            generate(&GenerateRequest {
+                generation_config: Some(GenerationConfig::default()),
+                ..request
+            })
+            .await
+            .unwrap();
+        },
+    );
+    assert_eq!(
+        calls[0].1["request"]["generationConfig"]["thinkingLevel"],
+        "medium"
+    );
+    assert!(
+        calls[1].1["request"]["generationConfig"]
+            .get("thinkingLevel")
+            .is_none()
+    );
 }
