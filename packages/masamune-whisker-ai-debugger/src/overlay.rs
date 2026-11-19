@@ -769,9 +769,11 @@ fn panel(ctx: Ctx) -> Element {
         Some(label) => Accessibility::new().label(label),
         None => Accessibility::new(),
     });
+    // The panel itself carries no label: on iOS a labeled view is an accessibility element whose
+    // children (the close button, the login button, …) disappear from the hierarchy. The auth
+    // state is a 1×1 node instead, like the observation nodes.
     render! {
         View(
-            accessibility: accessibility,
             style: css!(
                 width: percent(100),
                 height: percent(100),
@@ -785,6 +787,7 @@ fn panel(ctx: Ctx) -> Element {
             ),
             on_tap_catch: |_| {},
         ) {
+            LabelMarker(accessibility: accessibility)
             Show(when: move || ui.view.get() == PanelView::Prompt) {
                 PromptPanel(ctx: ctx)
             }
@@ -1725,10 +1728,8 @@ fn purchase_panel(ctx: Ctx) -> Element {
                 Show(when: move || available.with(Vec::is_empty)) {
                     Text(value: empty_text, style: label(SUB_TEXT_COLOR, 12.0, false))
                 }
-                View(
-                    accessibility: Accessibility::new().label("デバッグ課金 商品選択"),
-                    style: css!(display: Display::Flex, flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, gap: px(6)),
-                ) {
+                LabelMarker(accessibility: Accessibility::new().label("デバッグ課金 商品選択"))
+                View(style: css!(display: Display::Flex, flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, gap: px(6))) {
                     ForEach(
                         each: move || available.get(),
                         key: |product: &AiDebugPurchaseProduct| product.id.clone(),
@@ -1908,10 +1909,8 @@ fn camera_panel(ctx: Ctx) -> Element {
                 Show(when: move || available.with(Vec::is_empty)) {
                     Text(value: empty_text, style: label(SUB_TEXT_COLOR, 12.0, false))
                 }
-                View(
-                    accessibility: Accessibility::new().label("デバッグカメラ 画像選択"),
-                    style: css!(display: Display::Flex, flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, gap: px(6)),
-                ) {
+                LabelMarker(accessibility: Accessibility::new().label("デバッグカメラ 画像選択"))
+                View(style: css!(display: Display::Flex, flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, gap: px(6))) {
                     ForEach(
                         each: move || available.get(),
                         key: |picture: &AiDebugCameraPicture| picture.id.clone(),
@@ -2235,10 +2234,8 @@ fn session_section(ui: Ui, title: &'static str, performance: bool) -> Element {
 #[component]
 fn timeout_field(text: RwSignal<String>, title: &'static str) -> Element {
     render! {
-        View(
-            accessibility: Accessibility::new().label(title),
-            style: css!(flex_grow: 1.0, display: Display::Flex, flex_direction: FlexDirection::Column, gap: px(4)),
-        ) {
+        View(style: css!(flex_grow: 1.0, display: Display::Flex, flex_direction: FlexDirection::Column, gap: px(4))) {
+            LabelMarker(accessibility: Accessibility::new().label(title))
             Text(value: title, style: label(SUB_TEXT_COLOR, 11.0, false))
             View(style: css!(display: Display::Flex, flex_direction: FlexDirection::Row, align_items: AlignItems::Center, gap: px(4))) {
                 Input(
@@ -2260,6 +2257,17 @@ fn label(color: Color, size: f32, bold: bool) -> Css {
         font_size: px(size),
         font_weight: if bold { FontWeight::Bold } else { FontWeight::Normal },
     )
+}
+
+/// 1×1 node that exposes `accessibility` (a label of a group of elements) to UI automation
+/// without turning the group's container into a single accessibility element. On iOS a labeled
+/// view is an accessibility element and hides its children (buttons, inputs, radio chips) from
+/// the hierarchy, so containers stay unlabeled and the label lives on this marker instead.
+#[component]
+fn label_marker(accessibility: Signal<Accessibility>) -> Element {
+    render! {
+        View(accessibility: accessibility, style: css!(width: px(1), height: px(1))) {}
+    }
 }
 
 fn button_a11y(label: &str) -> Accessibility {

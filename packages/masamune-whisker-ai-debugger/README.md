@@ -242,12 +242,12 @@ let config = ai_debugger_config!(flavor)
 | `ai_debugger_auth_login` / `ai_debugger_auth_logout` (label `AIデバッガー認証`) | Login / logout button |
 | `ai_debugger_auth_account_<alias or account_N>` | Account row (left out for invalid or duplicate aliases) |
 | `ai_debugger_auth_{schema_version,state,identity,restore_state,boot_state,boot_id,login_count}` | 1×1 observation nodes whose label is the value, present while collapsed |
-| `AI Debugger auth unknown\|authenticated\|unauthenticated` | Panel label when debug login is configured |
+| `AI Debugger auth unknown\|authenticated\|unauthenticated` | 1×1 node inside the panel when debug login is configured |
 | `AIデバッガー指示入力`, `スクリーンショット`, `設定`, `送信`, `Mode <mode>`, `Model <model>` | Prompt panel |
 | `AI debugger voice input` | Microphone button (feature `voice`) |
 | `デバッグログイン メールアドレス` / `パスワード` / `実行`, `デバッグ匿名ログイン実行`, `デバッグアカウントログイン <alias or id>` | Login panel |
-| `デバッグ課金 商品選択`, `デバッグ強制課金実行`, `課金解除 <id>` | Purchase panel |
-| `デバッグカメラ 画像選択`, `デバッグカメラ画像設定実行`, `カメラ画像解除 <id>` | Camera panel |
+| `デバッグ課金 商品選択` (1×1 node before the product chips), `デバッグ強制課金実行`, `課金解除 <id>` | Purchase panel |
+| `デバッグカメラ 画像選択` (1×1 node before the picture chips), `デバッグカメラ画像設定実行`, `カメラ画像解除 <id>` | Camera panel |
 | `AI Debugger provider <name or automatic>`, `設定を閉じる`, `プレビューを閉じる`, `AI入力へ戻る` | Settings, preview and back buttons |
 
 ## Testing
