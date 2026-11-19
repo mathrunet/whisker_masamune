@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.6
+
+- **FIX** `masamune-whisker-ai-debugger`: the buttons and inputs inside the panel
+  (`ai_debugger_close`, `ai_debugger_auth_login` / `ai_debugger_auth_logout`, the login, purchase,
+  camera and settings controls) are back in the iOS accessibility hierarchy, so Maestro can target
+  them with `id:` / `text:`. The panel container carried the `AI Debugger auth …` label; on iOS a
+  labeled view is an accessibility element that hides every descendant. Group labels
+  (`AI Debugger auth …`, `デバッグ課金 商品選択`, `デバッグカメラ 画像選択`, the timeout field titles)
+  are now 1×1 marker nodes next to the unlabeled container, like the auth observation nodes.
+
 ## 0.9.5
 
 - **NEW** `masamune-whisker-firebase-ai`: `GenerationConfig::thinking_level` (`minimal` / `low` /
