@@ -87,7 +87,15 @@ private final class InterstitialPresenter: NSObject, FullScreenContentDelegate {
 
 @WhiskerModule
 public final class AdmobModule: Module {
+    private struct CachedInterstitial {
+        let ad: InterstitialAd
+        let loadedAt: Date
+    }
+
     private var presenters: [InterstitialPresenter] = []
+    // The cache and its in-flight loads are only accessed on the main thread.
+    private var cached: [String: CachedInterstitial] = [:]
+    private var loading: Set<String> = []
 
     public override func definition() -> ModuleDefinition {
         ModuleDefinition {
@@ -104,6 +112,31 @@ public final class AdmobModule: Module {
                 let adUnitId = Bridge.args(args)["adUnitId"] as? String ?? ""
                 AdmobSdk.ensureInitialized {
                     self?.showInterstitial(adUnitId: adUnitId, promise: promise)
+                }
+            }
+
+            AsyncFunction("preloadInterstitial") { [weak self] args, promise in
+                let adUnitId = Bridge.args(args)["adUnitId"] as? String ?? ""
+                Bridge.onMain {
+                    guard let self else {
+                        Bridge.resolve(promise, false)
+                        return
+                    }
+                    self.preloadInterstitial(adUnitId: adUnitId, promise: promise)
+                }
+            }
+
+            AsyncFunction("showPreloadedInterstitial") { [weak self] args, promise in
+                let adUnitId = Bridge.args(args)["adUnitId"] as? String ?? ""
+                Bridge.onMain {
+                    guard let self, UIApplication.shared.applicationState == .active,
+                          let ad = self.freshAd(adUnitId: adUnitId)
+                    else {
+                        Bridge.resolve(promise, false)
+                        return
+                    }
+                    self.cached.removeValue(forKey: adUnitId)
+                    self.presentInterstitial(ad, promise: promise)
                 }
             }
 
@@ -124,27 +157,72 @@ public final class AdmobModule: Module {
         }
     }
 
-    private func showInterstitial(adUnitId: String, promise: WhiskerPromise) {
-        InterstitialAd.load(with: adUnitId, request: Request()) { [weak self] ad, error in
-            Bridge.onMain {
-                guard let ad, error == nil else {
-                    // Treat no fill as an expected outcome.
+    private func freshAd(adUnitId: String) -> InterstitialAd? {
+        guard let entry = cached[adUnitId] else { return nil }
+        let age = Date().timeIntervalSince(entry.loadedAt)
+        guard age >= 0 && age < 60 * 60 else {
+            cached.removeValue(forKey: adUnitId)
+            return nil
+        }
+        return entry.ad
+    }
+
+    private func preloadInterstitial(adUnitId: String, promise: WhiskerPromise) {
+        if freshAd(adUnitId: adUnitId) != nil {
+            Bridge.resolve(promise, true)
+            return
+        }
+        guard loading.insert(adUnitId).inserted else {
+            Bridge.resolve(promise, false)
+            return
+        }
+        AdmobSdk.ensureInitialized { [weak self] in
+            guard let self else {
+                Bridge.resolve(promise, false)
+                return
+            }
+            self.loadInterstitial(adUnitId: adUnitId) { [weak self] ad in
+                guard let self else {
                     Bridge.resolve(promise, false)
                     return
                 }
-                guard let self, let controller = AdmobSdk.topViewController() else {
-                    Bridge.reject(promise, "no view controller")
-                    return
+                self.loading.remove(adUnitId)
+                if let ad {
+                    self.cached[adUnitId] = CachedInterstitial(ad: ad, loadedAt: Date())
                 }
-                let presenter = InterstitialPresenter(promise: promise) { [weak self] finished in
-                    self?.presenters.removeAll { $0 === finished }
-                }
-                presenter.ad = ad
-                ad.fullScreenContentDelegate = presenter
-                self.presenters.append(presenter)
-                ad.present(from: controller)
+                Bridge.resolve(promise, ad != nil)
             }
         }
+    }
+
+    private func showInterstitial(adUnitId: String, promise: WhiskerPromise) {
+        loadInterstitial(adUnitId: adUnitId) { [weak self] ad in
+            guard let ad, let self else {
+                Bridge.resolve(promise, false)
+                return
+            }
+            self.presentInterstitial(ad, promise: promise)
+        }
+    }
+
+    private func loadInterstitial(adUnitId: String, completion: @escaping (InterstitialAd?) -> Void) {
+        InterstitialAd.load(with: adUnitId, request: Request()) { ad, error in
+            Bridge.onMain { completion(error == nil ? ad : nil) }
+        }
+    }
+
+    private func presentInterstitial(_ ad: InterstitialAd, promise: WhiskerPromise) {
+        guard let controller = AdmobSdk.topViewController() else {
+            Bridge.reject(promise, "no view controller")
+            return
+        }
+        let presenter = InterstitialPresenter(promise: promise) { [weak self] finished in
+            self?.presenters.removeAll { $0 === finished }
+        }
+        presenter.ad = ad
+        ad.fullScreenContentDelegate = presenter
+        presenters.append(presenter)
+        ad.present(from: controller)
     }
 }
 
@@ -165,6 +243,7 @@ private enum TrackingAuthorization {
             return
         }
         pending.append(promise)
+        guard pending.count == 1 else { return }
         if UIApplication.shared.applicationState == .active {
             prompt()
         } else if observer == nil {

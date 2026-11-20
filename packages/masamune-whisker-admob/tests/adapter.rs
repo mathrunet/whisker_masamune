@@ -48,7 +48,8 @@ where
 }
 
 use masamune_whisker_admob::{
-    AdmobMasamuneAdapter, default_banner_ad_unit_id, show_default_interstitial,
+    AdmobMasamuneAdapter, default_banner_ad_unit_id, preload_interstitial,
+    show_default_interstitial, show_preloaded_interstitial,
 };
 
 #[test]
@@ -96,4 +97,20 @@ fn requests_tracking_on_start_only_when_asked() {
         || async {},
     );
     assert_eq!(calls[0].0, "requestTrackingAuthorization");
+}
+
+#[test]
+fn preloading_and_display_use_separate_native_calls() {
+    let calls = run(MasamuneAdapters::new(), "false", || async {
+        assert!(!preload_interstitial("interstitial").await.unwrap());
+        assert!(!show_preloaded_interstitial("interstitial").await.unwrap());
+    });
+    let args = serde_json::json!({ "adUnitId": "interstitial" });
+    assert_eq!(
+        calls,
+        [
+            ("preloadInterstitial".into(), args.clone()),
+            ("showPreloadedInterstitial".into(), args),
+        ]
+    );
 }

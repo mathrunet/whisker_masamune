@@ -40,6 +40,27 @@ pub async fn show_interstitial(ad_unit_id: &str) -> NativeResult<bool> {
         .await
 }
 
+/// Initializes the SDK and caches one interstitial for this unit.
+///
+/// Returns `true` once an ad is available, or `false` if a load is already in progress or failed.
+pub async fn preload_interstitial(ad_unit_id: &str) -> NativeResult<bool> {
+    module()
+        .call_async("preloadInterstitial", &json!({ "adUnitId": ad_unit_id }))
+        .await
+}
+
+/// Presents a cached interstitial, returning once it is closed.
+///
+/// Returns `false` immediately if no usable ad is cached. Never starts or waits for a load.
+pub async fn show_preloaded_interstitial(ad_unit_id: &str) -> NativeResult<bool> {
+    module()
+        .call_async(
+            "showPreloadedInterstitial",
+            &json!({ "adUnitId": ad_unit_id }),
+        )
+        .await
+}
+
 /// App Tracking Transparency authorization status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

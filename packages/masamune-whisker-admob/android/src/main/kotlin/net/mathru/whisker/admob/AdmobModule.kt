@@ -2,7 +2,9 @@
 
 package net.mathru.whisker.admob
 
+import android.app.Activity
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import android.widget.FrameLayout
 import com.google.android.gms.ads.AdListener
@@ -19,6 +21,7 @@ import rs.whisker.runtime.ModuleDefinition
 import rs.whisker.runtime.WhiskerApplication
 import rs.whisker.runtime.WhiskerContext
 import rs.whisker.runtime.WhiskerModule
+import rs.whisker.runtime.WhiskerPromise
 import rs.whisker.runtime.WhiskerUI
 import rs.whisker.runtime.WhiskerValue
 
@@ -75,6 +78,12 @@ internal object AdmobSdk {
 
 @WhiskerModule
 class AdmobModule : Module() {
+    private data class CachedInterstitial(val ad: InterstitialAd, val loadedAt: Long)
+
+    // The cache and its in-flight loads are only accessed on the main thread.
+    private val cached = mutableMapOf<String, CachedInterstitial>()
+    private val loading = mutableSetOf<String>()
+
     override fun definition() = ModuleDefinition {
         Name("Admob")
 
@@ -97,33 +106,44 @@ class AdmobModule : Module() {
                 return@AsyncFunction
             }
             val adUnitId = Bridge.args(args).optString("adUnitId")
+            loadInterstitial(activity, adUnitId, promise) { ad ->
+                presentInterstitial(ad, activity, promise)
+            }
+        }
+
+        AsyncFunction("preloadInterstitial") { args, promise ->
+            val adUnitId = Bridge.args(args).optString("adUnitId")
             Bridge.onMain {
-                AdmobSdk.ensureInitialized(activity.applicationContext, onReady = {
-                    InterstitialAd.load(
-                        activity,
-                        adUnitId,
-                        AdRequest.Builder().build(),
-                        object : InterstitialAdLoadCallback() {
-                            override fun onAdLoaded(ad: InterstitialAd) {
-                                ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                                    override fun onAdDismissedFullScreenContent() {
-                                        Bridge.resolve(promise, true)
-                                    }
+                val context = WhiskerApplication.appContext
+                if (context == null) {
+                    Bridge.reject(promise, "no context")
+                } else if (freshAd(adUnitId) != null) {
+                    Bridge.resolve(promise, true)
+                } else if (!loading.add(adUnitId)) {
+                    Bridge.resolve(promise, false)
+                } else {
+                    loadInterstitial(context, adUnitId, promise, onSettled = {
+                        loading.remove(adUnitId)
+                    }) { ad ->
+                        cached[adUnitId] = CachedInterstitial(ad, SystemClock.elapsedRealtime())
+                        Log.d("MasamuneWhiskerAdmob", "Interstitial preloaded")
+                        Bridge.resolve(promise, true)
+                    }
+                }
+            }
+        }
 
-                                    override fun onAdFailedToShowFullScreenContent(error: com.google.android.gms.ads.AdError) {
-                                        Bridge.reject(promise, error.message)
-                                    }
-                                }
-                                ad.show(activity)
-                            }
-
-                            override fun onAdFailedToLoad(error: LoadAdError) {
-                                // Treat no fill as an expected outcome.
-                                Bridge.resolve(promise, false)
-                            }
-                        },
-                    )
-                }, onFailed = { Bridge.reject(promise, it) })
+        AsyncFunction("showPreloadedInterstitial") { args, promise ->
+            val adUnitId = Bridge.args(args).optString("adUnitId")
+            Bridge.onMain {
+                val activity = appContext.currentActivity
+                val ad = freshAd(adUnitId)
+                if (activity == null || ad == null) {
+                    Bridge.resolve(promise, false)
+                } else {
+                    cached.remove(adUnitId)
+                    presentInterstitial(ad, activity, promise)
+                }
             }
         }
 
@@ -136,6 +156,70 @@ class AdmobModule : Module() {
             Prop("ad-unit-id") { view: AdBannerView, value -> view.setAdUnit(value.asString() ?: "") }
             Prop("width-dp") { view: AdBannerView, value -> view.setWidthDp(value.asString()?.toIntOrNull() ?: value.asInt()?.toInt() ?: 0) }
             Events("loaded", "failed")
+        }
+    }
+
+    private fun freshAd(adUnitId: String): InterstitialAd? {
+        val entry = cached[adUnitId] ?: return null
+        if (SystemClock.elapsedRealtime() - entry.loadedAt >= 60 * 60 * 1000L) {
+            cached.remove(adUnitId)
+            return null
+        }
+        return entry.ad
+    }
+
+    private fun loadInterstitial(
+        context: Context,
+        adUnitId: String,
+        promise: WhiskerPromise,
+        onSettled: () -> Unit = {},
+        onLoaded: (InterstitialAd) -> Unit,
+    ) {
+        AdmobSdk.ensureInitialized(context, onReady = {
+            InterstitialAd.load(
+                context,
+                adUnitId,
+                AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        onSettled()
+                        onLoaded(ad)
+                    }
+
+                    override fun onAdFailedToLoad(error: LoadAdError) {
+                        onSettled()
+                        Bridge.resolve(promise, false)
+                    }
+                },
+            )
+        }, onFailed = {
+            onSettled()
+            Bridge.reject(promise, it)
+        })
+    }
+
+    private fun presentInterstitial(ad: InterstitialAd, activity: Activity, promise: WhiskerPromise) {
+        if (activity.isFinishing || activity.isDestroyed) {
+            Bridge.resolve(promise, false)
+            return
+        }
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdShowedFullScreenContent() {
+                Log.d("MasamuneWhiskerAdmob", "Interstitial presented")
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                Bridge.resolve(promise, true)
+            }
+
+            override fun onAdFailedToShowFullScreenContent(error: com.google.android.gms.ads.AdError) {
+                Bridge.reject(promise, error.message)
+            }
+        }
+        try {
+            ad.show(activity)
+        } catch (error: Exception) {
+            Bridge.reject(promise, error)
         }
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.7
+
+- **NEW** `masamune-whisker-admob`: preload an interstitial on Android and iOS,
+  then show it if ready without waiting for a network request. Cached ads are
+  single-use and expire after one hour.
+
 ## 0.9.6
 
 - **FIX** `masamune-whisker-ai-debugger`: the buttons and inputs inside the panel
