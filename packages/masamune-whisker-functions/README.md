@@ -41,12 +41,20 @@ path values are URL paths (percent-encode dynamic path segments). `query` values
 are encoded automatically. JSON bodies may be objects, arrays, scalars or null.
 An absent body sends no REST payload. Empty successful REST responses become null.
 
+Requests with bearer tokens, App Check tokens or credential headers require HTTPS.
+For a local emulator, call `.allow_local_http()` on the adapter to permit loopback
+HTTP without a proxy. Authenticated requests and explicitly enabled emulator
+requests return redirects as HTTP errors without following them. Unauthenticated
+requests can still use HTTP. Endpoint URLs must not include user information.
+
 `FunctionsAction::decode` deserializes JSON into the associated `Response`; override
 it for custom mapping. `on_error` can provide an application-specific fallback.
 Errors from request construction, transport and decoding all reach this hook.
 `FunctionsError::Api` preserves the existing `ApiError`, including HTTP status/body,
 network, timeout and decode failures. Firebase errors preserve their status,
-message and details in `FunctionsError::Callable`.
+message and details in `FunctionsError::Callable`. Display and Debug output use
+fixed descriptions and HTTP status. Read structured fields explicitly when your
+application needs to handle server details.
 
 ## Adapter switching
 

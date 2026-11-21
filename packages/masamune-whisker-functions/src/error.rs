@@ -1,7 +1,7 @@
 use masamune_whisker_auth::AuthError;
 
 /// Failure of a server request.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum ApiError {
     /// No signed-in user while the request needs one.
     NotSignedIn,
@@ -21,12 +21,18 @@ impl std::fmt::Display for ApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ApiError::NotSignedIn => f.write_str("not signed in"),
-            ApiError::Http { status, body } => write!(f, "http {status}: {body}"),
-            ApiError::Network(message) => write!(f, "network: {message}"),
+            ApiError::Http { status, .. } => write!(f, "http {status}"),
+            ApiError::Network(_) => f.write_str("network error"),
             ApiError::Timeout => f.write_str("timeout"),
-            ApiError::Decode(message) => write!(f, "decode: {message}"),
-            ApiError::Other(message) => f.write_str(message),
+            ApiError::Decode(_) => f.write_str("decode error"),
+            ApiError::Other(_) => f.write_str("request failed"),
         }
+    }
+}
+
+impl std::fmt::Debug for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 

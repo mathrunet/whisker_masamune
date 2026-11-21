@@ -305,7 +305,11 @@ mod tests {
             ..TidbConfig::default()
         };
         Tidb::with_config(
-            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t"))),
+            Functions::new(
+                RestApiFunctionsAdapter::new(server.uri())
+                    .allow_local_http()
+                    .with_auth(Auth::fixed("t")),
+            ),
             config,
         )
         .unwrap()

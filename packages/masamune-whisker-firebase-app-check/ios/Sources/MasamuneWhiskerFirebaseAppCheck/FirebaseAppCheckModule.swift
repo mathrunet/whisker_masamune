@@ -54,12 +54,9 @@ enum AppCheckGate {
     /// Optional Info.plist override written by the crate's CNG plugin: `debug` or `appAttest`.
     /// When absent, debug builds of this package use the debug provider and release builds App Attest.
     static let providerInfoKey = "MasamuneFirebaseAppCheckProvider"
-    /// The key the App Check debug provider reads its fixed debug token from (AppCheckCore).
-    static let debugTokenDefaultsKey = "GACAppCheckDebugToken"
-
     private static let lock = NSLock()
     private static var installed = false
-    private static var activated = false
+    private static var activeProvider: AppCheckProviderPolicy?
 
     /// Installs the gated factory while Firebase is not configured yet.
     static func install() {
@@ -74,23 +71,10 @@ enum AppCheckGate {
         installed = true
     }
 
-    static var isActivated: Bool {
+    static var selectedProvider: AppCheckProviderPolicy? {
         lock.lock()
         defer { lock.unlock() }
-        return activated
-    }
-
-    static var usesDebugProvider: Bool {
-        switch Bundle.main.object(forInfoDictionaryKey: providerInfoKey) as? String {
-        case "debug": return true
-        case "appAttest": return false
-        default:
-            #if DEBUG
-            return true
-            #else
-            return false
-            #endif
-        }
+        return activeProvider
     }
 
     static func activate(debugToken: String) throws {
@@ -103,17 +87,15 @@ enum AppCheckGate {
     private static func open(debugToken: String) throws {
         lock.lock()
         defer { lock.unlock() }
-        if activated { return }
+        if activeProvider != nil { return }
         guard installed else {
             throw GateError("App Check could not install its provider factory because FirebaseApp was configured first")
         }
-        if usesDebugProvider, !debugToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // The debug provider reads the stored token on every request, so a fixed token set here
-            // is used from the first exchange on (the `FIRAAppCheckDebugToken` environment variable
-            // still wins, as in the Firebase SDK).
-            UserDefaults.standard.set(debugToken, forKey: debugTokenDefaultsKey)
-        }
-        activated = true
+        activeProvider = try AppCheckProviderPolicy.activate(
+            override: Bundle.main.object(forInfoDictionaryKey: providerInfoKey) as? String,
+            debugToken: debugToken,
+            defaults: .standard
+        )
     }
 
     struct GateError: LocalizedError {
@@ -163,17 +145,20 @@ private final class GatedProvider: NSObject, AppCheckProvider {
 
     /// Creates the real provider lazily, after `activate` stored the debug token.
     private func provider() throws -> AppCheckProvider {
-        guard AppCheckGate.isActivated else {
+        guard let selection = AppCheckGate.selectedProvider else {
             throw AppCheckGate.GateError("App Check is not activated; call activate() first")
         }
         lock.lock()
         defer { lock.unlock() }
         if let delegate { return delegate }
         let created: AppCheckProvider?
-        if AppCheckGate.usesDebugProvider {
-            created = AppCheckDebugProvider(app: app)
-        } else {
+        switch selection {
+        case .appAttest:
             created = AppAttestProvider(app: app)
+        #if DEBUG
+        case .debug:
+            created = AppCheckDebugProvider(app: app)
+        #endif
         }
         guard let created else {
             throw AppCheckGate.GateError("App Check provider is unavailable (check the Firebase options and the OS version)")

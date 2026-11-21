@@ -19,6 +19,7 @@ use serde_json::Value;
 pub struct FirebaseFunctionsAdapter {
     client: CallableClient,
     firestore_database_id: Option<String>,
+    allow_local_http: bool,
 }
 
 impl FirebaseFunctionsAdapter {
@@ -26,7 +27,7 @@ impl FirebaseFunctionsAdapter {
     pub fn new(project: &str, region: &str) -> Self {
         Self::from_client(CallableClient::new(project, region))
     }
-    /// Uses an explicit base URL, e.g. `http://localhost:5001/project/region`.
+    /// Uses an explicit base URL. Use `allow_local_http` for an authenticated loopback emulator.
     pub fn at_endpoint(endpoint: impl Into<String>) -> Self {
         Self::from_client(CallableClient::at_endpoint(endpoint))
     }
@@ -34,7 +35,13 @@ impl FirebaseFunctionsAdapter {
         Self {
             client,
             firestore_database_id: None,
+            allow_local_http: false,
         }
+    }
+    /// Allows HTTP to loopback endpoints for a local emulator.
+    pub fn allow_local_http(mut self) -> Self {
+        self.allow_local_http = true;
+        self
     }
     pub fn with_auth(mut self, auth: Auth) -> Self {
         self.client.auth = auth;
@@ -100,7 +107,13 @@ impl FunctionsAdapter for FirebaseFunctionsAdapter {
                     .insert("firestoreDatabaseId".into(), Value::String(id.clone()));
             }
             self.client
-                .call(&request.action, data, request.headers, request.timeout)
+                .call_with_policy(
+                    &request.action,
+                    data,
+                    request.headers,
+                    request.timeout,
+                    self.allow_local_http,
+                )
                 .await
                 .map_err(Into::into)
         })

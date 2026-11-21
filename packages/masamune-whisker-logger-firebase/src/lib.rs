@@ -112,24 +112,14 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
         let Some(crashlytics) = self.crashlytics else {
             return;
         };
-        if let Some(context) = context {
-            let line = format!("context: {context}");
-            self.on_ui(move || {
-                let _ = crashlytics.log(&line);
-            });
-        }
+        let safe_error = HandledError::for_reporting(error, context);
         if whisker::runtime_dispatcher().is_some() {
-            let _ = crashlytics.record_error(error);
+            let _ = crashlytics.record_error(&safe_error);
             return;
         }
         // The UI thread's backtrace would be misleading, so off-thread reports carry none.
-        let report = ErrorReport {
-            name: "Error".into(),
-            reason: reason(error),
-            frames: Vec::new(),
-        };
         self.on_ui(move || {
-            let _ = crashlytics.record_report(&report);
+            let _ = crashlytics.record_report(&safe_error.report());
         });
     }
 }
@@ -156,34 +146,36 @@ fn screen_view(analytics: Analytics, params: &[(String, Param)]) -> Result<(), F
     }
 }
 
-fn reason(error: &(dyn Error + 'static)) -> String {
-    let mut reason = error.to_string();
-    let mut source = error.source();
-    while let Some(cause) = source {
-        reason.push_str(&format!("\nCaused by: {cause}"));
-        source = cause.source();
+#[derive(Debug)]
+struct HandledError;
+
+impl HandledError {
+    // Both paths accept only the fixed classification. The original error and context can
+    // contain request URLs, server payloads, or other unstructured application data.
+    fn for_reporting(_error: &dyn Error, _context: Option<&str>) -> Self {
+        Self
     }
-    reason
+
+    fn report(&self) -> ErrorReport {
+        ErrorReport {
+            name: "HandledError".into(),
+            reason: self.to_string(),
+            frames: Vec::new(),
+        }
+    }
 }
+
+impl std::fmt::Display for HandledError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("handled_error")
+    }
+}
+
+impl Error for HandledError {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[derive(Debug)]
-    struct Outer(std::fmt::Error);
-
-    impl std::fmt::Display for Outer {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str("sync failed")
-        }
-    }
-
-    impl Error for Outer {
-        fn source(&self) -> Option<&(dyn Error + 'static)> {
-            Some(&self.0)
-        }
-    }
 
     #[test]
     fn converts_values() {
@@ -194,10 +186,29 @@ mod tests {
     }
 
     #[test]
-    fn includes_source_chain() {
-        assert_eq!(
-            reason(&Outer(std::fmt::Error)),
-            "sync failed\nCaused by: an error occurred when formatting an argument"
-        );
+    fn handled_error_uses_the_same_fixed_reason_on_both_paths() {
+        #[derive(Debug)]
+        struct WrappedError(std::io::Error);
+
+        impl std::fmt::Display for WrappedError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("dummy HTTP response body")
+            }
+        }
+
+        impl Error for WrappedError {
+            fn source(&self) -> Option<&(dyn Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+
+        let error = WrappedError(std::io::Error::other("dummy private URL"));
+        let safe_error = HandledError::for_reporting(&error, Some("dummy private context"));
+        let report = safe_error.report();
+        assert_eq!(safe_error.to_string(), "handled_error");
+        assert!(safe_error.source().is_none());
+        assert_eq!(report.name, "HandledError");
+        assert_eq!(report.reason, safe_error.to_string());
+        assert!(report.frames.is_empty());
     }
 }

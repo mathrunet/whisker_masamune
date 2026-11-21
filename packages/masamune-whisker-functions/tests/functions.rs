@@ -68,12 +68,12 @@ async fn rest_contract_and_non_send_auth() {
         .await;
     let calls = Rc::new(Cell::new(0));
     let observed = calls.clone();
-    let adapter = RestApiFunctionsAdapter::new(format!("{}/api", server.uri())).with_auth(
-        Auth::from_fn(move |_| {
+    let adapter = RestApiFunctionsAdapter::new(format!("{}/api", server.uri()))
+        .allow_local_http()
+        .with_auth(Auth::from_fn(move |_| {
             observed.set(observed.get() + 1);
             async { Ok(Some("fresh".into())) }
-        }),
-    );
+        }));
     let mut request = FunctionRequest::new("unused");
     request.path = Some("/items/a%20b".into());
     request.method = Method::PATCH;
@@ -105,7 +105,7 @@ async fn http_decode_empty_and_deadline_errors() {
         (
             "slow",
             ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(200))
+                .set_delay(Duration::from_secs(2))
                 .set_body_json(json!({})),
         ),
     ] {
@@ -129,7 +129,7 @@ async fn http_decode_empty_and_deadline_errors() {
         Value::Null
     );
     let mut request = FunctionRequest::new("slow");
-    request.timeout = Some(Duration::from_millis(20));
+    request.timeout = Some(Duration::from_millis(300));
     assert_eq!(
         adapter.send(request).await,
         Err(FunctionsError::Api(ApiError::Timeout))
@@ -163,7 +163,9 @@ async fn posts_json_with_bearer_token_and_encoded_segments() {
         .mount(&server)
         .await;
     let functions = Functions::new(
-        RestApiFunctionsAdapter::new(format!("{}/", server.uri())).with_auth(Auth::fixed("t")),
+        RestApiFunctionsAdapter::new(format!("{}/", server.uri()))
+            .allow_local_http()
+            .with_auth(Auth::fixed("t")),
     );
     let value = functions
         .send(FunctionRequest::new("/delete_user").with_body(json!({"userId": "u"})))
@@ -176,6 +178,87 @@ async fn posts_json_with_bearer_token_and_encoded_segments() {
         .with_query("where", "[1]");
     assert_eq!(request.path.as_deref(), Some("turso/database/u%201/user"));
     assert_eq!(functions.send(request).await.unwrap(), json!({"data": []}));
+}
+
+#[tokio::test]
+async fn rest_credentials_require_https_or_an_explicit_loopback() {
+    let server = MockServer::start().await;
+    let adapter = RestApiFunctionsAdapter::new(server.uri());
+    for name in [
+        "authorization",
+        "x-firebase-appcheck",
+        "cookie",
+        "proxy-authorization",
+    ] {
+        let mut request = FunctionRequest::new("run");
+        request
+            .headers
+            .insert(name, HeaderValue::from_static("dummy"));
+        assert!(matches!(
+            adapter.send(request).await,
+            Err(FunctionsError::Configuration(_))
+        ));
+    }
+    assert!(matches!(
+        adapter
+            .with_auth(Auth::fixed("dummy"))
+            .send(FunctionRequest::new("run"))
+            .await,
+        Err(FunctionsError::Configuration(_))
+    ));
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn authenticated_rest_stops_at_redirect_response() {
+    let server = MockServer::start().await;
+    let destination = MockServer::start().await;
+    Mock::given(path("/run"))
+        .and(header("authorization", "Bearer dummy"))
+        .respond_with(ResponseTemplate::new(307).insert_header("location", destination.uri()))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let adapter = RestApiFunctionsAdapter::new(server.uri())
+        .allow_local_http()
+        .with_auth(Auth::fixed("dummy"));
+    assert!(matches!(
+        adapter.send(FunctionRequest::new("run")).await,
+        Err(FunctionsError::Api(ApiError::Http { status: 307, .. }))
+    ));
+    assert!(destination.received_requests().await.unwrap().is_empty());
+}
+
+#[test]
+fn error_formatting_uses_only_fixed_text_and_http_status() {
+    let sentinel = "dummy private value";
+    let http: FunctionsError = ApiError::Http {
+        status: 503,
+        body: sentinel.into(),
+    }
+    .into();
+    let callable = FunctionsError::from(CallableFailure::Remote {
+        http_status: 403,
+        status: sentinel.into(),
+        message: sentinel.into(),
+        details: json!({ "private": sentinel }),
+    });
+    let network: FunctionsError =
+        ApiError::Network(format!("https://example.invalid/{sentinel}")).into();
+    let decode: FunctionsError = ApiError::Decode(sentinel.into()).into();
+    let other: FunctionsError = ApiError::Other(sentinel.into()).into();
+    let configuration = FunctionsError::Configuration(sentinel.into());
+    for (error, expected) in [
+        (http, "http 503"),
+        (callable, "callable error (http 403)"),
+        (network, "network error"),
+        (decode, "decode error"),
+        (other, "request failed"),
+        (configuration, "functions configuration error"),
+    ] {
+        assert_eq!(error.to_string(), expected);
+        assert_eq!(format!("{error:?}"), expected);
+    }
 }
 
 #[test]

@@ -37,13 +37,16 @@ For a local emulator use:
 use masamune_whisker_functions_firebase::FirebaseFunctionsAdapter;
 let emulator = FirebaseFunctionsAdapter::at_endpoint(
     "http://127.0.0.1:5001/project-id/asia-northeast1"
-);
+).allow_local_http();
 ```
 
 Select project, region and emulator URL from the application's dev/prod configuration
 at boot. Explicit base URLs also support deployed callable URLs by splitting the
-base endpoint and final function name. Use a host address reachable from the device
-when connecting to a local emulator.
+base endpoint and final function name. Authenticated endpoints require HTTPS.
+`allow_local_http()` permits only loopback HTTP without a proxy. For callers
+using `CallableClient` directly, use `call_local_emulator` for the same exception.
+Authenticated and explicitly enabled emulator calls return 3xx as HTTP errors
+without following redirects.
 
 Calls POST `{"data": <action body>}` to `<base>/<action name>`. An absent body
 becomes `{}`; explicit JSON null remains null. Responses accept `data` or `result`,

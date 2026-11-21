@@ -19,6 +19,14 @@ async fn routes_edge_and_region_with_shared_auth() {
     let adapter = CloudflareFunctionsAdapter::new(format!("{}/api/", edge.uri()))
         .with_auth(Auth::fixed("t"))
         .with_region_endpoint(format!("{}/api", region.uri()));
+    for worker in ["edge", "region"] {
+        let request = FunctionRequest::new("action").with_worker_type(worker);
+        assert!(matches!(
+            adapter.send(request).await,
+            Err(FunctionsError::Configuration(_))
+        ));
+    }
+    let adapter = adapter.allow_local_http();
     for worker in [None, Some("region")] {
         let mut request = FunctionRequest::new("action");
         request.method = Method::GET;

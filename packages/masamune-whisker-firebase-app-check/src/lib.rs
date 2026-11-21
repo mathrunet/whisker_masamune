@@ -23,10 +23,10 @@ fn module() -> NativeModule {
 
 /// Activates App Check. In debug builds, passing `debug_token` uses that fixed token.
 ///
-/// On iOS "debug build" means the Debug configuration (or the `debug` provider forced by the CNG
-/// plugin), the token is stored under the `GACAppCheckDebugToken` user default that the Firebase
-/// debug provider reads, and the `FIRAAppCheckDebugToken` environment variable still takes
-/// precedence. This call also configures the default Firebase app when it is not configured yet.
+/// On iOS, the Debug configuration can store the token under the `GACAppCheckDebugToken` user
+/// default when the debug provider is selected. The `FIRAAppCheckDebugToken` environment variable
+/// still takes precedence. Release builds use App Attest and reject the `debug` provider override.
+/// This call also configures the default Firebase app when it is not configured yet.
 pub fn activate(debug_token: Option<&str>) -> NativeResult<bool> {
     module().call(
         "activate",

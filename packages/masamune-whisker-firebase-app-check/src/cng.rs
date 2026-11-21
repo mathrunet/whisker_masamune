@@ -10,7 +10,8 @@
 //!
 //! It adds the `com.apple.developer.devicecheck.appattest-environment` entitlement (App Attest
 //! also has to be enabled for the App ID) and, when [`MasamuneFirebaseAppCheckConfig::provider`]
-//! is not `auto`, the `MasamuneFirebaseAppCheckProvider` Info.plist key that forces the provider.
+//! is not `auto`, the `MasamuneFirebaseAppCheckProvider` Info.plist override.
+//! The native module rejects the `debug` override in Release builds.
 
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ pub struct MasamuneFirebaseAppCheckConfig {
     /// always use production regardless of this value.
     pub app_attest_environment: String,
     /// `auto` (default: the debug provider in Debug builds, App Attest in Release builds),
-    /// `debug` or `app_attest`.
+    /// `debug` (Debug builds only) or `app_attest`.
     pub provider: String,
 }
 
@@ -164,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn forces_the_provider_and_rejects_typos() {
+    fn writes_the_debug_override_and_rejects_typos() {
         let mut config = MasamuneFirebaseAppCheckConfig::default();
         config
             .app_attest_environment("development")

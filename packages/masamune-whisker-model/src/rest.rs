@@ -324,7 +324,11 @@ mod tests {
             .mount(&server)
             .await;
         let db = RestDatabase::new(
-            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t"))),
+            Functions::new(
+                RestApiFunctionsAdapter::new(server.uri())
+                    .allow_local_http()
+                    .with_auth(Auth::fixed("t")),
+            ),
             "turso",
         )
         .with_prefix(Some("dev"))

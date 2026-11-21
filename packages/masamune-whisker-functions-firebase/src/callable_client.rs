@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use masamune_whisker_functions::{ApiError, Auth, CallableFailure, HeaderMap, Url, client};
+use masamune_whisker_functions::{
+    ApiError, Auth, CallableFailure, HeaderMap, Url, functions_client,
+};
 
 /// Callable transport with injectable auth and App Check token sources.
 ///
@@ -43,10 +45,37 @@ impl CallableClient {
         headers: HeaderMap,
         timeout: Option<Duration>,
     ) -> Result<Value, CallableFailure> {
-        let timeout = timeout.unwrap_or(self.timeout);
-        tokio::time::timeout(timeout, self.call_inner(name, data, headers, timeout))
+        self.call_with_policy(name, data, headers, timeout, false)
             .await
-            .unwrap_or(Err(CallableFailure::Transport(ApiError::Timeout)))
+    }
+
+    /// Executes a function and permits HTTP to a loopback emulator.
+    pub async fn call_local_emulator(
+        &self,
+        name: &str,
+        data: Value,
+        headers: HeaderMap,
+        timeout: Option<Duration>,
+    ) -> Result<Value, CallableFailure> {
+        self.call_with_policy(name, data, headers, timeout, true)
+            .await
+    }
+
+    pub(crate) async fn call_with_policy(
+        &self,
+        name: &str,
+        data: Value,
+        headers: HeaderMap,
+        timeout: Option<Duration>,
+        allow_local_http: bool,
+    ) -> Result<Value, CallableFailure> {
+        let timeout = timeout.unwrap_or(self.timeout);
+        tokio::time::timeout(
+            timeout,
+            self.call_inner(name, data, headers, timeout, allow_local_http),
+        )
+        .await
+        .unwrap_or(Err(CallableFailure::Transport(ApiError::Timeout)))
     }
 
     async fn call_inner(
@@ -55,6 +84,7 @@ impl CallableClient {
         data: Value,
         mut headers: HeaderMap,
         timeout: Duration,
+        allow_local_http: bool,
     ) -> Result<Value, CallableFailure> {
         if name.is_empty() || name.contains(['/', '?', '#']) || name == "." || name == ".." {
             return Err(ApiError::Other("invalid callable name".into()).into());
@@ -74,12 +104,20 @@ impl CallableClient {
         headers.remove("content-type");
         headers.remove("authorization");
         headers.remove("x-firebase-appcheck");
-        let mut request = client()
+        let auth_token = self.auth.token(false).await?;
+        let client = functions_client(
+            &url,
+            &headers,
+            auth_token.is_some() || self.app_check.is_some(),
+            allow_local_http,
+        )
+        .map_err(|message| ApiError::Other(message.into()))?;
+        let mut request = client
             .post(url)
             .headers(headers)
             .json(&json!({"data": data}))
             .timeout(timeout);
-        if let Some(token) = self.auth.token(false).await? {
+        if let Some(token) = auth_token {
             request = request.bearer_auth(token);
         }
         if let Some(provider) = &self.app_check {

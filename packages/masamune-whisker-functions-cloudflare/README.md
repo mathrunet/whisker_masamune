@@ -28,6 +28,9 @@ For Firebase ID tokens, pass `masamune_whisker_auth_firebase::firebase_auth()`
 `masamune-whisker-auth` interface, never on an auth implementation. The backend
 must verify the token. Authentication is opt-in;
 without a provider the adapter sends no managed Authorization header.
+Both workers require HTTPS for credential-bearing requests and return redirects
+as HTTP errors. For local workers, `.allow_local_http()` permits loopback HTTP
+without a proxy on both endpoints.
 
 Method defaults to POST. Set GET/PUT/PATCH/DELETE explicitly as needed. Action
 `path`, encoded query parameters, custom headers, JSON body and timeout are honored.

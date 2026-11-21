@@ -21,6 +21,7 @@ async fn callable_envelope_tokens_database_and_typed_response() {
         .await;
     let adapter =
         FirebaseFunctionsAdapter::at_endpoint(format!("{}/project/region/", server.uri()))
+            .allow_local_http()
             .with_auth(Auth::fixed("id-token"))
             .with_app_check(Auth::fixed("app-token"))
             .with_firestore_database_id("named");
@@ -130,7 +131,7 @@ async fn validates_response_shapes_and_preserves_http_errors() {
 #[tokio::test]
 async fn token_failures_and_invalid_requests_never_dispatch() {
     let server = MockServer::start().await;
-    let adapter = FirebaseFunctionsAdapter::at_endpoint(server.uri());
+    let adapter = FirebaseFunctionsAdapter::at_endpoint(server.uri()).allow_local_http();
     let auth_fail = adapter
         .clone()
         .with_auth(Auth::from_fn(|_| async { Err(AuthError::NotSignedIn) }));
@@ -170,15 +171,15 @@ async fn timeout_covers_token_and_http_without_retries() {
     Mock::given(path("/slow"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(200))
+                .set_delay(Duration::from_secs(2))
                 .set_body_json(json!({"result": true})),
         )
         .expect(1)
         .mount(&server)
         .await;
-    let adapter = FirebaseFunctionsAdapter::at_endpoint(server.uri());
+    let adapter = FirebaseFunctionsAdapter::at_endpoint(server.uri()).allow_local_http();
     let mut request = FunctionRequest::new("slow");
-    request.timeout = Some(Duration::from_millis(20));
+    request.timeout = Some(Duration::from_millis(300));
     assert_eq!(
         adapter.send(request).await,
         Err(FunctionsError::Api(ApiError::Timeout))
@@ -194,4 +195,37 @@ async fn timeout_covers_token_and_http_without_retries() {
         Err(FunctionsError::Api(ApiError::Timeout))
     );
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn callable_credentials_require_explicit_loopback_permission() {
+    let server = MockServer::start().await;
+    let client = masamune_whisker_functions_firebase::CallableClient {
+        app_check: Some(Auth::fixed("dummy")),
+        ..masamune_whisker_functions_firebase::CallableClient::at_endpoint(server.uri())
+    };
+    let result = client.call("run", json!({}), HeaderMap::new(), None).await;
+    assert_eq!(
+        result,
+        Err(ApiError::Other("authenticated functions requests require HTTPS".into()).into())
+    );
+    assert!(server.received_requests().await.unwrap().is_empty());
+
+    let destination = MockServer::start().await;
+    Mock::given(path("/run"))
+        .and(header("x-firebase-appcheck", "dummy"))
+        .respond_with(ResponseTemplate::new(307).insert_header("location", destination.uri()))
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert!(matches!(
+        client
+            .call_local_emulator("run", json!({}), HeaderMap::new(), None)
+            .await,
+        Err(CallableFailure::Transport(ApiError::Http {
+            status: 307,
+            ..
+        }))
+    ));
+    assert!(destination.received_requests().await.unwrap().is_empty());
 }

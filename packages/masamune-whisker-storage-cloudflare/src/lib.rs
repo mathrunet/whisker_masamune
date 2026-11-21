@@ -231,8 +231,11 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn adapter(server: &MockServer) -> CloudflareStorageAdapter {
-        let functions =
-            Functions::new(RestApiFunctionsAdapter::new(server.uri()).with_auth(Auth::fixed("t")));
+        let functions = Functions::new(
+            RestApiFunctionsAdapter::new(server.uri())
+                .allow_local_http()
+                .with_auth(Auth::fixed("t")),
+        );
         CloudflareStorageAdapter::new(functions, "https://files.example.com/")
     }
 

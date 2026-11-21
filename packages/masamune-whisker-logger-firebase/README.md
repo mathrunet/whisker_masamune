@@ -23,7 +23,7 @@ fn prepare() -> Result<(), Box<dyn std::error::Error>> {
 | `warn!` / `error!` (`breadcrumb_level`, default Warn) | Crashlytics breadcrumb (`log`) |
 | `send` / `send_event` | Analytics `log_event` |
 | `send_event("screen_view", [("screen_name", ..)])` | Analytics `log_screen_view` (optional `screen_class`) |
-| `report_error(err, context)` | Crashlytics non-fatal `record_error`; `context` becomes a breadcrumb |
+| `report_error(err, context)` | Crashlytics non-fatal `HandledError` with the fixed reason `handled_error` |
 | `record_panics()` | Crashlytics crash report for Rust panics |
 
 Breadcrumbs are still limited by the flavor's level, so prod never sends Debug/Info.
@@ -41,6 +41,6 @@ Add `whisker-firebase-analytics` and `whisker-firebase-crashlytics` to the app's
 
 ## Sensitive data
 
-Events, parameters, breadcrumbs and error messages leave the device. Never include
-tokens, passwords, personal data or full payloads. Use fixed codes for `context` and
-report only errors whose `Display` output is safe to send.
+Handled error reports omit the error text, cause chain and context. Analytics
+events, explicit log breadcrumbs and panic messages can still leave the device.
+Keep tokens, passwords, personal data and full payloads out of those inputs.

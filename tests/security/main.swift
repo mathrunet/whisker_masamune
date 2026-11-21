@@ -19,4 +19,31 @@ precondition(!NativeOriginPolicy.allows("https://a.test", allowedOrigins: allowe
 precondition(!NativeOriginPolicy.allows("https://evil.test", allowedOrigins: allowed))
 precondition(!NativeOriginPolicy.allows(nil, allowedOrigins: allowed))
 precondition(!NativeOriginPolicy.allows("null", allowedOrigins: allowed))
+
+let suite = "masamune-app-check-test-\(UUID().uuidString)"
+let defaults = UserDefaults(suiteName: suite)!
+defer { defaults.removePersistentDomain(forName: suite) }
+let debugTokenKey = "GACAppCheckDebugToken"
+let debugToken = "dummy-token"
+let appAttest = try AppCheckProviderPolicy.activate(override: "appAttest", debugToken: debugToken, defaults: defaults)
+precondition(appAttest == .appAttest)
+precondition(defaults.object(forKey: debugTokenKey) == nil)
+#if DEBUG
+let auto = try AppCheckProviderPolicy.activate(override: nil, debugToken: "", defaults: defaults)
+precondition(auto == .debug)
+precondition(defaults.object(forKey: debugTokenKey) == nil)
+let debug = try AppCheckProviderPolicy.activate(override: "debug", debugToken: debugToken, defaults: defaults)
+precondition(debug == .debug)
+precondition(defaults.string(forKey: debugTokenKey) == debugToken)
+#else
+let auto = try AppCheckProviderPolicy.activate(override: nil, debugToken: debugToken, defaults: defaults)
+precondition(auto == .appAttest)
+do {
+    _ = try AppCheckProviderPolicy.activate(override: "debug", debugToken: debugToken, defaults: defaults)
+    preconditionFailure("Release accepted the debug provider")
+} catch {
+    precondition(error.localizedDescription == "The App Check debug provider requires a Debug build")
+}
+precondition(defaults.object(forKey: debugTokenKey) == nil)
+#endif
 print("Swift security policies passed")

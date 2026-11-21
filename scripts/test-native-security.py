@@ -59,11 +59,13 @@ def main():
             finally:
                 subprocess.run([*adb, "shell", f"cd /data/local/tmp && rm -r -- {remote_name}"], check=True)
         swift_output = str(Path(temporary) / "swift-security")
-        subprocess.run(["xcrun", "swiftc",
-                        str(root / "packages/masamune-whisker-view-capture/ios/Sources/MasamuneWhiskerViewCapture/CaptureFilePolicy.swift"),
-                        str(root / "packages/masamune-whisker-webview/ios/Sources/MasamuneWhiskerWebview/NativeOriginPolicy.swift"),
-                        str(root / "tests/security/main.swift"), "-o", swift_output], check=True)
-        subprocess.run([swift_output], check=True)
+        for swift_flags in [[], ["-D", "DEBUG"]]:
+            subprocess.run(["xcrun", "swiftc", *swift_flags,
+                            str(root / "packages/masamune-whisker-view-capture/ios/Sources/MasamuneWhiskerViewCapture/CaptureFilePolicy.swift"),
+                            str(root / "packages/masamune-whisker-webview/ios/Sources/MasamuneWhiskerWebview/NativeOriginPolicy.swift"),
+                            str(root / "packages/masamune-whisker-firebase-app-check/ios/Sources/MasamuneWhiskerFirebaseAppCheck/AppCheckProviderPolicy.swift"),
+                            str(root / "tests/security/main.swift"), "-o", swift_output], check=True)
+            subprocess.run([swift_output], check=True)
 
 
 if __name__ == "__main__":

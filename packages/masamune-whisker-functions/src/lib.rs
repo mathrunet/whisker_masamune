@@ -5,6 +5,7 @@
 
 mod error;
 mod retry;
+mod transport;
 
 use std::{future::Future, pin::Pin, rc::Rc, sync::OnceLock, time::Duration};
 
@@ -15,17 +16,19 @@ pub use reqwest::{Method, Url};
 pub use retry::{RetryPolicy, retry, with_timeout};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+#[doc(hidden)]
+pub use transport::functions_client;
 
 /// Shared HTTP client (connect timeout 10 s, overall timeout 30 s unless a request overrides it).
 pub fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("http client")
-    })
+    CLIENT.get_or_init(|| client_builder().build().expect("http client"))
+}
+
+fn client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
 }
 
 /// Reads a response as JSON. Non-2xx statuses become [`ApiError::Http`]; an empty body is `null`.
@@ -45,7 +48,7 @@ pub async fn read_json(response: reqwest::Response) -> ApiResult<Value> {
 }
 
 /// Structured Firebase callable errors (status, message and application details).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum CallableFailure {
     Transport(ApiError),
     Remote {
@@ -72,17 +75,21 @@ impl std::fmt::Display for CallableFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Transport(error) => error.fmt(f),
-            Self::Remote {
-                status, message, ..
-            } => write!(f, "callable {status}: {message}"),
+            Self::Remote { http_status, .. } => write!(f, "callable error (http {http_status})"),
         }
+    }
+}
+
+impl std::fmt::Debug for CallableFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
 impl std::error::Error for CallableFailure {}
 
 /// Preserves existing backend errors, including structured Firebase failures.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum FunctionsError {
     Api(ApiError),
     Callable(Box<CallableFailure>),
@@ -138,8 +145,14 @@ impl std::fmt::Display for FunctionsError {
         match self {
             Self::Api(error) => error.fmt(f),
             Self::Callable(error) => error.fmt(f),
-            Self::Configuration(message) => write!(f, "configuration: {message}"),
+            Self::Configuration(_) => f.write_str("functions configuration error"),
         }
+    }
+}
+
+impl std::fmt::Debug for FunctionsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
@@ -267,6 +280,7 @@ pub struct RestApiFunctionsAdapter {
     endpoint: String,
     auth: Auth,
     timeout: Duration,
+    allow_local_http: bool,
 }
 
 impl RestApiFunctionsAdapter {
@@ -275,6 +289,7 @@ impl RestApiFunctionsAdapter {
             endpoint: endpoint.into().trim_end_matches('/').to_owned(),
             auth: Auth::none(),
             timeout: Duration::from_secs(30),
+            allow_local_http: false,
         }
     }
     pub fn with_auth(mut self, auth: Auth) -> Self {
@@ -283,6 +298,12 @@ impl RestApiFunctionsAdapter {
     }
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Allows HTTP to loopback endpoints for a local emulator.
+    pub fn allow_local_http(mut self) -> Self {
+        self.allow_local_http = true;
         self
     }
 
@@ -302,7 +323,7 @@ impl RestApiFunctionsAdapter {
         let timeout = request.timeout.unwrap_or(self.timeout);
         let mut headers = request.headers;
         let body = request.body;
-        let value = with_timeout(timeout, async {
+        tokio::time::timeout(timeout, async {
             headers.remove("accept");
             let token = self.auth.token(false).await?;
             if token.is_some() {
@@ -311,7 +332,8 @@ impl RestApiFunctionsAdapter {
             if body.is_some() {
                 headers.remove("content-type");
             }
-            let mut http = client()
+            let mut http = functions_client(&url, &headers, token.is_some(), self.allow_local_http)
+                .map_err(|message| FunctionsError::Configuration(message.into()))?
                 .request(request.method, url)
                 .headers(headers)
                 .header("Accept", "application/json")
@@ -322,10 +344,11 @@ impl RestApiFunctionsAdapter {
             if let Some(body) = &body {
                 http = http.json(body);
             }
-            read_json(http.send().await?).await
+            let response = http.send().await.map_err(ApiError::from)?;
+            read_json(response).await.map_err(FunctionsError::from)
         })
-        .await?;
-        Ok(value)
+        .await
+        .unwrap_or(Err(ApiError::Timeout.into()))
     }
 }
 

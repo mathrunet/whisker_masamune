@@ -17,6 +17,7 @@ pub struct CloudflareFunctionsAdapter {
     region: Option<RestApiFunctionsAdapter>,
     auth: Auth,
     timeout: Duration,
+    allow_local_http: bool,
 }
 
 impl CloudflareFunctionsAdapter {
@@ -27,14 +28,25 @@ impl CloudflareFunctionsAdapter {
             region: None,
             auth: Auth::none(),
             timeout: Duration::from_secs(30),
+            allow_local_http: false,
         }
     }
     pub fn with_region_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        self.region = Some(
-            RestApiFunctionsAdapter::new(endpoint)
-                .with_auth(self.auth.clone())
-                .with_timeout(self.timeout),
-        );
+        let adapter = RestApiFunctionsAdapter::new(endpoint)
+            .with_auth(self.auth.clone())
+            .with_timeout(self.timeout);
+        self.region = Some(if self.allow_local_http {
+            adapter.allow_local_http()
+        } else {
+            adapter
+        });
+        self
+    }
+    /// Allows HTTP to loopback endpoints for local edge and region workers.
+    pub fn allow_local_http(mut self) -> Self {
+        self.allow_local_http = true;
+        self.edge = self.edge.allow_local_http();
+        self.region = self.region.map(RestApiFunctionsAdapter::allow_local_http);
         self
     }
     pub fn with_auth(mut self, auth: Auth) -> Self {
