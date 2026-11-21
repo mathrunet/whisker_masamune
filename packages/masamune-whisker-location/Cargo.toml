@@ -1,0 +1,37 @@
+[package]
+name = "masamune-whisker-location"
+description = "Location permission, current position and position streams for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+[package.metadata.whisker.plugins.masamune-whisker-location]
+bin = "masamune-whisker-location-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-location-plugin"
+path = "bin/masamune_whisker_location_plugin.rs"
+test = false
+bench = false
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-bridge.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

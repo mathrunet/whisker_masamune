@@ -24,6 +24,13 @@ git repository or crates.io.
 | `masamune-whisker-audio-capture` | [Microphone capture as 16 kHz PCM16 chunks (iOS, Android, Web)](packages/masamune-whisker-audio-capture/README.md) |
 | `masamune-whisker-speech-recognition` | [On-device streaming speech recognition with partial results (Android)](packages/masamune-whisker-speech-recognition/README.md) |
 | `masamune-whisker-local-notification` | Daily scheduled local notifications |
+| `masamune-whisker-audio-session` | [Audio session, interruptions and route changes, lock screen / media notification Now Playing and remote commands, background playback (Android `mediaPlayback` foreground service)](packages/masamune-whisker-audio-session/README.md) |
+| `masamune-whisker-location` | [Location permission, current position and position streams with background updates (Android `location` foreground service)](packages/masamune-whisker-location/README.md) |
+| `masamune-whisker-activity` | [Motion activity recognition (still, walking, running, cycling, vehicle)](packages/masamune-whisker-activity/README.md) |
+| `masamune-whisker-geocoding` | [Reverse geocoding with the platform geocoder](packages/masamune-whisker-geocoding/README.md) |
+| `masamune-whisker-photo-library` | [Photo library permission, assets by date with locations, thumbnails](packages/masamune-whisker-photo-library/README.md) |
+| `masamune-whisker-deeplink` | [Custom URL schemes, Universal Links and App Links at launch and while running](packages/masamune-whisker-deeplink/README.md) |
+| `masamune-whisker-google-maps` | [Google Map element with markers, polylines, map styles and camera control (iOS 16+)](packages/masamune-whisker-google-maps/README.md) |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
 | `masamune-whisker-billing` | In-app subscriptions |
 | `masamune-whisker-admob` | AdMob banners and full-screen ads |
@@ -67,8 +74,8 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-shimmer` | Shimmer loading placeholders (`ShimmerBox`, `ShimmerMultiLine`) ([usage](packages/masamune-whisker-shimmer/README.md)) |
 | `masamune-whisker-ai-debugger` | [AI debugger overlay for dev and test builds](packages/masamune-whisker-ai-debugger/README.md): instructions, screenshots, crashes and slow operations to SamuraiAI, plus debug login, purchases, camera and dev-only voice input (feature `voice`) |
 
-Every native module is implemented for Android and iOS (iOS 15 or later) behind the same Rust
-API. Where a platform has no equivalent, the function's documentation says what it does there
+Every native module is implemented for Android and iOS (iOS 15 or later; `masamune-whisker-google-maps`
+needs iOS 16) behind the same Rust API. Where a platform has no equivalent, the function's documentation says what it does there
 (for example `exit_app` does nothing on iOS, where apps must not close themselves).
 
 ### iOS setup
@@ -101,6 +108,13 @@ app.project_plugin::<MasamuneLocalize>(|c| {
 });
 ```
 
+The device-feature crates `masamune-whisker-audio-session` (`background_audio`),
+`masamune-whisker-location` (usage descriptions, `background`), `masamune-whisker-activity`
+(`motion_usage`), `masamune-whisker-photo-library` (`photo_library_usage`),
+`masamune-whisker-deeplink` (URL schemes, associated domains, Android intent filters) and
+`masamune-whisker-google-maps` (API keys) ship project plugins (`app.project_plugin::<…>`) as well;
+see each README.
+
 `masamune-whisker-screen` restricts the iOS orientations (`ios_orientations` /
 `ipad_orientations`). Firebase modules use firebase-ios-sdk 12.19.2, the version
 `whisker-firebase` pins.
@@ -111,7 +125,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.9.7" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.10.0" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.10.0
+
+- **NEW** `masamune-whisker-audio-session`: audio session configuration and activation (audio
+  focus on Android), interruption and route change events, Now Playing info, lock screen / Control
+  Center / media notification controls with custom actions, remote commands, and a `mediaPlayback`
+  foreground service with a wake lock on Android.
+- **NEW** `masamune-whisker-location`: location permission (when in use / always, precise),
+  current and last known position, position streams with accuracy, distance filter and background
+  updates (a `location` foreground service on Android that can reuse an existing notification).
+- **NEW** `masamune-whisker-activity`: motion activity permission and stream
+  (`CMMotionActivityManager`, Activity Recognition Transition API).
+- **NEW** `masamune-whisker-deeplink`: custom scheme, Universal Link and App Link reception at
+  launch and while running, `DeeplinkMasamuneAdapter` with filtering, `parse_link`, and a CNG
+  plugin for URL schemes, associated domains and intent filters.
+- **NEW** `masamune-whisker-photo-library`: photo library permission (including limited access),
+  assets by creation date with locations, thumbnails and scaled images.
+- **NEW** `masamune-whisker-geocoding`: reverse geocoding with `CLGeocoder` /
+  `android.location.Geocoder`.
+- **NEW** `masamune-whisker-google-maps`: `GoogleMap` element (Google Maps SDK for iOS 10.x /
+  `play-services-maps` 20.1.0) with markers, polylines, map styles, camera moves and events, and a
+  CNG plugin for the API keys.
+
 ## 0.9.7
 
 - **NEW** `masamune-whisker-admob`: preload an interstitial on Android and iOS,
