@@ -4,14 +4,15 @@ use masamune_whisker_adapter::{AdapterError, MasamuneAdapter, StartFuture};
 use whisker::prelude::*;
 
 use crate::{
-    NotificationConfig, NotificationTap, Subscription, authorized, configure, initial_tap, on_tap,
-    rearm,
+    NotificationChannel, NotificationConfig, NotificationTap, Subscription, authorized, configure,
+    create_channel, initial_tap, on_tap, rearm,
 };
 
 /// Notification settings for [`masamune_whisker_adapter::MasamuneAdapters`] (Masamune's
 /// `LocalNotificationMasamuneAdapter`).
 ///
-/// `prepare` configures the channel and subscribes to [`on_tap`] once per runtime. `start`
+/// `prepare` creates the extra [`channels`](Self::channels), configures the channel and subscribes
+/// to [`on_tap`] once per runtime. `start`
 /// re-arms the saved schedules (when notifications are allowed) and reads [`initial_tap`]. Every
 /// tap is published to [`latest_tap`] and kept for [`take_pending_tap`].
 #[derive(Debug, Clone)]
@@ -19,6 +20,11 @@ pub struct LocalNotificationMasamuneAdapter {
     pub config: NotificationConfig<'static>,
     /// Re-arm the saved schedules after startup when notifications are allowed.
     pub rearm_on_start: bool,
+    /// Android channels created before `config` is applied (for example a
+    /// [`NotificationImportance::High`](crate::NotificationImportance::High) channel for urgent
+    /// notifications). A channel with the ID of `config` sets the importance of the default
+    /// channel when it is created for the first time.
+    pub channels: Vec<NotificationChannel>,
 }
 
 impl LocalNotificationMasamuneAdapter {
@@ -26,7 +32,14 @@ impl LocalNotificationMasamuneAdapter {
         Self {
             config,
             rearm_on_start: true,
+            channels: Vec::new(),
         }
+    }
+
+    /// Adds a channel created at startup (see [`channels`](Self::channels)).
+    pub fn channel(mut self, channel: NotificationChannel) -> Self {
+        self.channels.push(channel);
+        self
     }
 }
 
@@ -37,6 +50,9 @@ whisker::runtime_local! {
 
 impl MasamuneAdapter for LocalNotificationMasamuneAdapter {
     fn prepare(&self) -> Result<(), AdapterError> {
+        for channel in &self.channels {
+            create_channel(channel)?;
+        }
         configure(&self.config)?;
         SUBSCRIPTION.with(|subscription| {
             let mut subscription = subscription.borrow_mut();

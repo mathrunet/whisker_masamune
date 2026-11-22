@@ -13,8 +13,10 @@
 // Taps: the tap that launched the app is kept for `getInitialTap`; later taps are sent as the
 // `tap` event, queued while nobody observes it.
 //
-// Android notification channels and small icons have no iOS counterpart, so `configure` stores
-// nothing and the app icon is used.
+// Android notification channels and small icons have no iOS counterpart, so `configure` and
+// `createChannel` store nothing and the app icon is used. A schedule's `interruptionLevel`
+// (`passive`, `active`, `timeSensitive`) becomes the content's interruption level; Time Sensitive
+// needs the app's `com.apple.developer.usernotifications.time-sensitive` entitlement.
 
 import UIKit
 import UserNotifications
@@ -67,6 +69,36 @@ public final class LocalNotificationModule: Module {
                 return Bridge.ok(true)
             }
 
+            // createChannel / deleteChannel — Android only.
+            Function("createChannel") { _ in Bridge.ok(true) }
+            Function("deleteChannel") { _ in Bridge.ok(true) }
+
+            // channelStatus({ id }) -> every channel "exists"; enabled is the app's authorization.
+            Function("channelStatus") { _ in
+                Bridge.ok([
+                    "exists": true,
+                    "enabled": LocalNotifications.authorized(),
+                    "importance": "default",
+                ] as [String: Any])
+            }
+
+            // timeSensitiveSetting() -> "enabled" | "disabled" | "notSupported"
+            AsyncFunction("timeSensitiveSetting") { _, promise in
+                UNUserNotificationCenter.current().getNotificationSettings { settings in
+                    let value: String
+                    switch settings.timeSensitiveSetting {
+                    case .enabled: value = "enabled"
+                    case .disabled: value = "disabled"
+                    default: value = "notSupported"
+                    }
+                    Bridge.resolve(promise, value)
+                }
+            }
+
+            // Full-screen intents are Android only.
+            Function("canUseFullScreenIntent") { _ in Bridge.ok(false) }
+            Function("openFullScreenIntentSettings") { _ in Bridge.ok(false) }
+
             // status() -> "authorized" | "denied" | "notDetermined" (the cached authorization)
             Function("status") { _ in
                 Bridge.ok(LocalNotifications.status())
@@ -81,7 +113,7 @@ public final class LocalNotificationModule: Module {
                 }
             }
 
-            // scheduleDaily({ id, hour, minute, title, text, payload }) -> next fire time (ms)
+            // scheduleDaily({ id, hour, minute, title, text, payload, interruptionLevel? }) -> next fire time (ms)
             Function("scheduleDaily") { args in
                 var json = Bridge.args(args)
                 guard let id = json["id"] as? String else { return Bridge.err("No value for id") }
@@ -95,7 +127,8 @@ public final class LocalNotificationModule: Module {
                 return Bridge.ok(LocalNotifications.nextOccurrence(hour: hour, minute: minute))
             }
 
-            // scheduleOnce({ id, atMs, title, text, payload }) -> fire time (ms). Fails for past times.
+            // scheduleOnce({ id, atMs, title, text, payload, interruptionLevel? }) -> fire time (ms). Fails for
+            // past times.
             Function("scheduleOnce") { args in
                 var json = Bridge.args(args)
                 guard let id = json["id"] as? String else { return Bridge.err("No value for id") }
@@ -308,6 +341,7 @@ enum LocalNotifications {
         content.title = schedule["title"] as? String ?? ""
         content.body = schedule["text"] as? String ?? ""
         content.sound = .default
+        content.interruptionLevel = interruptionLevel(schedule["interruptionLevel"] as? String)
         var userInfo: [String: Any] = [idKey: id]
         if let payload = schedule["payload"] as? String { userInfo[payloadKey] = payload }
         content.userInfo = userInfo
@@ -316,6 +350,15 @@ enum LocalNotifications {
             if let error {
                 NSLog("MasamuneWhiskerLocalNotification: failed to schedule %@: %@", id, Bridge.message(error))
             }
+        }
+    }
+
+    /// The interruption level of a schedule (`active`, the iOS default, when missing or unknown).
+    static func interruptionLevel(_ value: String?) -> UNNotificationInterruptionLevel {
+        switch value {
+        case "passive": return .passive
+        case "timeSensitive": return .timeSensitive
+        default: return .active
         }
     }
 
@@ -358,7 +401,9 @@ private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterD
     ) {
         if notification.request.identifier.hasPrefix(LocalNotifications.identifierPrefix) {
             LocalNotifications.pruneExpired()
-            completionHandler([.banner, .list, .sound])
+            // Passive notifications only go to the list, like in the background.
+            let passive = notification.request.content.interruptionLevel == .passive
+            completionHandler(passive ? [.list] : [.banner, .list, .sound])
         } else if let next, next.responds(to: #selector(userNotificationCenter(_:willPresent:withCompletionHandler:))) {
             next.userNotificationCenter?(center, willPresent: notification, withCompletionHandler: completionHandler)
         } else {

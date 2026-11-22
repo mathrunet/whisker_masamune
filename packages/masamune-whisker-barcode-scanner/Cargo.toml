@@ -1,0 +1,46 @@
+[package]
+name = "masamune-whisker-barcode-scanner"
+description = "Camera QR code scanner element (AVFoundation / CameraX + ZXing) and pure-Rust QR decoding from image files for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+# CNG plugin: `app.plugin::<MasamuneBarcodeScanner>(|c| …)` in whisker.rs writes the iOS camera
+# usage description.
+[package.metadata.whisker.plugins.masamune-whisker-barcode-scanner]
+bin = "masamune-whisker-barcode-scanner-plugin"
+
+[[bin]]
+name = "masamune-whisker-barcode-scanner-plugin"
+path = "bin/masamune_whisker_barcode_scanner_plugin.rs"
+test = false
+bench = false
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+masamune-whisker-bridge.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true
+# Pure-Rust QR decoding of image files (no native code, no crypto). `rqrr` runs on a greyscale
+# buffer, so its `img` feature (a second `image` requirement) stays off.
+rqrr = { version = "0.11", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+[dev-dependencies]
+# Builds inverted and oversized variants of the fixtures (same features as above).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

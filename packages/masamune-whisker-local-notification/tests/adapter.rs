@@ -4,8 +4,12 @@ use std::rc::Rc;
 
 use masamune_whisker_adapter::MasamuneAdapters;
 use masamune_whisker_local_notification::{
-    LocalNotificationMasamuneAdapter, NotificationConfig, NotificationTap, Schedule, latest_tap,
-    on_tap, schedule, schedule_daily, schedule_daily_with_payload, schedule_once, take_pending_tap,
+    ChannelStatus, InterruptionLevel, LocalNotificationMasamuneAdapter, NotificationChannel,
+    NotificationConfig, NotificationImportance, NotificationOptions, NotificationSetting,
+    NotificationTap, Schedule, can_use_full_screen_intent, channel_enabled, channel_status,
+    create_channel, latest_tap, on_tap, schedule, schedule_daily, schedule_daily_with_options,
+    schedule_daily_with_payload, schedule_once, schedule_once_with_options, take_pending_tap,
+    time_sensitive_setting,
 };
 use serde_json::{Value, json};
 use whisker::Owner;
@@ -399,4 +403,167 @@ fn latest_tap_is_tracked_by_effects() {
         seen.take()
     });
     assert_eq!(seen, [None, Some(tap("night", None))]);
+}
+
+#[test]
+fn adapter_creates_channels_before_configuring() {
+    let adapter = adapter().channel(
+        NotificationChannel::new("urgent", "Urgent")
+            .description("Calls from the staff")
+            .importance(NotificationImportance::High),
+    );
+    let calls = run(adapter, Host::default().status("denied"));
+    assert_eq!(
+        methods(&calls),
+        ["createChannel", "configure", "status", "getInitialTap"]
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&calls[0].1).unwrap(),
+        json!({
+            "id": "urgent",
+            "name": "Urgent",
+            "description": "Calls from the staff",
+            "importance": "high",
+        })
+    );
+}
+
+#[test]
+fn schedule_options_are_sent_only_when_set() {
+    let host = Host::default()
+        .respond("scheduleOnce", r#"{"value":1795000000000}"#)
+        .respond("scheduleDaily", r#"{"value":1795000000000}"#);
+    let urgent = NotificationOptions::new()
+        .channel("urgent")
+        .interruption_level(InterruptionLevel::TimeSensitive)
+        .full_screen(true);
+    with_host(&host, |_| {
+        schedule_once_with_options("call", 1_795_000_000_000, "T", "X", Some("/call"), &urgent)
+            .unwrap();
+        schedule_daily_with_options(
+            "quiet",
+            7,
+            0,
+            "T",
+            "X",
+            None,
+            &NotificationOptions::new().interruption_level(InterruptionLevel::Passive),
+        )
+        .unwrap();
+        schedule_once_with_options(
+            "plain",
+            1_795_000_000_000,
+            "T",
+            "X",
+            None,
+            &NotificationOptions::default(),
+        )
+        .unwrap();
+    });
+    let calls = host.calls.take();
+    assert_eq!(
+        serde_json::from_str::<Value>(&calls[0].1).unwrap(),
+        json!({
+            "id": "call",
+            "atMs": 1_795_000_000_000_i64,
+            "title": "T",
+            "text": "X",
+            "payload": "/call",
+            "channelId": "urgent",
+            "interruptionLevel": "timeSensitive",
+            "fullScreen": true,
+        })
+    );
+    let daily = serde_json::from_str::<Value>(&calls[1].1).unwrap();
+    assert_eq!(daily["interruptionLevel"], json!("passive"));
+    assert!(daily.get("channelId").is_none() && daily.get("fullScreen").is_none());
+    let plain = serde_json::from_str::<Value>(&calls[2].1).unwrap();
+    assert_eq!(
+        plain.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["id", "atMs", "title", "text", "payload"]
+    );
+}
+
+#[test]
+fn channel_status_reads_native_state() {
+    let high = Host::default().respond(
+        "channelStatus",
+        r#"{"value":{"exists":true,"enabled":true,"importance":"high"}}"#,
+    );
+    assert_eq!(
+        with_host(&high, |_| (
+            channel_status("urgent"),
+            channel_enabled("urgent")
+        )),
+        (
+            Ok(Some(ChannelStatus {
+                enabled: true,
+                importance: NotificationImportance::High,
+            })),
+            true
+        )
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&high.calls.take()[0].1).unwrap(),
+        json!({ "id": "urgent" })
+    );
+    let blocked = Host::default().respond(
+        "channelStatus",
+        r#"{"value":{"exists":true,"enabled":false,"importance":"none"}}"#,
+    );
+    assert_eq!(
+        with_host(&blocked, |_| channel_status("urgent")),
+        Ok(Some(ChannelStatus {
+            enabled: false,
+            importance: NotificationImportance::None,
+        }))
+    );
+    let missing = Host::default().respond("channelStatus", r#"{"value":{"exists":false}}"#);
+    assert_eq!(with_host(&missing, |_| channel_status("x")), Ok(None));
+    assert!(!with_host(&missing, |_| channel_enabled("x")));
+}
+
+#[test]
+fn create_channel_defaults_to_default_importance() {
+    let host = Host::default();
+    with_host(&host, |_| {
+        create_channel(&NotificationChannel::new("news", "News")).unwrap()
+    });
+    assert_eq!(
+        serde_json::from_str::<Value>(&host.calls.take()[0].1).unwrap()["importance"],
+        json!("default")
+    );
+}
+
+#[test]
+fn time_sensitive_setting_and_full_screen_queries() {
+    for (answer, expected) in [
+        (r#"{"value":"enabled"}"#, NotificationSetting::Enabled),
+        (r#"{"value":"disabled"}"#, NotificationSetting::Disabled),
+        (
+            r#"{"value":"notSupported"}"#,
+            NotificationSetting::NotSupported,
+        ),
+        ("not json", NotificationSetting::NotSupported),
+    ] {
+        let host = Host::default().respond("timeSensitiveSetting", answer);
+        let seen = with_host(&host, |_| {
+            let seen = Rc::new(RefCell::new(None));
+            let sink = seen.clone();
+            let root = Owner::new(None);
+            root.with(|| {
+                whisker::spawn_local(async move {
+                    *sink.borrow_mut() = Some(time_sensitive_setting().await);
+                })
+            });
+            whisker::run_until_stalled();
+            root.dispose();
+            seen.take()
+        });
+        assert_eq!(seen, Some(expected));
+    }
+    let allowed = Host::default().respond("canUseFullScreenIntent", r#"{"value":true}"#);
+    assert!(with_host(&allowed, |_| can_use_full_screen_intent()));
+    let broken = Host::default().respond("canUseFullScreenIntent", "not json");
+    assert!(!with_host(&broken, |_| can_use_full_screen_intent()));
 }

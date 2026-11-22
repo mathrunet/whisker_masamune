@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.13.0
+
+- **NEW** `masamune-whisker-barcode-scanner`: `BarcodeScanner` camera preview element that reports
+  QR codes (iOS `AVCaptureSession` + `AVCaptureMetadataOutput`, Android CameraX 1.4.2 + ZXing core
+  3.5.3) with `active` start / stop, torch, front camera, the camera permission flow
+  (`on_permission`, `camera_permission`, `request_camera_permission`, `open_camera_settings`),
+  duplicate filtering (`ScanDebouncer`) and accessibility `identifier` / `label`;
+  `decode_qr_from_image` / `decode_qr_from_bytes` / `decode_qr_codes` read QR codes from PNG / JPEG
+  images in pure Rust (`image` + `rqrr`); `RuntimeBarcodeScannerAdapter` feeds scans in tests and
+  the `test` flavor; a CNG plugin writes `NSCameraUsageDescription`.
+- **NEW** `masamune-whisker-local-notification`: `NotificationChannel` / `create_channel` /
+  `delete_channel` with `NotificationImportance` (including `High`) and
+  `LocalNotificationMasamuneAdapter::channel`; `schedule_daily_with_options` /
+  `schedule_once_with_options` with `NotificationOptions` (Android channel and full-screen intent,
+  iOS `InterruptionLevel` passive / active / time sensitive); `channel_status` / `channel_enabled`,
+  `time_sensitive_setting`, `can_use_full_screen_intent` and `open_full_screen_intent_settings`.
+  Calls without options behave as before. iOS passive notifications go to the list only while
+  the app is in the foreground. The app declares `USE_FULL_SCREEN_INTENT` and the Time Sensitive
+  entitlement itself.
+- **NEW** `masamune-whisker-audio-playlist`: gapless queue playback (iOS `AVQueuePlayer`, Android
+  Media3 ExoPlayer 1.9.4) of `https://` URLs and local files with item / drain / error events,
+  skip, remove, volume and announcement interrupts that pause or duck the queue and restore it at
+  the same position. `RuntimeAudioPlaylistAdapter` simulates the queue for tests.
+- **NEW** `masamune-whisker-wakelock`: keep the screen awake (iOS `isIdleTimerDisabled`, Android
+  `FLAG_KEEP_SCREEN_ON`) with `RuntimeWakelockAdapter` for tests.
+
 ## 0.12.0
 
 - **NEW** `masamune-whisker-local-notification`: `schedule_once` schedules a notification once at a

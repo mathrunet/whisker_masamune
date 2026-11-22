@@ -21,16 +21,19 @@ git repository or crates.io.
 | `masamune-whisker-share` | OS share sheet |
 | `masamune-whisker-youtube` | [YouTube player (IFrame Player API in a native web view) and a 16:9 `YouTube` box](packages/masamune-whisker-youtube/README.md) |
 | `masamune-whisker-image-picker` | Gallery / camera picker with resizing |
+| `masamune-whisker-barcode-scanner` | [QR code scanner element (iOS AVFoundation, Android CameraX + ZXing) with permission flow, torch and duplicate filtering, and pure-Rust QR decoding of image files](packages/masamune-whisker-barcode-scanner/README.md) |
 | `masamune-whisker-audio-capture` | [Microphone capture as 16 kHz PCM16 chunks (iOS, Android, Web)](packages/masamune-whisker-audio-capture/README.md) |
 | `masamune-whisker-speech-recognition` | [On-device streaming speech recognition with partial results (Android)](packages/masamune-whisker-speech-recognition/README.md) |
-| `masamune-whisker-local-notification` | Daily and one-off local notifications with payloads and tap handling (launch and running) |
+| `masamune-whisker-local-notification` | Daily and one-off local notifications with payloads and tap handling (launch and running), Android channels with importance (heads-up) and full-screen intents, iOS interruption levels (Time Sensitive), channel / Time Sensitive state queries |
 | `masamune-whisker-audio-session` | [Audio session, interruptions and route changes, lock screen / media notification Now Playing and remote commands, background playback (Android `mediaPlayback` foreground service)](packages/masamune-whisker-audio-session/README.md) |
+| `masamune-whisker-audio-playlist` | [Gapless queue playback (iOS `AVQueuePlayer`, Android Media3 ExoPlayer) with announcement interrupts that pause or duck the queue; background playback with audio-session](packages/masamune-whisker-audio-playlist/README.md) |
 | `masamune-whisker-location` | [Location permission, current position and position streams with background updates (Android `location` foreground service)](packages/masamune-whisker-location/README.md) |
 | `masamune-whisker-activity` | [Motion activity recognition (still, walking, running, cycling, vehicle)](packages/masamune-whisker-activity/README.md) |
 | `masamune-whisker-geocoding` | [Reverse geocoding with the platform geocoder](packages/masamune-whisker-geocoding/README.md) |
 | `masamune-whisker-photo-library` | [Photo library permission, assets by date with locations, thumbnails](packages/masamune-whisker-photo-library/README.md) |
 | `masamune-whisker-deeplink` | [Custom URL schemes, Universal Links and App Links at launch and while running](packages/masamune-whisker-deeplink/README.md) |
 | `masamune-whisker-google-maps` | [Google Map element with markers, polylines, map styles and camera control (iOS 16+)](packages/masamune-whisker-google-maps/README.md) |
+| `masamune-whisker-wakelock` | [Keep the screen awake (iOS idle timer, Android `FLAG_KEEP_SCREEN_ON`)](packages/masamune-whisker-wakelock/README.md) |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
 | `masamune-whisker-billing` | In-app subscriptions |
 | `masamune-whisker-admob` | AdMob banners and full-screen ads |
@@ -114,6 +117,8 @@ The device-feature crates `masamune-whisker-audio-session` (`background_audio`),
 `masamune-whisker-deeplink` (URL schemes, associated domains, Android intent filters) and
 `masamune-whisker-google-maps` (API keys) ship project plugins (`app.project_plugin::<…>`) as well;
 see each README.
+`masamune-whisker-barcode-scanner` writes `NSCameraUsageDescription` with
+`app.plugin::<MasamuneBarcodeScanner>(|c| { c.camera_usage("…"); })`.
 
 `masamune-whisker-screen` restricts the iOS orientations (`ios_orientations` /
 `ipad_orientations`). Firebase modules use firebase-ios-sdk 12.19.2, the version
@@ -125,7 +130,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.12.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.13.0" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]

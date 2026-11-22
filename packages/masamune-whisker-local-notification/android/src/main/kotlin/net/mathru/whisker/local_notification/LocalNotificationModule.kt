@@ -6,6 +6,10 @@
 // running activity receives it in onNewIntent). The launch intent is read by `getInitialTap`; later intents are sent as
 // the `tap` event, queued while nobody observes it. Each intent is marked as consumed so it is delivered once, and
 // intents relaunched from the recents screen are ignored.
+//
+// Schedules may name a channel created with `createChannel` (its importance decides how the notification interrupts) and
+// ask for a full-screen intent (the content intent, which also opens the app on an idle or locked device; the app must
+// declare USE_FULL_SCREEN_INTENT). Channel importances are also saved, for the notification priority before Android 8.
 
 package net.mathru.whisker.local_notification
 
@@ -48,6 +52,8 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object LocalNotifications {
     private const val SCHEDULES = "MasamuneWhiskerLocalNotification.schedules"
     private const val CONFIG = "MasamuneWhiskerLocalNotification.config"
+    private const val CHANNELS = "MasamuneWhiskerLocalNotification.channels"
+    private const val USE_FULL_SCREEN_INTENT = "android.permission.USE_FULL_SCREEN_INTENT"
     private const val ASSET_PREFIX = "file:///android_asset/"
     private const val DEFAULT_CHANNEL_ID = "default"
 
@@ -81,11 +87,14 @@ internal object LocalNotifications {
         }
     }
 
-    /** Whether notifications are allowed for both the app and the channel. */
-    fun authorized(context: Context): Boolean {
+    /** Whether notifications are allowed for both the app and the configured channel. */
+    fun authorized(context: Context): Boolean = channelEnabled(context, channelId(context))
+
+    /** Whether the app may post notifications and the channel [id] (when it exists) is not blocked. */
+    private fun channelEnabled(context: Context, id: String): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(channelId(context))
+            val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(id)
             if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return false
         }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -95,6 +104,90 @@ internal object LocalNotifications {
         }
         return true
     }
+
+    // ---- channels ---------------------------------------------------------------------------
+
+    private fun importanceValue(name: String): Int = when (name) {
+        "none" -> NotificationManagerCompat.IMPORTANCE_NONE
+        "min" -> NotificationManagerCompat.IMPORTANCE_MIN
+        "low" -> NotificationManagerCompat.IMPORTANCE_LOW
+        "high" -> NotificationManagerCompat.IMPORTANCE_HIGH
+        else -> NotificationManagerCompat.IMPORTANCE_DEFAULT
+    }
+
+    private fun importanceName(value: Int): String = when {
+        value == NotificationManagerCompat.IMPORTANCE_NONE -> "none"
+        value <= NotificationManagerCompat.IMPORTANCE_MIN -> "min"
+        value == NotificationManagerCompat.IMPORTANCE_LOW -> "low"
+        value >= NotificationManagerCompat.IMPORTANCE_HIGH -> "high"
+        else -> "default"
+    }
+
+    private fun channels(context: Context) = context.getSharedPreferences(CHANNELS, Context.MODE_PRIVATE)
+
+    /** Creates (or renames) a channel from `{ id, name, description, importance }`. */
+    fun createChannel(context: Context, json: JSONObject) {
+        val id = json.getString("id")
+        val importance = json.optString("importance").ifBlank { "default" }
+        channels(context).edit().putString(id, importance).apply()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val name = json.optString("name").ifBlank { id }
+        val channel = NotificationChannel(id, name, importanceValue(importance))
+        json.optString("description").takeIf { it.isNotBlank() }?.let { channel.description = it }
+        context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+    }
+
+    fun deleteChannel(context: Context, id: String) {
+        channels(context).edit().remove(id).apply()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        context.getSystemService(NotificationManager::class.java).deleteNotificationChannel(id)
+    }
+
+    /** `{ exists, enabled, importance }` of the channel [id]. Before Android 8 every channel exists with its saved importance. */
+    fun channelStatus(context: Context, id: String): JSONObject {
+        val importance: String
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(id)
+                ?: return JSONObject().put("exists", false)
+            importance = importanceName(channel.importance)
+        } else {
+            importance = channels(context).getString(id, null) ?: "default"
+        }
+        return JSONObject()
+            .put("exists", true)
+            .put("enabled", channelEnabled(context, id))
+            .put("importance", importance)
+    }
+
+    /** The channel of a schedule: its `channelId` when that channel exists, else the configured one. */
+    private fun scheduleChannel(context: Context, schedule: JSONObject): String {
+        val requested = string(schedule, "channelId")?.takeIf { it.isNotBlank() } ?: return channelId(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            context.getSystemService(NotificationManager::class.java).getNotificationChannel(requested) == null
+        ) {
+            return channelId(context)
+        }
+        return requested
+    }
+
+    /** Notification priority used before Android 8, from the channel's saved importance. */
+    private fun priority(context: Context, channel: String, fullScreen: Boolean): Int {
+        if (fullScreen) return NotificationCompat.PRIORITY_HIGH
+        return when (channels(context).getString(channel, null)) {
+            "min" -> NotificationCompat.PRIORITY_MIN
+            "low" -> NotificationCompat.PRIORITY_LOW
+            "high" -> NotificationCompat.PRIORITY_HIGH
+            else -> NotificationCompat.PRIORITY_DEFAULT
+        }
+    }
+
+    /** Whether full-screen intents are shown: the Android 14 grant, or the declared permission before. */
+    fun canUseFullScreenIntent(context: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= 34) {
+            context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        } else {
+            ContextCompat.checkSelfPermission(context, USE_FULL_SCREEN_INTENT) == PackageManager.PERMISSION_GRANTED
+        }
 
     fun requestCode(id: String): Int = id.hashCode()
 
@@ -204,8 +297,10 @@ internal object LocalNotifications {
 
     fun show(context: Context, id: String) {
         val schedule = load(context, id) ?: return
-        if (!authorized(context)) return
         ensureChannel(context)
+        val channel = scheduleChannel(context, schedule)
+        if (!channelEnabled(context, channel)) return
+        val fullScreen = schedule.optBoolean("fullScreen", false)
         // The launch intent itself (MAIN / LAUNCHER) keeps the task's root intent equal to the launcher's, so opening the
         // app from the launcher later resumes the task instead of stacking a second activity.
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
@@ -216,12 +311,19 @@ internal object LocalNotifications {
         val content = launch?.let {
             PendingIntent.getActivity(context, requestCode(id), it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
-        val notification = NotificationCompat.Builder(context, channelId(context))
+        val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(smallIcon(context))
             .setContentTitle(schedule.optString("title"))
             .setContentText(schedule.optString("text"))
             .setAutoCancel(true)
-            .apply { if (content != null) setContentIntent(content) }
+            .setPriority(priority(context, channel, fullScreen))
+            .apply {
+                if (content != null) {
+                    setContentIntent(content)
+                    // Opening the app this way carries the tap extras, so it is reported like a tap.
+                    if (fullScreen) setFullScreenIntent(content, true)
+                }
+            }
             .build()
         try {
             NotificationManagerCompat.from(context).notify(requestCode(id), notification)
@@ -312,6 +414,63 @@ class LocalNotificationModule : Module() {
             }
         }
 
+        // createChannel({ id, name, description, importance }) — creates or renames a notification channel.
+        Function("createChannel") { args ->
+            try {
+                val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
+                LocalNotifications.createChannel(context, Bridge.args(args))
+                Bridge.ok(true)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
+        // deleteChannel({ id })
+        Function("deleteChannel") { args ->
+            val context = WhiskerApplication.appContext
+            if (context != null) LocalNotifications.deleteChannel(context, Bridge.args(args).optString("id"))
+            Bridge.ok(true)
+        }
+
+        // channelStatus({ id }) -> { exists, enabled, importance }
+        Function("channelStatus") { args ->
+            val context = WhiskerApplication.appContext ?: return@Function Bridge.ok(JSONObject().put("exists", false))
+            Bridge.ok(LocalNotifications.channelStatus(context, Bridge.args(args).optString("id")))
+        }
+
+        // timeSensitiveSetting() -> "notSupported" (an iOS setting)
+        AsyncFunction("timeSensitiveSetting") { _, promise ->
+            Bridge.resolve(promise, "notSupported")
+        }
+
+        // canUseFullScreenIntent() -> whether full-screen intents are shown
+        Function("canUseFullScreenIntent") { _ ->
+            val context = WhiskerApplication.appContext
+            Bridge.ok(context != null && LocalNotifications.canUseFullScreenIntent(context))
+        }
+
+        // openFullScreenIntentSettings() — the full-screen intent grant (Android 14+) or the notification settings.
+        Function("openFullScreenIntentSettings") { _ ->
+            try {
+                val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")
+                val intent = if (Build.VERSION.SDK_INT >= 34) {
+                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${activity.packageName}"))
+                } else {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                }
+                try {
+                    activity.startActivity(intent)
+                } catch (_: ActivityNotFoundException) {
+                    activity.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${activity.packageName}")),
+                    )
+                }
+                Bridge.ok(true)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
         // status() -> "authorized" | "denied"
         Function("status") { _ ->
             val context = WhiskerApplication.appContext
@@ -349,7 +508,7 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // scheduleDaily({ id, hour, minute, title, text, payload }) -> next fire time (ms)
+        // scheduleDaily({ id, hour, minute, title, text, payload, channelId?, fullScreen?, interruptionLevel? }) -> next fire time (ms)
         Function("scheduleDaily") { args ->
             try {
                 val json = Bridge.args(args)
@@ -366,7 +525,8 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // scheduleOnce({ id, atMs, title, text, payload }) -> fire time (ms). Fails for past times.
+        // scheduleOnce({ id, atMs, title, text, payload, channelId?, fullScreen?, interruptionLevel? }) -> fire time (ms).
+        // Fails for past times.
         Function("scheduleOnce") { args ->
             try {
                 val json = Bridge.args(args)

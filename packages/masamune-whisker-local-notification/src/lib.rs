@@ -44,6 +44,33 @@
 //! let subscription = masamune_whisker_local_notification::on_tap(|tap| { /* … */ });
 //! ```
 //!
+//! # Urgent notifications
+//!
+//! [`schedule_daily_with_options`] / [`schedule_once_with_options`] take [`NotificationOptions`]:
+//!
+//! - `channel` (Android): post to a channel created with [`create_channel`], whose
+//!   [`NotificationImportance`] decides how the notification interrupts (`High` peeks in as a
+//!   heads-up notification and makes a sound). Without it, the channel of [`configure`] is used.
+//!   [`LocalNotificationMasamuneAdapter::channel`] creates channels at startup.
+//! - `full_screen` (Android): also attach the content intent as a full-screen intent, so an idle or
+//!   locked device opens the app at once (like an alarm or an incoming call). Android 14 and later
+//!   grant this only to calling and alarm apps; check [`can_use_full_screen_intent`] and send the
+//!   user to [`open_full_screen_intent_settings`]. The app must declare
+//!   `android.permission.USE_FULL_SCREEN_INTENT` itself (for example with whisker-cng's
+//!   `AndroidPermissions` plugin) and Google Play requires a declaration for it, which is why this
+//!   crate does not add it. Opening the app this way is reported like a tap ([`on_tap`]).
+//! - `interruption_level` (iOS): [`InterruptionLevel::Passive`] (no sound, no screen wake),
+//!   `Active` (the default) or `TimeSensitive` (breaks through Focus and scheduled summaries). Time
+//!   Sensitive needs the app's `com.apple.developer.usernotifications.time-sensitive` entitlement
+//!   (enable the "Time Sensitive Notifications" capability of the App ID and add the key to the
+//!   app's entitlements); without it iOS delivers the notification as `Active`. The user can turn
+//!   it off per app: read it with [`time_sensitive_setting`].
+//!
+//! [`channel_status`] / [`channel_enabled`] tell whether the user turned a channel off or lowered
+//! its importance in the system settings (Android; on iOS they report the app's permission).
+//! Options that do not apply to a platform are ignored there, and calls without options keep the
+//! previous behavior.
+//!
 //! # Platforms
 //!
 //! On iOS the schedules are `UNCalendarNotificationTrigger` requests (repeating for daily ones),
@@ -113,6 +140,279 @@ pub struct NotificationTap {
     /// The payload passed when scheduling, if any.
     #[serde(default)]
     pub payload: Option<String>,
+}
+
+/// Importance of an Android notification channel (`NotificationManager.IMPORTANCE_*`).
+///
+/// It decides how notifications on the channel interrupt. The user can change it in the system
+/// settings, and an app can only lower it afterwards: to raise it, create a channel with a new ID
+/// (a deleted channel that is created again with the same ID gets its old settings back).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum NotificationImportance {
+    /// The channel is blocked (only reported by [`channel_status`]).
+    None,
+    /// Shown in the shade only, collapsed.
+    Min,
+    /// Shown everywhere, without sound.
+    Low,
+    /// Shown everywhere, with sound (the importance of the [`configure`] channel).
+    #[default]
+    Default,
+    /// Sound and a heads-up notification.
+    High,
+}
+
+impl NotificationImportance {
+    fn as_native(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Min => "min",
+            Self::Low => "low",
+            Self::Default => "default",
+            Self::High => "high",
+        }
+    }
+
+    fn from_native(value: &str) -> Self {
+        match value {
+            "none" => Self::None,
+            "min" => Self::Min,
+            "low" => Self::Low,
+            "high" => Self::High,
+            _ => Self::Default,
+        }
+    }
+}
+
+/// An Android notification channel created with [`create_channel`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotificationChannel {
+    /// Channel ID, passed to [`NotificationOptions::channel`].
+    pub id: String,
+    /// Name shown in the system settings.
+    pub name: String,
+    /// Description shown in the system settings (empty for none).
+    pub description: String,
+    /// Importance when the channel is created.
+    pub importance: NotificationImportance,
+}
+
+impl NotificationChannel {
+    /// A channel with [`NotificationImportance::Default`] and no description.
+    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            description: String::new(),
+            importance: NotificationImportance::Default,
+        }
+    }
+
+    /// Sets the description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// Sets the importance.
+    pub fn importance(mut self, importance: NotificationImportance) -> Self {
+        self.importance = importance;
+        self
+    }
+}
+
+/// How an iOS notification interrupts (`UNNotificationInterruptionLevel`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum InterruptionLevel {
+    /// Added to the list without sound or lighting up the screen.
+    Passive,
+    /// Presented at once with sound (the iOS default).
+    #[default]
+    Active,
+    /// Presented at once, also during Focus and outside scheduled summaries. Needs the Time
+    /// Sensitive entitlement (see the crate documentation).
+    TimeSensitive,
+}
+
+impl InterruptionLevel {
+    fn as_native(self) -> &'static str {
+        match self {
+            Self::Passive => "passive",
+            Self::Active => "active",
+            Self::TimeSensitive => "timeSensitive",
+        }
+    }
+}
+
+/// Per-notification options of [`schedule_daily_with_options`] / [`schedule_once_with_options`].
+///
+/// The default keeps the behavior of the functions without options.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NotificationOptions {
+    channel_id: Option<String>,
+    interruption_level: Option<InterruptionLevel>,
+    full_screen: bool,
+}
+
+impl NotificationOptions {
+    /// No options.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Posts to the Android channel `channel_id` (created with [`create_channel`]; a missing
+    /// channel falls back to the [`configure`] channel). Ignored on iOS.
+    pub fn channel(mut self, channel_id: impl Into<String>) -> Self {
+        self.channel_id = Some(channel_id.into());
+        self
+    }
+
+    /// Sets the iOS interruption level. Ignored on Android (use a channel's importance).
+    pub fn interruption_level(mut self, level: InterruptionLevel) -> Self {
+        self.interruption_level = Some(level);
+        self
+    }
+
+    /// Attaches a full-screen intent on Android (see the crate documentation). Ignored on iOS.
+    pub fn full_screen(mut self, full_screen: bool) -> Self {
+        self.full_screen = full_screen;
+        self
+    }
+
+    /// The channel set with [`channel`](Self::channel).
+    pub fn get_channel(&self) -> Option<&str> {
+        self.channel_id.as_deref()
+    }
+
+    /// The interruption level set with [`interruption_level`](Self::interruption_level).
+    pub fn get_interruption_level(&self) -> Option<InterruptionLevel> {
+        self.interruption_level
+    }
+
+    /// Whether a full-screen intent is attached.
+    pub fn is_full_screen(&self) -> bool {
+        self.full_screen
+    }
+
+    /// Adds the set options to a schedule request (nothing for the default).
+    fn extend(&self, request: &mut serde_json::Value) {
+        let Some(map) = request.as_object_mut() else {
+            return;
+        };
+        if let Some(channel_id) = &self.channel_id {
+            map.insert("channelId".into(), json!(channel_id));
+        }
+        if let Some(level) = self.interruption_level {
+            map.insert("interruptionLevel".into(), json!(level.as_native()));
+        }
+        if self.full_screen {
+            map.insert("fullScreen".into(), json!(true));
+        }
+    }
+}
+
+/// Creates (or renames) an Android notification channel. Returns `true` on success.
+///
+/// Creating an existing channel updates its name and description; its importance can only be
+/// lowered (see [`NotificationImportance`]). iOS has no channels: the call does nothing and
+/// succeeds.
+pub fn create_channel(channel: &NotificationChannel) -> NativeResult<bool> {
+    module().call(
+        "createChannel",
+        &json!({
+            "id": channel.id,
+            "name": channel.name,
+            "description": channel.description,
+            "importance": channel.importance.as_native(),
+        }),
+    )
+}
+
+/// Deletes an Android notification channel (does nothing on iOS).
+pub fn delete_channel(id: &str) -> NativeResult<bool> {
+    module().call("deleteChannel", &json!({ "id": id }))
+}
+
+/// State of a notification channel, from [`channel_status`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelStatus {
+    /// Whether notifications on the channel are shown: the app may post notifications and the
+    /// channel is not blocked.
+    pub enabled: bool,
+    /// The current importance, including changes the user made in the system settings.
+    pub importance: NotificationImportance,
+}
+
+#[derive(Deserialize)]
+struct NativeChannelStatus {
+    #[serde(default)]
+    exists: bool,
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    importance: String,
+}
+
+/// The state of the channel `id`, or `None` when it has not been created.
+///
+/// On iOS (no channels) every ID exists, `enabled` is the app's permission ([`authorized`]) and
+/// the importance is [`NotificationImportance::Default`].
+pub fn channel_status(id: &str) -> NativeResult<Option<ChannelStatus>> {
+    let status: Option<NativeChannelStatus> =
+        module().call("channelStatus", &json!({ "id": id }))?;
+    Ok(status
+        .filter(|status| status.exists)
+        .map(|status| ChannelStatus {
+            enabled: status.enabled,
+            importance: NotificationImportance::from_native(&status.importance),
+        }))
+}
+
+/// Whether notifications on the channel `id` are shown (`false` when it does not exist or on
+/// errors). See [`channel_status`].
+pub fn channel_enabled(id: &str) -> bool {
+    matches!(channel_status(id), Ok(Some(status)) if status.enabled)
+}
+
+/// A per-app notification setting the user can change (`UNNotificationSetting`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationSetting {
+    /// The setting is on.
+    Enabled,
+    /// The user turned it off.
+    Disabled,
+    /// The setting does not apply: Android, or an iOS app without the entitlement.
+    NotSupported,
+}
+
+/// Whether the user allows Time Sensitive notifications for this app
+/// (`UNNotificationSettings.timeSensitiveSetting`). Android and errors report
+/// [`NotificationSetting::NotSupported`].
+pub async fn time_sensitive_setting() -> NotificationSetting {
+    match module()
+        .call_async::<_, String>("timeSensitiveSetting", &json!({}))
+        .await
+        .as_deref()
+    {
+        Ok("enabled") => NotificationSetting::Enabled,
+        Ok("disabled") => NotificationSetting::Disabled,
+        _ => NotificationSetting::NotSupported,
+    }
+}
+
+/// Whether full-screen intents are shown (Android: `NotificationManager.canUseFullScreenIntent()`
+/// on Android 14 and later, the `USE_FULL_SCREEN_INTENT` declaration before). Always `false` on
+/// iOS.
+pub fn can_use_full_screen_intent() -> bool {
+    module()
+        .call::<_, bool>("canUseFullScreenIntent", &json!({}))
+        .unwrap_or(false)
+}
+
+/// Opens the system page where the user allows full-screen intents for this app (Android 14 and
+/// later; the app's notification settings before). Returns `false` on iOS.
+pub fn open_full_screen_intent_settings() -> NativeResult<bool> {
+    module().call("openFullScreenIntentSettings", &json!({}))
 }
 
 /// Sets the notification channel and small icon (once at startup).
@@ -192,17 +492,38 @@ pub fn schedule_daily_with_payload(
     text: &str,
     payload: Option<&str>,
 ) -> NativeResult<i64> {
-    module().call(
-        "scheduleDaily",
-        &json!({
-            "id": id,
-            "hour": hour,
-            "minute": minute,
-            "title": title,
-            "text": text,
-            "payload": payload,
-        }),
+    schedule_daily_with_options(
+        id,
+        hour,
+        minute,
+        title,
+        text,
+        payload,
+        &NotificationOptions::default(),
     )
+}
+
+/// [`schedule_daily_with_payload`] with [`NotificationOptions`] (channel, full-screen intent,
+/// interruption level). The options are saved with the schedule and apply to every occurrence.
+pub fn schedule_daily_with_options(
+    id: &str,
+    hour: u32,
+    minute: u32,
+    title: &str,
+    text: &str,
+    payload: Option<&str>,
+    options: &NotificationOptions,
+) -> NativeResult<i64> {
+    let mut request = json!({
+        "id": id,
+        "hour": hour,
+        "minute": minute,
+        "title": title,
+        "text": text,
+        "payload": payload,
+    });
+    options.extend(&mut request);
+    module().call("scheduleDaily", &request)
 }
 
 /// Schedules a notification once at `at_ms` (UTC milliseconds), replacing any schedule with the
@@ -217,16 +538,35 @@ pub fn schedule_once(
     text: &str,
     payload: Option<&str>,
 ) -> NativeResult<i64> {
-    module().call(
-        "scheduleOnce",
-        &json!({
-            "id": id,
-            "atMs": at_ms,
-            "title": title,
-            "text": text,
-            "payload": payload,
-        }),
+    schedule_once_with_options(
+        id,
+        at_ms,
+        title,
+        text,
+        payload,
+        &NotificationOptions::default(),
     )
+}
+
+/// [`schedule_once`] with [`NotificationOptions`] (channel, full-screen intent, interruption
+/// level).
+pub fn schedule_once_with_options(
+    id: &str,
+    at_ms: i64,
+    title: &str,
+    text: &str,
+    payload: Option<&str>,
+    options: &NotificationOptions,
+) -> NativeResult<i64> {
+    let mut request = json!({
+        "id": id,
+        "atMs": at_ms,
+        "title": title,
+        "text": text,
+        "payload": payload,
+    });
+    options.extend(&mut request);
+    module().call("scheduleOnce", &request)
 }
 
 /// Returns the saved schedule (`None` for a one-off schedule that has already fired).
