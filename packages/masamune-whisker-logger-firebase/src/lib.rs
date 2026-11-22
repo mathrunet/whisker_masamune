@@ -124,6 +124,16 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
     }
 }
 
+/// Sets (or, with `None`, clears) the Analytics user ID attached to later events, like
+/// `FirebaseAnalytics.setUserId`.
+///
+/// Call it on the UI thread after Firebase is initialized (for example after creating the
+/// [`FirebaseLoggerAdapter`]). Pass an opaque, non-personal ID (such as the auth uid), never an
+/// email address or a name.
+pub fn set_user_id(id: Option<&str>) -> Result<(), FirebaseError> {
+    Analytics::instance()?.set_user_id(id)
+}
+
 fn param(value: &LogValue) -> Param {
     match value {
         LogValue::String(value) => Param::String(value.clone()),

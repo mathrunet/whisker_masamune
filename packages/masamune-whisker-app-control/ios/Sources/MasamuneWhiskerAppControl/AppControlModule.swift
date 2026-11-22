@@ -1,4 +1,5 @@
-// Opens URLs in external apps (browser, store), locks the screen orientation and styles the window.
+// Opens URLs in external apps (browser, store), locks the screen orientation, styles the window and
+// reports foreground / background changes (`lifecycle` event, see `LifecycleObserver`).
 //
 // The host app owns the root view controller, so the orientation lock and the status bar style are
 // applied by switching that controller to a runtime subclass which overrides
@@ -10,9 +11,24 @@ import WhiskerModule
 
 @WhiskerModule
 public final class AppControlModule: Module {
+    private let lifecycle = LifecycleObserver()
+
     public override func definition() -> ModuleDefinition {
         ModuleDefinition {
             Name("AppControl")
+            Events("lifecycle")
+
+            OnStartObserving("lifecycle") { [weak self] in
+                Bridge.onMain { self?.lifecycle.start { state in self?.sendEvent("lifecycle", .string("\"\(state)\"")) } }
+            }
+            OnStopObserving("lifecycle") { [weak self] in
+                Bridge.onMain { self?.lifecycle.stop() }
+            }
+
+            // currentLifecycle() -> "foreground" | "background"
+            Function("currentLifecycle") { _ in
+                Bridge.ok(LifecycleObserver.current())
+            }
 
             // openUrl({ url }) -> whether it was opened (false if no app can handle it)
             Function("openUrl") { args in
@@ -195,5 +211,40 @@ enum RootControllerOverride {
             value() ?? fallback(object, selector)
         }
         class_addMethod(subclass, selector, imp_implementationWithBlock(block), method_getTypeEncoding(method))
+    }
+}
+
+/// Sends "foreground" on `didBecomeActive` and "background" on `didEnterBackground`, skipping
+/// repeats (an app that resigns active for Control Center becomes active again without a change).
+/// Main thread only.
+final class LifecycleObserver {
+    private var observers: [NSObjectProtocol] = []
+    private var last: String?
+
+    static func current() -> String {
+        let read = { UIApplication.shared.applicationState == .background ? "background" : "foreground" }
+        return Thread.isMainThread ? read() : DispatchQueue.main.sync(execute: read)
+    }
+
+    func start(_ send: @escaping (String) -> Void) {
+        stop()
+        last = Self.current()
+        let center = NotificationCenter.default
+        let emit: (String) -> Void = { [weak self] state in
+            guard let self, self.last != state else { return }
+            self.last = state
+            send(state)
+        }
+        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            emit("foreground")
+        })
+        observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            emit("background")
+        })
+    }
+
+    func stop() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
     }
 }

@@ -69,4 +69,6 @@ if status.can_read() {
 - With `include_location` Android opens every listed original, so page through large ranges with
   `offset` / `limit`. Android reads the requested range in full and sorts in memory (dates come
   from `DATE_TAKEN`, or `DATE_ADDED` when missing).
+- `open_asset` shows an asset in the gallery app on Android (`ACTION_VIEW` on its MediaStore URI).
+  iOS has no public API to open a given asset in the Photos app, so it returns `false` there.
 - Only reading is supported (no saving or deleting).

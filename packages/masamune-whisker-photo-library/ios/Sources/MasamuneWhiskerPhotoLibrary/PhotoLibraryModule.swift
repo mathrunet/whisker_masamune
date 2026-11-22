@@ -49,6 +49,11 @@ public final class PhotoLibraryModule: Module {
                 return Bridge.ok(true)
             }
 
+            // openAsset({ id }) -> false. iOS has no public API to open a given asset in the Photos app.
+            Function("openAsset") { _ in
+                Bridge.ok(false)
+            }
+
             // listAssets({ fromMs, toMs, kinds, newestFirst, offset, limit, includeLocation }) -> [asset]
             AsyncFunction("listAssets") { args, promise in
                 let json = Bridge.args(args)

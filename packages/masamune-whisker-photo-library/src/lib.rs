@@ -197,6 +197,16 @@ pub async fn asset_location(id: &str) -> NativeResult<Option<(f64, f64)>> {
     Ok(location.map(|location| (location.latitude, location.longitude)))
 }
 
+/// Opens `id` in the system photo viewer. Returns `false` when it cannot be opened.
+///
+/// - Android: an `ACTION_VIEW` intent for the asset's MediaStore content URI (with
+///   `FLAG_GRANT_READ_URI_PERMISSION`), shown by the gallery app the user picks. `false` when the
+///   id is not a MediaStore id or no app can view it.
+/// - iOS: always `false`. There is no public API to open a given asset in the Photos app.
+pub fn open_asset(id: &str) -> NativeResult<bool> {
+    module().call("openAsset", &json!({ "id": id }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

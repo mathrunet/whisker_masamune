@@ -26,6 +26,22 @@ app.project_plugin::<MasamuneDeeplink>(|c| {
 | iOS | `CFBundleURLTypes` (schemes), `com.apple.developer.associated-domains` = `applinks:<host>` | `https://<host>/.well-known/apple-app-site-association`; the Associated Domains capability on the App ID (automatic signing enables it) |
 | Android | `VIEW` + `BROWSABLE` intent filters on `.MainActivity` (`android:autoVerify="true"` for app links, `https`, host, `pathPrefix`) and `android:launchMode="singleTask"` | `https://<host>/.well-known/assetlinks.json` with the signing certificate fingerprints |
 
+Restrict a scheme to some hosts, or an app link to one platform:
+
+```rust,ignore
+app.project_plugin::<MasamuneDeeplink>(|c| {
+    c.scheme_hosts("segue", ["track", "playlist"]) // segue://track/…, segue://playlist/…
+        .android_app_link("segue.day", Some("/app/")) // Android App Link only
+        .ios_app_link("links.segue.day");            // iOS Universal Link only
+});
+```
+
+- `scheme_hosts` writes one `<data android:scheme android:host>` per host in the scheme's intent
+  filter. iOS cannot restrict a URL scheme to hosts, so the scheme opens any host there; filter
+  the received links by `Link::host` when that matters.
+- `app_link` targets both platforms. `android_app_link` adds only the Android intent filter and
+  `ios_app_link` only the `applinks:` associated domain (`AppLink::ios` / `AppLink::android`).
+
 Re-run `whisker run` after changing `whisker.rs`.
 
 ## Usage

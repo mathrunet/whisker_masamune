@@ -40,5 +40,6 @@ dependencies {
     implementation("rs.whisker:whisker-module-android:0.1.21")
     ksp("rs.whisker:ksp:0.1.21")
     implementation("androidx.core:core-ktx:1.13.1")
-
+    // ProcessLifecycleOwner (foreground / background); the same version as whisker-runtime's lifecycle-runtime.
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
 }

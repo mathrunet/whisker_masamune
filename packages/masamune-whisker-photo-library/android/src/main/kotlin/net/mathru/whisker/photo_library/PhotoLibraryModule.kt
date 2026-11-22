@@ -75,6 +75,23 @@ class PhotoLibraryModule : Module() {
             }
         }
 
+        // openAsset({ id }) -> whether a viewer was opened (false for unknown ids or when no app can view it)
+        Function("openAsset") { args ->
+            try {
+                val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")
+                val (video, uri) = parseId(Bridge.args(args).optString("id")) ?: return@Function Bridge.ok(false)
+                val intent = Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, if (video) "video/*" else "image/*")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                activity.startActivity(intent)
+                Bridge.ok(true)
+            } catch (_: ActivityNotFoundException) {
+                Bridge.ok(false)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
         // listAssets({ fromMs, toMs, kinds, newestFirst, offset, limit, includeLocation }) -> [asset]
         AsyncFunction("listAssets") { args, promise ->
             val json = Bridge.args(args)

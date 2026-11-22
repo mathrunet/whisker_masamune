@@ -9,11 +9,16 @@
 //! });
 //! ```
 //!
+//! Restrict a scheme to some hosts with [`MasamuneDeeplinkConfig::scheme_hosts`] (Android only) and
+//! limit an app link to one platform with [`MasamuneDeeplinkConfig::android_app_link`] /
+//! [`MasamuneDeeplinkConfig::ios_app_link`].
+//!
 //! - iOS: each scheme is added to `CFBundleURLTypes`, each app link host to the
 //!   `com.apple.developer.associated-domains` entitlement as `applinks:<host>`. The domain has to
 //!   serve `/.well-known/apple-app-site-association` and the Associated Domains capability has to be
 //!   enabled for the App ID (automatic signing does this).
-//! - Android: `MainActivity` gets a `VIEW` / `BROWSABLE` intent filter per scheme and an
+//! - Android: `MainActivity` gets a `VIEW` / `BROWSABLE` intent filter per scheme (with one
+//!   `<data android:scheme android:host>` per host when the scheme is restricted to hosts) and an
 //!   `android:autoVerify="true"` filter per app link (`https`, host, optional path prefix), and
 //!   `android:launchMode="singleTask"` (kept when it already reuses the activity) so links reach the
 //!   running app through `onNewIntent`. The domain has to serve `/.well-known/assetlinks.json`.
@@ -39,7 +44,7 @@ const ANDROID_NS: &str = "http://schemas.android.com/apk/res/android";
 const REUSING_LAUNCH_MODES: [&str; 3] = ["singleTask", "singleInstance", "singleInstancePerTask"];
 
 /// A Universal Link / App Link domain.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppLink {
     /// Host name such as `segue.day`.
@@ -47,6 +52,21 @@ pub struct AppLink {
     /// Path prefix Android opens in the app (for example `/app/`). iOS reads the paths from the
     /// domain's `apple-app-site-association` file.
     pub path_prefix: Option<String>,
+    /// Add `applinks:<host>` to the iOS associated domains (default `true`).
+    pub ios: bool,
+    /// Add the `android:autoVerify` intent filter on Android (default `true`).
+    pub android: bool,
+}
+
+impl Default for AppLink {
+    fn default() -> Self {
+        Self {
+            host: String::new(),
+            path_prefix: None,
+            ios: true,
+            android: true,
+        }
+    }
 }
 
 /// Settings of [`MasamuneDeeplink`].
@@ -55,6 +75,10 @@ pub struct AppLink {
 pub struct MasamuneDeeplinkConfig {
     /// Custom URL schemes (lowercase), such as `segue`.
     pub schemes: Vec<String>,
+    /// Hosts each scheme is restricted to on Android (`segue` → `["track", "playlist"]` opens only
+    /// `segue://track…` and `segue://playlist…`). Schemes without an entry accept any host. iOS
+    /// cannot restrict a URL scheme to hosts, so this has no effect there.
+    pub scheme_hosts: BTreeMap<String, Vec<String>>,
     /// Universal Link / App Link domains.
     pub app_links: Vec<AppLink>,
 }
@@ -66,13 +90,68 @@ impl MasamuneDeeplinkConfig {
         self
     }
 
-    /// Opens `https://<host><path_prefix>…` links in the app.
+    /// Opens `<scheme>://<host>…` links in the app only for the given hosts on Android (one
+    /// `<data android:scheme android:host>` per host). On iOS the scheme opens any host. Adds the
+    /// scheme when it is not registered yet.
+    pub fn scheme_hosts<I, S>(&mut self, scheme: impl Into<String>, hosts: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let scheme = scheme.into();
+        if !self.schemes.contains(&scheme) {
+            self.schemes.push(scheme.clone());
+        }
+        self.scheme_hosts
+            .entry(scheme)
+            .or_default()
+            .extend(hosts.into_iter().map(Into::into));
+        self
+    }
+
+    /// Opens `https://<host><path_prefix>…` links in the app on iOS and Android.
     pub fn app_link(&mut self, host: impl Into<String>, path_prefix: Option<&str>) -> &mut Self {
         self.app_links.push(AppLink {
             host: host.into(),
             path_prefix: path_prefix.map(String::from),
+            ..Default::default()
         });
         self
+    }
+
+    /// Opens `https://<host><path_prefix>…` links in the app on Android only (no iOS associated
+    /// domain).
+    pub fn android_app_link(
+        &mut self,
+        host: impl Into<String>,
+        path_prefix: Option<&str>,
+    ) -> &mut Self {
+        self.app_links.push(AppLink {
+            host: host.into(),
+            path_prefix: path_prefix.map(String::from),
+            ios: false,
+            android: true,
+        });
+        self
+    }
+
+    /// Opens `https://<host>…` Universal Links in the app on iOS only (no Android intent filter).
+    pub fn ios_app_link(&mut self, host: impl Into<String>) -> &mut Self {
+        self.app_links.push(AppLink {
+            host: host.into(),
+            path_prefix: None,
+            ios: true,
+            android: false,
+        });
+        self
+    }
+
+    fn ios_app_links(&self) -> impl Iterator<Item = &AppLink> {
+        self.app_links.iter().filter(|link| link.ios)
+    }
+
+    fn android_app_links(&self) -> impl Iterator<Item = &AppLink> {
+        self.app_links.iter().filter(|link| link.android)
     }
 }
 
@@ -100,6 +179,25 @@ impl ProjectPlugin for MasamuneDeeplink {
                 "masamune-whisker-deeplink: use app_link for http(s) links"
             );
         }
+        for (scheme, hosts) in &config.scheme_hosts {
+            ensure!(
+                config.schemes.contains(scheme),
+                "masamune-whisker-deeplink: scheme_hosts names `{scheme}`, which is not in schemes"
+            );
+            ensure!(
+                !hosts.is_empty(),
+                "masamune-whisker-deeplink: scheme `{scheme}` is restricted to no host"
+            );
+            for host in hosts {
+                ensure!(
+                    !host.is_empty()
+                        && host
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || "-._*".contains(c)),
+                    "masamune-whisker-deeplink: host `{host}` of scheme `{scheme}` must be a host name"
+                );
+            }
+        }
         for link in &config.app_links {
             ensure!(
                 !link.host.is_empty()
@@ -116,6 +214,11 @@ impl ProjectPlugin for MasamuneDeeplink {
                     .is_none_or(|prefix| prefix.starts_with('/') && !prefix.contains('"')),
                 "masamune-whisker-deeplink: path prefix must start with `/`"
             );
+            ensure!(
+                link.ios || link.android,
+                "masamune-whisker-deeplink: app link `{}` targets neither iOS nor Android",
+                link.host
+            );
         }
         Ok(())
     }
@@ -126,6 +229,16 @@ impl ProjectPlugin for MasamuneDeeplink {
             return Ok(ProjectUpdate::Keep);
         }
         match &context.project {
+            ProjectIr::Ios(_)
+                if config.schemes.is_empty() && config.ios_app_links().next().is_none() =>
+            {
+                Ok(ProjectUpdate::Keep)
+            }
+            ProjectIr::Android(_)
+                if config.schemes.is_empty() && config.android_app_links().next().is_none() =>
+            {
+                Ok(ProjectUpdate::Keep)
+            }
             ProjectIr::Ios(ios) => {
                 let mut ios = ios.clone();
                 let target = ios
@@ -136,7 +249,7 @@ impl ProjectPlugin for MasamuneDeeplink {
                 for scheme in &config.schemes {
                     add_url_scheme(&mut target.info_plist, scheme)?;
                 }
-                for link in &config.app_links {
+                for link in config.ios_app_links() {
                     add_array_item(
                         &mut target.entitlements,
                         ASSOCIATED_DOMAINS_ENTITLEMENT,
@@ -325,12 +438,22 @@ fn android_edits(
     }
     let mut append = Vec::new();
     for scheme in &config.schemes {
-        append.push(view_filter(
-            false,
-            vec![element("data", &[("android:scheme", scheme)], vec![])],
-        ));
+        let data = match config.scheme_hosts.get(scheme) {
+            Some(hosts) if !hosts.is_empty() => hosts
+                .iter()
+                .map(|host| {
+                    element(
+                        "data",
+                        &[("android:scheme", scheme), ("android:host", host)],
+                        vec![],
+                    )
+                })
+                .collect(),
+            _ => vec![element("data", &[("android:scheme", scheme)], vec![])],
+        };
+        append.push(view_filter(false, data));
     }
-    for link in &config.app_links {
+    for link in config.android_app_links() {
         let mut data = vec![
             ("android:scheme", "https"),
             ("android:host", link.host.as_str()),
@@ -508,6 +631,123 @@ mod tests {
         activity(&replaced(android(Some(mode)), &config()))
     }
 
+    fn intent_filters(activity: &XmlElement) -> Vec<&XmlElement> {
+        activity
+            .children
+            .iter()
+            .filter_map(|node| match node {
+                XmlNode::Element(element) if element.name == "intent-filter" => Some(element),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn data_elements(filter: &XmlElement) -> Vec<&XmlElement> {
+        filter
+            .children
+            .iter()
+            .filter_map(|node| match node {
+                XmlNode::Element(element) if element.name == "data" => Some(element),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn restricts_schemes_to_hosts_on_android() {
+        let mut config = MasamuneDeeplinkConfig::default();
+        config
+            .scheme_hosts("segue", ["track", "playlist"])
+            .scheme("other");
+        assert_eq!(config.schemes, ["segue", "other"]);
+        let activity = activity(&replaced(android(None), &config));
+        let filters = intent_filters(&activity);
+        assert_eq!(filters.len(), 2);
+        let restricted: Vec<(&str, &str)> = data_elements(filters[0])
+            .iter()
+            .map(|data| {
+                (
+                    data.attributes["android:scheme"].as_str(),
+                    data.attributes["android:host"].as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(restricted, [("segue", "track"), ("segue", "playlist")]);
+        let open = data_elements(filters[1]);
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].attributes["android:scheme"], "other");
+        assert!(!open[0].attributes.contains_key("android:host"));
+        // iOS registers the scheme itself; hosts cannot be restricted there.
+        let ProjectIr::Ios(ios) = replaced(ios(), &config) else {
+            panic!("expected iOS")
+        };
+        let PropertyListValue::Array(types) =
+            &ios.apple.targets["App"].info_plist["CFBundleURLTypes"]
+        else {
+            panic!("expected an array")
+        };
+        assert_eq!(types.len(), 2);
+    }
+
+    #[test]
+    fn targets_app_links_per_platform() {
+        let mut config = MasamuneDeeplinkConfig::default();
+        config
+            .android_app_link("android.segue.day", Some("/app/"))
+            .ios_app_link("ios.segue.day");
+        let ProjectIr::Ios(ios_project) = replaced(ios(), &config) else {
+            panic!("expected iOS")
+        };
+        assert_eq!(
+            ios_project.apple.targets["App"].entitlements[ASSOCIATED_DOMAINS_ENTITLEMENT],
+            PropertyListValue::Array(vec![PropertyListValue::String(
+                "applinks:ios.segue.day".into()
+            )])
+        );
+        let activity = activity(&replaced(android(None), &config));
+        let filters = intent_filters(&activity);
+        assert_eq!(filters.len(), 1);
+        assert_eq!(
+            data_elements(filters[0])[0].attributes["android:host"],
+            "android.segue.day"
+        );
+
+        // Android-only links leave the iOS project untouched, and vice versa.
+        let mut android_only = MasamuneDeeplinkConfig::default();
+        android_only.android_app_link("segue.day", None);
+        let context = ProjectContext {
+            project: ios(),
+            app_crate_dir: None,
+        };
+        assert!(matches!(
+            MasamuneDeeplink
+                .contribute(&context, &android_only)
+                .unwrap(),
+            ProjectUpdate::Keep
+        ));
+        let mut ios_only = MasamuneDeeplinkConfig::default();
+        ios_only.ios_app_link("segue.day");
+        let context = ProjectContext {
+            project: android(None),
+            app_crate_dir: None,
+        };
+        assert!(matches!(
+            MasamuneDeeplink.contribute(&context, &ios_only).unwrap(),
+            ProjectUpdate::Keep
+        ));
+    }
+
+    #[test]
+    fn app_links_default_to_both_platforms() {
+        let link: AppLink = serde_json::from_str(r#"{"host":"segue.day"}"#).unwrap();
+        assert!(link.ios && link.android);
+        let config: MasamuneDeeplinkConfig =
+            serde_json::from_str(r#"{"schemes":["segue"],"app_links":[{"host":"segue.day"}]}"#)
+                .unwrap();
+        assert!(config.scheme_hosts.is_empty());
+        assert!(config.app_links[0].ios && config.app_links[0].android);
+    }
+
     #[test]
     fn validates_and_skips_empty_configs() {
         let mut bad = MasamuneDeeplinkConfig::default();
@@ -519,6 +759,25 @@ mod tests {
         let mut host = MasamuneDeeplinkConfig::default();
         host.app_link("https://segue.day", None);
         assert!(MasamuneDeeplink.validate(&host).is_err());
+        let mut nowhere = MasamuneDeeplinkConfig::default();
+        nowhere.app_links.push(AppLink {
+            host: "segue.day".into(),
+            ios: false,
+            android: false,
+            ..Default::default()
+        });
+        assert!(MasamuneDeeplink.validate(&nowhere).is_err());
+        let mut unknown = MasamuneDeeplinkConfig::default();
+        unknown
+            .scheme_hosts
+            .insert("segue".into(), vec!["track".into()]);
+        assert!(MasamuneDeeplink.validate(&unknown).is_err());
+        let mut bad_host = MasamuneDeeplinkConfig::default();
+        bad_host.scheme_hosts("segue", ["track/x"]);
+        assert!(MasamuneDeeplink.validate(&bad_host).is_err());
+        let mut no_hosts = MasamuneDeeplinkConfig::default();
+        no_hosts.scheme_hosts("segue", Vec::<String>::new());
+        assert!(MasamuneDeeplink.validate(&no_hosts).is_err());
         let context = ProjectContext {
             project: ios(),
             app_crate_dir: None,

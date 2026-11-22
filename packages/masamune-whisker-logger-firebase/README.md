@@ -26,6 +26,13 @@ fn prepare() -> Result<(), Box<dyn std::error::Error>> {
 | `report_error(err, context)` | Crashlytics non-fatal `HandledError` with the fixed reason `handled_error` |
 | `record_panics()` | Crashlytics crash report for Rust panics |
 
+Set the Analytics user ID with the free function `set_user_id` (on the UI thread):
+
+```rust,ignore
+masamune_whisker_logger_firebase::set_user_id(Some(&uid))?; // after sign-in
+masamune_whisker_logger_firebase::set_user_id(None)?;       // after sign-out
+```
+
 Breadcrumbs are still limited by the flavor's level, so prod never sends Debug/Info.
 `without_analytics()` / `without_crashlytics()` disable one service.
 

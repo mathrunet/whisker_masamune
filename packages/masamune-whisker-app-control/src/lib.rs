@@ -1,4 +1,5 @@
-//! Opens URLs in external apps (browser, store) and closes the app.
+//! Opens URLs in external apps (browser, store), closes the app, styles the window and reports
+//! whether the app is in the foreground ([`on_lifecycle`]).
 //!
 //! On iOS, [`open_url`] can only detect handlers of custom URL schemes that are declared in
 //! `LSApplicationQueriesSchemes`; declare them with the [`cng::MasamuneAppControl`] CNG plugin.
@@ -6,7 +7,8 @@
 pub mod cng;
 
 use masamune_whisker_bridge::NativeModule;
-pub use masamune_whisker_bridge::{NativeError, NativeResult};
+pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
+use serde::Deserialize;
 use serde_json::json;
 
 fn module() -> NativeModule {
@@ -93,4 +95,63 @@ pub fn set_system_bars_style(
 /// storyboard, so the color shown before the first frame is the build-time background instead.
 pub fn set_window_background(argb: u32) -> NativeResult<bool> {
     module().call("setWindowBackground", &json!({ "argb": argb }))
+}
+
+/// Whether the app is visible to the user.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppLifecycle {
+    /// The app is on screen (iOS: active; Android: the process has a started activity).
+    Foreground,
+    /// The app is not on screen.
+    Background,
+}
+
+/// The current [`AppLifecycle`]. Errors (and platforms without the native module) read as
+/// [`AppLifecycle::Foreground`].
+///
+/// - iOS: `UIApplication.applicationState`; only `.background` reads as background (`.inactive`,
+///   for example during launch or while a system alert is shown, reads as foreground).
+/// - Android: `ProcessLifecycleOwner`'s state is at least `STARTED`.
+pub fn current_lifecycle() -> AppLifecycle {
+    module()
+        .call::<_, AppLifecycle>("currentLifecycle", &json!({}))
+        .unwrap_or(AppLifecycle::Foreground)
+}
+
+/// Receives foreground / background changes while the returned [`Subscription`] is held.
+///
+/// Only changes are delivered: the state at the time of subscribing is not sent (read it with
+/// [`current_lifecycle`]) and the same state is never sent twice in a row.
+///
+/// - iOS: [`AppLifecycle::Foreground`] on `UIApplication.didBecomeActiveNotification`,
+///   [`AppLifecycle::Background`] on `didEnterBackgroundNotification`. Briefly resigning active
+///   (Control Center, a system alert) without entering the background sends nothing.
+/// - Android: `ProcessLifecycleOwner` `ON_START` / `ON_STOP`. `ON_STOP` is dispatched about 700 ms
+///   after the last activity stops, so configuration changes (rotation) send nothing.
+pub fn on_lifecycle(handler: impl Fn(AppLifecycle) + 'static) -> Subscription {
+    module().subscribe("lifecycle", handler)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_lifecycle_events() {
+        assert_eq!(
+            serde_json::from_str::<AppLifecycle>(r#""foreground""#).unwrap(),
+            AppLifecycle::Foreground
+        );
+        assert_eq!(
+            serde_json::from_str::<AppLifecycle>(r#""background""#).unwrap(),
+            AppLifecycle::Background
+        );
+        assert!(serde_json::from_str::<AppLifecycle>(r#""inactive""#).is_err());
+    }
+
+    #[test]
+    fn current_lifecycle_defaults_to_foreground_without_native_module() {
+        assert_eq!(current_lifecycle(), AppLifecycle::Foreground);
+    }
 }
