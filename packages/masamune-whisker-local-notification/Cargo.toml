@@ -1,6 +1,6 @@
 [package]
 name = "masamune-whisker-local-notification"
-description = "Daily scheduled local notifications for Whisker apps"
+description = "Daily and one-off local notifications with tap handling for Whisker apps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,5 +1,11 @@
-// Daily local notifications at a fixed time (AlarmManager). Schedules and channel settings are saved in SharedPreferences
-// and re-armed after device reboots and app updates.
+// Daily and one-off local notifications (AlarmManager) and notification taps. Schedules and channel settings are saved
+// in SharedPreferences and re-armed after device reboots and app updates; one-off schedules are removed once they fire
+// (or when they are re-armed after their time).
+//
+// A tap opens the app's launch activity with the schedule ID and payload as extras (FLAG_ACTIVITY_SINGLE_TOP, so a
+// running activity receives it in onNewIntent). The launch intent is read by `getInitialTap`; later intents are sent as
+// the `tap` event, queued while nobody observes it. Each intent is marked as consumed so it is delivered once, and
+// intents relaunched from the recents screen are ignored.
 
 package net.mathru.whisker.local_notification
 
@@ -17,6 +23,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,13 +32,17 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.IconCompat
+import androidx.core.util.Consumer
 import org.json.JSONObject
 import rs.whisker.runtime.Module
 import rs.whisker.runtime.ModuleDefinition
+import rs.whisker.runtime.RuntimeAttachedListener
 import rs.whisker.runtime.WhiskerApplication
 import rs.whisker.runtime.WhiskerModule
+import rs.whisker.runtime.WhiskerValue
 import java.io.File
 import java.util.Calendar
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 internal object LocalNotifications {
@@ -38,6 +50,11 @@ internal object LocalNotifications {
     private const val CONFIG = "MasamuneWhiskerLocalNotification.config"
     private const val ASSET_PREFIX = "file:///android_asset/"
     private const val DEFAULT_CHANNEL_ID = "default"
+
+    /** Extras of the activity intent a tap opens. */
+    const val EXTRA_ID = "net.mathru.whisker.local_notification.ID"
+    const val EXTRA_PAYLOAD = "net.mathru.whisker.local_notification.PAYLOAD"
+    const val EXTRA_CONSUMED = "net.mathru.whisker.local_notification.CONSUMED"
 
     private fun schedules(context: Context) = context.getSharedPreferences(SCHEDULES, Context.MODE_PRIVATE)
 
@@ -90,6 +107,25 @@ internal object LocalNotifications {
     fun all(context: Context): Map<String, JSONObject> =
         schedules(context).all.mapNotNull { (key, value) -> (value as? String)?.let { key to JSONObject(it) } }.toMap()
 
+    /** Removes a saved schedule without touching its alarm (it has fired or will be replaced). */
+    fun forget(context: Context, id: String) {
+        schedules(context).edit().remove(id).apply()
+    }
+
+    /** A string value, `null` when missing or JSON null. */
+    fun string(json: JSONObject, key: String): String? = if (json.isNull(key)) null else json.optString(key)
+
+    fun isOnce(schedule: JSONObject): Boolean = schedule.optBoolean("once", false)
+
+    /** The time of a saved schedule: the next daily occurrence, or a one-off schedule's time. */
+    fun fireTime(schedule: JSONObject): Long =
+        if (isOnce(schedule)) schedule.optLong("atMs") else nextOccurrence(schedule.getInt("hour"), schedule.getInt("minute"))
+
+    /** Re-arms every saved schedule, dropping one-off schedules whose time has passed. */
+    fun rearmAll(context: Context) {
+        all(context).keys.forEach { arm(context, it) }
+    }
+
     fun remove(context: Context, id: String) {
         schedules(context).edit().remove(id).apply()
         cancelAlarm(context, id)
@@ -127,10 +163,14 @@ internal object LocalNotifications {
         return calendar.timeInMillis
     }
 
-    /** Sets the next alarm from the saved schedule. */
+    /** Sets the next alarm from the saved schedule. A one-off schedule whose time has passed is removed instead. */
     fun arm(context: Context, id: String) {
         val schedule = load(context, id) ?: return
-        val at = nextOccurrence(schedule.getInt("hour"), schedule.getInt("minute"))
+        val at = fireTime(schedule)
+        if (isOnce(schedule) && at <= System.currentTimeMillis()) {
+            forget(context, id)
+            return
+        }
         val alarm = context.getSystemService(AlarmManager::class.java)
         val pending = pendingIntent(context, id)
         val exact = Build.VERSION.SDK_INT < 31 || alarm.canScheduleExactAlarms()
@@ -166,7 +206,13 @@ internal object LocalNotifications {
         val schedule = load(context, id) ?: return
         if (!authorized(context)) return
         ensureChannel(context)
-        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        // The launch intent itself (MAIN / LAUNCHER) keeps the task's root intent equal to the launcher's, so opening the
+        // app from the launcher later resumes the task instead of stacking a second activity.
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(EXTRA_ID, id)
+            string(schedule, "payload")?.let { putExtra(EXTRA_PAYLOAD, it) }
+        }
         val content = launch?.let {
             PendingIntent.getActivity(context, requestCode(id), it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
@@ -184,28 +230,76 @@ internal object LocalNotifications {
     }
 }
 
-/** Posts the notification at the scheduled time and re-arms it for the next day. */
+/** Posts the notification at the scheduled time, then re-arms a daily schedule for the next day or removes a one-off one. */
 class DailyNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra("id") ?: return
+        val schedule = LocalNotifications.load(context, id) ?: return
         LocalNotifications.show(context, id)
-        LocalNotifications.arm(context, id)
+        if (LocalNotifications.isOnce(schedule)) {
+            LocalNotifications.forget(context, id)
+        } else {
+            LocalNotifications.arm(context, id)
+        }
     }
 }
 
-/** Re-arms schedules after a reboot, app update, or time change. */
+/** Re-arms schedules after a reboot, app update, or time change (dropping one-off schedules whose time has passed). */
 class DailyNotificationBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        LocalNotifications.all(context).keys.forEach { LocalNotifications.arm(context, it) }
+        LocalNotifications.rearmAll(context)
     }
 }
 
 @WhiskerModule
 class LocalNotificationModule : Module() {
     private val requestCounter = AtomicInteger(0)
+    private val main = Handler(Looper.getMainLooper())
+
+    /** Main thread only: whether `tap` has subscribers, and the taps that arrived while it had none. */
+    private var observing = false
+    private val queued = mutableListOf<JSONObject>()
+
+    /** Activity whose onNewIntent is observed, and whether an activity has been attached before. */
+    private var intentActivity: ComponentActivity? = null
+    private var attachedBefore = false
+    private val newIntentListener = Consumer<Intent> { intent -> claim(intent)?.let(::deliver) }
+    private val attachListener = RuntimeAttachedListener { main.post { attachIntentListener() } }
+    private val attachListenerAdded = AtomicBoolean(false)
 
     override fun definition() = ModuleDefinition {
         Name("LocalNotification")
+        Events("tap")
+
+        OnStartObserving("tap") {
+            // The onNewIntent listener stays registered after the last subscriber leaves, so taps keep being queued.
+            if (attachListenerAdded.compareAndSet(false, true)) appContext.addOnRuntimeAttachedListener(attachListener)
+            main.post {
+                observing = true
+                val pending = queued.toList()
+                queued.clear()
+                pending.forEach(::deliver)
+            }
+        }
+        OnStopObserving("tap") {
+            main.post { observing = false }
+        }
+
+        // getInitialTap() -> { id, payload } | null — waits for the host activity, then consumes its launch intent.
+        AsyncFunction("getInitialTap") { _, promise ->
+            var listener: RuntimeAttachedListener? = null
+            val pending = RuntimeAttachedListener {
+                main.post {
+                    val current = listener ?: return@post
+                    listener = null
+                    appContext.removeOnRuntimeAttachedListener(current)
+                    val intent = appContext.currentActivity?.intent
+                    Bridge.resolve(promise, intent?.let { claim(it) })
+                }
+            }
+            listener = pending
+            appContext.addOnRuntimeAttachedListener(pending)
+        }
 
         // configure({ channelId, channelName, channelDescription, smallIcon }) — notification channel and small icon.
         Function("configure") { args ->
@@ -255,12 +349,14 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // scheduleDaily({ id, hour, minute, title, text }) -> next fire time (ms)
+        // scheduleDaily({ id, hour, minute, title, text, payload }) -> next fire time (ms)
         Function("scheduleDaily") { args ->
             try {
                 val json = Bridge.args(args)
                 val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
                 val id = json.getString("id")
+                json.put("once", false)
+                json.remove("atMs")
                 LocalNotifications.ensureChannel(context)
                 LocalNotifications.save(context, id, json)
                 LocalNotifications.arm(context, id)
@@ -270,19 +366,42 @@ class LocalNotificationModule : Module() {
             }
         }
 
-        // schedule({ id }) -> saved schedule (null if missing)
-        Function("schedule") { args ->
-            val context = WhiskerApplication.appContext
-            val id = Bridge.args(args).optString("id")
-            Bridge.ok(context?.let { LocalNotifications.load(it, id) })
+        // scheduleOnce({ id, atMs, title, text, payload }) -> fire time (ms). Fails for past times.
+        Function("scheduleOnce") { args ->
+            try {
+                val json = Bridge.args(args)
+                val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
+                val id = json.getString("id")
+                val at = json.getLong("atMs")
+                if (at <= System.currentTimeMillis()) throw IllegalArgumentException("at_ms is in the past")
+                val calendar = Calendar.getInstance().apply { timeInMillis = at }
+                json.put("once", true)
+                json.put("hour", calendar.get(Calendar.HOUR_OF_DAY))
+                json.put("minute", calendar.get(Calendar.MINUTE))
+                LocalNotifications.ensureChannel(context)
+                LocalNotifications.save(context, id, json)
+                LocalNotifications.arm(context, id)
+                Bridge.ok(at)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
         }
 
-        // rearm() — re-arms all saved schedules (at startup).
+        // schedule({ id }) -> saved schedule (null if missing or a one-off that has fired)
+        Function("schedule") { args ->
+            val context = WhiskerApplication.appContext ?: return@Function Bridge.ok(null)
+            val id = Bridge.args(args).optString("id")
+            val schedule = LocalNotifications.load(context, id)
+            val expired = schedule != null && LocalNotifications.isOnce(schedule) &&
+                LocalNotifications.fireTime(schedule) <= System.currentTimeMillis()
+            if (expired) LocalNotifications.forget(context, id)
+            Bridge.ok(if (expired) null else schedule)
+        }
+
+        // rearm() — re-arms all saved schedules (at startup), dropping one-off schedules whose time has passed.
         Function("rearm") { _ ->
             val context = WhiskerApplication.appContext
-            if (context != null) {
-                LocalNotifications.all(context).keys.forEach { LocalNotifications.arm(context, it) }
-            }
+            if (context != null) LocalNotifications.rearmAll(context)
             Bridge.ok(true)
         }
 
@@ -316,5 +435,38 @@ class LocalNotificationModule : Module() {
                 Bridge.err(error)
             }
         }
+    }
+
+    /** Observes onNewIntent of the attached activity. A later activity (re-created while subscribed) also has its launch
+     *  intent delivered; the first one's is left to `getInitialTap`. */
+    private fun attachIntentListener() {
+        val activity = appContext.currentActivity as? ComponentActivity ?: return
+        if (activity === intentActivity) return
+        intentActivity?.removeOnNewIntentListener(newIntentListener)
+        activity.addOnNewIntentListener(newIntentListener)
+        intentActivity = activity
+        if (attachedBefore) claim(activity.intent)?.let(::deliver)
+        attachedBefore = true
+    }
+
+    /** Sends a tap, or queues it while nobody observes `tap`. Main thread. */
+    private fun deliver(tap: JSONObject) {
+        if (!observing) {
+            queued.add(tap)
+            return
+        }
+        sendEvent("tap", WhiskerValue.Str(tap.toString()))
+    }
+
+    /** Marks a tap intent as consumed and returns `{ id, payload }`. Null when it is not one, or was handled. */
+    private fun claim(intent: Intent?): JSONObject? {
+        if (intent == null) return null
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        if (intent.getBooleanExtra(LocalNotifications.EXTRA_CONSUMED, false)) return null
+        val id = intent.getStringExtra(LocalNotifications.EXTRA_ID)?.takeIf { it.isNotEmpty() } ?: return null
+        intent.putExtra(LocalNotifications.EXTRA_CONSUMED, true)
+        return JSONObject()
+            .put("id", id)
+            .put("payload", intent.getStringExtra(LocalNotifications.EXTRA_PAYLOAD) ?: JSONObject.NULL)
     }
 }

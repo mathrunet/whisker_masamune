@@ -1,10 +1,17 @@
-// Daily local notifications at a fixed time (UNUserNotificationCenter with repeating calendar triggers).
-// Schedules are saved in UserDefaults so `schedule(id)` returns them like on Android; iOS keeps
-// repeating requests across reboots and app updates by itself.
+// Daily and one-off local notifications (UNUserNotificationCenter with calendar triggers) and
+// notification taps. Schedules are saved in UserDefaults so `schedule(id)` returns them like on
+// Android; iOS keeps pending requests across reboots and app updates by itself. One-off schedules
+// are dropped from UserDefaults once their time has passed.
 //
 // Like Android, notifications are also shown while the app is in the foreground: a notification
-// center delegate presents this module's notifications and forwards everything else to the delegate
-// that was installed before it (for example Firebase Messaging).
+// center delegate presents this module's notifications, reports taps on them, and forwards
+// everything else to the delegate that was installed before it (for example Firebase Messaging).
+// Firebase Messaging sets its delegate when it is registered, possibly after this module, so the
+// delegate is installed again once launching finishes (before the launch tap response is
+// delivered), when a scene connects and whenever the app becomes active.
+//
+// Taps: the tap that launched the app is kept for `getInitialTap`; later taps are sent as the
+// `tap` event, queued while nobody observes it.
 //
 // Android notification channels and small icons have no iOS counterpart, so `configure` stores
 // nothing and the app icon is used.
@@ -15,24 +22,44 @@ import WhiskerModule
 
 @WhiskerModule
 public final class LocalNotificationModule: Module {
-    private var activeObserver: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
 
     public override func definition() -> ModuleDefinition {
-        // Modules are installed from didFinishLaunching: refresh the cached permission now and every
-        // time the app becomes active (the user may change it in Settings meanwhile).
+        // Modules are installed from didFinishLaunching: install the delegate now, again right
+        // after launching (other modules may replace it meanwhile), and refresh the cached
+        // permission every time the app becomes active (the user may change it in Settings).
+        TapStore.shared.module = self
         LocalNotifications.installDelegate()
         LocalNotifications.refreshStatus()
-        activeObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            LocalNotifications.installDelegate()
-            LocalNotifications.refreshStatus()
-        }
+        DispatchQueue.main.async { LocalNotifications.installDelegate() }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: UIApplication.didFinishLaunchingNotification, object: nil, queue: .main) { _ in
+                LocalNotifications.installDelegate()
+            },
+            center.addObserver(forName: UIScene.willConnectNotification, object: nil, queue: .main) { _ in
+                LocalNotifications.installDelegate()
+            },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+                LocalNotifications.installDelegate()
+            },
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                LocalNotifications.installDelegate()
+                LocalNotifications.refreshStatus()
+                TapStore.shared.becameActive()
+            },
+        ]
 
         return ModuleDefinition {
             Name("LocalNotification")
+            Events("tap")
+
+            OnStartObserving("tap") {
+                Bridge.onMain { TapStore.shared.startObserving() }
+            }
+            OnStopObserving("tap") {
+                Bridge.onMain { TapStore.shared.observing = false }
+            }
 
             // configure({ channelId, channelName, channelDescription, smallIcon }) — Android only.
             Function("configure") { _ in
@@ -54,26 +81,48 @@ public final class LocalNotificationModule: Module {
                 }
             }
 
-            // scheduleDaily({ id, hour, minute, title, text }) -> next fire time (ms)
+            // scheduleDaily({ id, hour, minute, title, text, payload }) -> next fire time (ms)
             Function("scheduleDaily") { args in
-                let json = Bridge.args(args)
+                var json = Bridge.args(args)
                 guard let id = json["id"] as? String else { return Bridge.err("No value for id") }
                 guard let hour = (json["hour"] as? NSNumber)?.intValue else { return Bridge.err("No value for hour") }
                 guard let minute = (json["minute"] as? NSNumber)?.intValue else { return Bridge.err("No value for minute") }
+                json["once"] = false
+                json["atMs"] = nil
                 LocalNotifications.installDelegate()
                 LocalNotifications.save(id: id, schedule: json)
                 LocalNotifications.arm(id: id, schedule: json)
                 return Bridge.ok(LocalNotifications.nextOccurrence(hour: hour, minute: minute))
             }
 
-            // schedule({ id }) -> saved schedule (null if missing)
+            // scheduleOnce({ id, atMs, title, text, payload }) -> fire time (ms). Fails for past times.
+            Function("scheduleOnce") { args in
+                var json = Bridge.args(args)
+                guard let id = json["id"] as? String else { return Bridge.err("No value for id") }
+                guard let atMs = (json["atMs"] as? NSNumber)?.int64Value else { return Bridge.err("No value for atMs") }
+                let date = Date(timeIntervalSince1970: TimeInterval(atMs) / 1000)
+                guard date > Date() else { return Bridge.err("at_ms is in the past") }
+                let calendar = Calendar.current
+                json["once"] = true
+                json["hour"] = calendar.component(.hour, from: date)
+                json["minute"] = calendar.component(.minute, from: date)
+                LocalNotifications.installDelegate()
+                LocalNotifications.save(id: id, schedule: json)
+                LocalNotifications.arm(id: id, schedule: json)
+                return Bridge.ok(atMs)
+            }
+
+            // schedule({ id }) -> saved schedule (null if missing or a one-off that has fired)
             Function("schedule") { args in
                 let id = Bridge.args(args)["id"] as? String ?? ""
+                LocalNotifications.pruneExpired()
                 return Bridge.ok(LocalNotifications.load(id: id))
             }
 
-            // rearm() — re-registers the saved schedules (repeating requests normally survive by themselves).
+            // rearm() — re-registers the saved schedules (pending requests normally survive by
+            // themselves) after dropping one-off schedules whose time has passed.
             Function("rearm") { _ in
+                LocalNotifications.pruneExpired()
                 for (id, schedule) in LocalNotifications.all() {
                     LocalNotifications.arm(id: id, schedule: schedule)
                 }
@@ -102,11 +151,22 @@ public final class LocalNotificationModule: Module {
                 UIApplication.shared.open(url)
                 return Bridge.ok(true)
             }
+
+            // getInitialTap() -> { id, payload } | null. Consumes the tap that launched the app.
+            AsyncFunction("getInitialTap") { _, promise in
+                Bridge.onMain {
+                    TapStore.shared.waitForLaunchTap { tap in Bridge.resolve(promise, tap) }
+                }
+            }
         }
     }
 
+    fileprivate func send(_ tap: [String: Any?]) {
+        sendEvent("tap", Bridge.event(tap))
+    }
+
     deinit {
-        if let activeObserver { NotificationCenter.default.removeObserver(activeObserver) }
+        observers.forEach(NotificationCenter.default.removeObserver)
     }
 }
 
@@ -114,6 +174,9 @@ enum LocalNotifications {
     private static let defaultsKey = "MasamuneWhiskerLocalNotification.schedules"
     /// Prefix of this module's request identifiers.
     static let identifierPrefix = "masamune_whisker_local_notification."
+    /// userInfo keys of this module's notifications.
+    static let idKey = "masamuneWhiskerLocalNotification"
+    static let payloadKey = "masamuneWhiskerLocalNotificationPayload"
 
     private static let lock = NSLock()
     /// "authorized", "denied" or "notDetermined"; `nil` until the first refresh finishes.
@@ -202,23 +265,67 @@ enum LocalNotifications {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
-    /// Registers (or replaces) the repeating request of a saved schedule.
+    /// Removes one-off schedules whose time has passed (their requests have fired).
+    static func pruneExpired() {
+        let now = Date()
+        var schedules = saved()
+        let expired = schedules.filter { _, text in
+            guard let schedule = decode(text), isOnce(schedule) else { return false }
+            return fireDate(schedule).map { $0 <= now } ?? true
+        }
+        guard !expired.isEmpty else { return }
+        expired.keys.forEach { schedules[$0] = nil }
+        UserDefaults.standard.set(schedules, forKey: defaultsKey)
+    }
+
+    static func isOnce(_ schedule: [String: Any]) -> Bool {
+        (schedule["once"] as? Bool) ?? (schedule["once"] as? NSNumber)?.boolValue ?? false
+    }
+
+    /// The fire time of a one-off schedule.
+    static func fireDate(_ schedule: [String: Any]) -> Date? {
+        guard let atMs = (schedule["atMs"] as? NSNumber)?.int64Value else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(atMs) / 1000)
+    }
+
+    /// Registers (or replaces) the request of a saved schedule: repeating for daily schedules, a
+    /// single calendar date for one-off schedules (skipped once the date has passed).
     static func arm(id: String, schedule: [String: Any]) {
-        guard let hour = (schedule["hour"] as? NSNumber)?.intValue,
-              let minute = (schedule["minute"] as? NSNumber)?.intValue
-        else { return }
+        let trigger: UNCalendarNotificationTrigger
+        if isOnce(schedule) {
+            guard let date = fireDate(schedule), date > Date() else { return }
+            // Calendar triggers match whole seconds: round up so the request never fires before atMs.
+            let second = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.up))
+            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: second)
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        } else {
+            guard let hour = (schedule["hour"] as? NSNumber)?.intValue,
+                  let minute = (schedule["minute"] as? NSNumber)?.intValue
+            else { return }
+            trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute), repeats: true)
+        }
         let content = UNMutableNotificationContent()
         content.title = schedule["title"] as? String ?? ""
         content.body = schedule["text"] as? String ?? ""
         content.sound = .default
-        content.userInfo = ["masamuneWhiskerLocalNotification": id]
-        let trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute), repeats: true)
+        var userInfo: [String: Any] = [idKey: id]
+        if let payload = schedule["payload"] as? String { userInfo[payloadKey] = payload }
+        content.userInfo = userInfo
         let request = UNNotificationRequest(identifier: identifierPrefix + id, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
                 NSLog("MasamuneWhiskerLocalNotification: failed to schedule %@: %@", id, Bridge.message(error))
             }
         }
+    }
+
+    /// The tap reported for one of this module's notifications (`nil` for other notifications).
+    static func tap(_ notification: UNNotification) -> [String: Any?]? {
+        let request = notification.request
+        guard request.identifier.hasPrefix(identifierPrefix) else { return nil }
+        let userInfo = request.content.userInfo
+        let id = userInfo[idKey] as? String ?? String(request.identifier.dropFirst(identifierPrefix.count))
+        return ["id": id, "payload": userInfo[payloadKey] as? String]
     }
 
     /// The next occurrence of the time in milliseconds (tomorrow if today's time has already passed).
@@ -239,8 +346,8 @@ enum LocalNotifications {
     }
 }
 
-/// Presents this module's notifications in the foreground and forwards everything else (and every
-/// other delegate method) to the previously installed delegate.
+/// Presents this module's notifications in the foreground, reports taps on them, and forwards
+/// everything else (and every other delegate method) to the previously installed delegate.
 private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterDelegate {
     weak var next: UNUserNotificationCenterDelegate?
 
@@ -250,6 +357,7 @@ private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterD
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         if notification.request.identifier.hasPrefix(LocalNotifications.identifierPrefix) {
+            LocalNotifications.pruneExpired()
             completionHandler([.banner, .list, .sound])
         } else if let next, next.responds(to: #selector(userNotificationCenter(_:willPresent:withCompletionHandler:))) {
             next.userNotificationCenter?(center, willPresent: notification, withCompletionHandler: completionHandler)
@@ -263,7 +371,13 @@ private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterD
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if let next, next.responds(to: #selector(userNotificationCenter(_:didReceive:withCompletionHandler:))) {
+        if let tap = LocalNotifications.tap(response.notification) {
+            LocalNotifications.pruneExpired()
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+                Bridge.onMain { TapStore.shared.receive(tap) }
+            }
+            completionHandler()
+        } else if let next, next.responds(to: #selector(userNotificationCenter(_:didReceive:withCompletionHandler:))) {
             next.userNotificationCenter?(center, didReceive: response, withCompletionHandler: completionHandler)
         } else {
             completionHandler()
@@ -278,5 +392,99 @@ private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterD
     override func forwardingTarget(for selector: Selector!) -> Any? {
         if let next, next.responds(to: selector) { return next }
         return super.forwardingTarget(for: selector)
+    }
+}
+
+/// The launch tap, queued taps and the observing state. Main thread only.
+///
+/// The first tap that arrives while launching is the launch tap, returned once by
+/// `getInitialTap`. Launching ends when `getInitialTap` answers (it waits until the app has been
+/// active for a moment, at most two seconds) or a few seconds after the app first becomes active;
+/// a launch tap nobody asked for is then delivered like any other tap.
+final class TapStore {
+    static let shared = TapStore()
+
+    weak var module: LocalNotificationModule?
+    var observing = false
+    private var launching = true
+    private var everActive = false
+    private var launchTap: [String: Any?]?
+    private var queued: [[String: Any?]] = []
+    private var waiters: [([String: Any?]?) -> Void] = []
+
+    /// How long `getInitialTap` waits after the app is active for the launch tap.
+    private static let activeGrace: TimeInterval = 0.5
+    /// How long `getInitialTap` waits at most.
+    private static let maxWait: TimeInterval = 2
+    /// When launching ends without `getInitialTap`, counted from the first activation.
+    private static let launchWindow: TimeInterval = 5
+
+    func receive(_ tap: [String: Any?]) {
+        if launching && launchTap == nil {
+            launchTap = tap
+            if !waiters.isEmpty { finishLaunch() }
+            return
+        }
+        deliver(tap)
+    }
+
+    func startObserving() {
+        observing = true
+        let pending = queued
+        queued.removeAll()
+        pending.forEach(deliver)
+    }
+
+    func becameActive() {
+        if !everActive {
+            everActive = true
+            after(Self.launchWindow) { $0.finishLaunch() }
+        }
+        if !waiters.isEmpty {
+            after(Self.activeGrace) { $0.finishLaunch() }
+        }
+    }
+
+    /// Answers with the launch tap, waiting for it while the app is launching.
+    func waitForLaunchTap(_ completion: @escaping ([String: Any?]?) -> Void) {
+        guard launching else { return completion(nil) }
+        if launchTap != nil {
+            waiters.append(completion)
+            return finishLaunch()
+        }
+        waiters.append(completion)
+        if everActive || UIApplication.shared.applicationState == .active {
+            after(Self.activeGrace) { $0.finishLaunch() }
+        }
+        after(Self.maxWait) { $0.finishLaunch() }
+    }
+
+    /// Ends launching: hands the launch tap to the waiters, or delivers it when nobody asked.
+    private func finishLaunch() {
+        guard launching else { return }
+        launching = false
+        let tap = launchTap
+        launchTap = nil
+        let pending = waiters
+        waiters.removeAll()
+        if pending.isEmpty {
+            if let tap { deliver(tap) }
+        } else {
+            pending.forEach { $0(tap) }
+        }
+    }
+
+    private func deliver(_ tap: [String: Any?]) {
+        guard observing, let module else {
+            queued.append(tap)
+            return
+        }
+        module.send(tap)
+    }
+
+    private func after(_ delay: TimeInterval, _ body: @escaping (TapStore) -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            if let self { body(self) }
+        }
     }
 }
