@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.11.0
+
+- **NEW** `masamune-whisker-app-control`: `on_lifecycle` receives foreground / background changes
+  (iOS `didBecomeActive` / `didEnterBackground`, Android `ProcessLifecycleOwner` `ON_START` /
+  `ON_STOP`) and `current_lifecycle` reads the current state. Android now depends on
+  `androidx.lifecycle:lifecycle-process`.
+- **NEW** `masamune-whisker-photo-library`: `open_asset` shows an asset in the gallery app on
+  Android (`ACTION_VIEW` on its MediaStore URI with read permission). iOS has no public API for
+  this and returns `false`.
+- **NEW** `masamune-whisker-deeplink`: the CNG plugin restricts a custom scheme to hosts on Android
+  (`scheme_hosts`, one `<data android:scheme android:host>` per host) and targets an app link at
+  one platform (`android_app_link`, `ios_app_link`, `AppLink::ios` / `AppLink::android`; both
+  default to `true`).
+- **NEW** `masamune-whisker-logger-firebase`: `set_user_id` sets or clears the Analytics user ID.
+- **FIX** `masamune-whisker-functions` / `-functions-cloudflare` / `-functions-firebase`: requests
+  with bearer tokens, App Check tokens or credential headers require HTTPS (loopback HTTP only
+  through `allow_local_http()`), authenticated requests no longer follow redirects, and error
+  Display / Debug output uses fixed descriptions.
+- **FIX** `masamune-whisker-logger-firebase`: handled errors are reported to Crashlytics as
+  `HandledError` with the fixed reason `handled_error`, without the error text, cause chain or
+  context.
+- **FIX** `masamune-whisker-firebase-app-check`: iOS Release builds use App Attest and reject the
+  `debug` provider override.
+
 ## 0.10.0
 
 - **NEW** `masamune-whisker-audio-session`: audio session configuration and activation (audio

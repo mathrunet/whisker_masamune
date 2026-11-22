@@ -15,7 +15,7 @@ git repository or crates.io.
 | `masamune-whisker-bridge` | Shared JSON bridge used by every native module (Rust only) |
 | `masamune-whisker-fonts` | Register bundled fonts by family name |
 | `masamune-whisker-device-info` | Screen metrics, time zone, app version and appearance settings |
-| `masamune-whisker-app-control` | Open URLs externally and close the app |
+| `masamune-whisker-app-control` | Open URLs externally, close the app, lock the orientation, style the window, foreground / background changes |
 | `masamune-whisker-date-picker` | Native date and time pickers |
 | `masamune-whisker-view-capture` | Capture a view subtree as PNG |
 | `masamune-whisker-share` | OS share sheet |
@@ -125,7 +125,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.10.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.11.0" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]
