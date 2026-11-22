@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.0
+
+- **NEW** `masamune-whisker-local-notification`: `schedule_once` schedules a notification once at a
+  time in UTC milliseconds (past times are rejected; the schedule is removed after it fires and
+  dropped on re-arm once its time has passed), and `schedule_daily_with_payload` adds a payload to
+  daily schedules (`schedule_daily` is unchanged). `Schedule` gains `payload`, `once` and `at_ms`.
+- **NEW** `masamune-whisker-local-notification`: notification taps. `initial_tap` returns the tap
+  that launched the app once, `on_tap` receives taps while the app runs (queued until the first
+  subscription), and `LocalNotificationMasamuneAdapter` publishes both to `latest_tap` /
+  `take_pending_tap`. iOS reports taps from its notification center delegate, which is also
+  installed again after launch, when a scene connects and when the app becomes active so it stays
+  in front of a delegate set later (Firebase Messaging); other notifications are still forwarded.
+  Android opens the launch activity with `FLAG_ACTIVITY_SINGLE_TOP` and the ID and payload as
+  extras, reads the launch intent and `onNewIntent`, delivers each tap once and ignores intents
+  relaunched from the recent apps.
+
 ## 0.11.0
 
 - **NEW** `masamune-whisker-app-control`: `on_lifecycle` receives foreground / background changes

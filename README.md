@@ -23,7 +23,7 @@ git repository or crates.io.
 | `masamune-whisker-image-picker` | Gallery / camera picker with resizing |
 | `masamune-whisker-audio-capture` | [Microphone capture as 16 kHz PCM16 chunks (iOS, Android, Web)](packages/masamune-whisker-audio-capture/README.md) |
 | `masamune-whisker-speech-recognition` | [On-device streaming speech recognition with partial results (Android)](packages/masamune-whisker-speech-recognition/README.md) |
-| `masamune-whisker-local-notification` | Daily scheduled local notifications |
+| `masamune-whisker-local-notification` | Daily and one-off local notifications with payloads and tap handling (launch and running) |
 | `masamune-whisker-audio-session` | [Audio session, interruptions and route changes, lock screen / media notification Now Playing and remote commands, background playback (Android `mediaPlayback` foreground service)](packages/masamune-whisker-audio-session/README.md) |
 | `masamune-whisker-location` | [Location permission, current position and position streams with background updates (Android `location` foreground service)](packages/masamune-whisker-location/README.md) |
 | `masamune-whisker-activity` | [Motion activity recognition (still, walking, running, cycling, vehicle)](packages/masamune-whisker-activity/README.md) |
@@ -125,7 +125,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.11.0" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.12.0" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]
