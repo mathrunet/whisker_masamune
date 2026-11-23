@@ -83,6 +83,17 @@ public final class AppControlModule: Module {
                 return Bridge.ok(true)
             }
 
+            // openSettings({ page }) — iOS apps can only open their own page in Settings, so "app" and
+            // "system" open it and the Android-only pages ("developer", "wirelessDebugging") return false.
+            Function("openSettings") { args in
+                let page = Bridge.args(args)["page"] as? String ?? ""
+                guard page == "app" || page == "system",
+                      let url = URL(string: UIApplication.openSettingsURLString)
+                else { return Bridge.ok(false) }
+                Bridge.onMain { UIApplication.shared.open(url) }
+                return Bridge.ok(true)
+            }
+
             // exitApp() — iOS apps must not quit themselves (App Store Review Guidelines), so this is a no-op.
             Function("exitApp") { _ in
                 Bridge.ok(false)

@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import rs.whisker.runtime.Module
 import rs.whisker.runtime.ModuleDefinition
 import rs.whisker.runtime.WhiskerApplication
@@ -92,6 +93,25 @@ class DeviceInfoModule : Module() {
         Function("info") { _ ->
             try {
                 Bridge.ok(info())
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
+        // developerOptions() -> { enabled, adbEnabled, adbWifiEnabled }
+        Function("developerOptions") { _ ->
+            try {
+                val resolver = WhiskerApplication.appContext?.contentResolver
+                    ?: throw IllegalStateException("no context")
+                fun flag(name: String) = Settings.Global.getInt(resolver, name, 0) != 0
+                Bridge.ok(
+                    mapOf(
+                        "enabled" to flag(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED),
+                        "adbEnabled" to flag(Settings.Global.ADB_ENABLED),
+                        // Settings.Global.ADB_WIFI_ENABLED is a hidden constant (Android 11+).
+                        "adbWifiEnabled" to flag("adb_wifi_enabled"),
+                    ),
+                )
             } catch (error: Throwable) {
                 Bridge.err(error)
             }

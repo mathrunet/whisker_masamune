@@ -9,7 +9,9 @@ import android.content.pm.ActivityInfo
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Handler
+import android.os.Bundle
 import android.os.Looper
+import android.provider.Settings
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -86,6 +88,22 @@ class AppControlModule : Module() {
             }
         }
 
+        // openSettings({ page }) -> whether a settings screen was opened
+        // page: "app" | "system" | "developer" | "wirelessDebugging"
+        Function("openSettings") { args ->
+            try {
+                val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")
+                val intent = settingsIntent(Bridge.args(args).optString("page"), activity.packageName)
+                    ?: return@Function Bridge.ok(false)
+                activity.startActivity(intent)
+                Bridge.ok(true)
+            } catch (_: ActivityNotFoundException) {
+                Bridge.ok(false)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
         // setOrientation({ lock }) — locks the screen orientation ("unspecified" unlocks it).
         Function("setOrientation") { args ->
             try {
@@ -138,6 +156,21 @@ class AppControlModule : Module() {
             appContext.currentActivity?.finishAndRemoveTask()
             Bridge.ok(true)
         }
+    }
+
+    /** The intent for a settings page, or null for an unknown page. */
+    private fun settingsIntent(page: String, packageName: String): Intent? = when (page) {
+        "app" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        "system" -> Intent(Settings.ACTION_SETTINGS)
+        "developer" -> Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+        "wirelessDebugging" -> Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+            // The Settings app scrolls to and highlights the preference with this key
+            // (SettingsActivity.EXTRA_FRAGMENT_ARG_KEY), on devices that support it.
+            val key = "toggle_adb_wireless"
+            putExtra(":settings:fragment_args_key", key)
+            putExtra(":settings:show_fragment_args", Bundle().apply { putString(":settings:fragment_args_key", key) })
+        }
+        else -> null
     }
 
     private fun currentLifecycle(): String =

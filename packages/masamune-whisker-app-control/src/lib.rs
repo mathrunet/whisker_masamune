@@ -33,6 +33,43 @@ pub fn exit_app() -> NativeResult<bool> {
     module().call("exitApp", &json!({}))
 }
 
+/// A system settings screen opened by [`open_settings`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SettingsPage {
+    /// This app's settings (Android: app details; iOS: the app's page in Settings).
+    App,
+    /// The top of the system Settings app.
+    System,
+    /// Developer options. Android only.
+    Developer,
+    /// Developer options with the Wireless debugging entry highlighted (on devices that support
+    /// highlighting). Android only: the Wireless debugging screen itself cannot be opened by other
+    /// apps, so this is one tap away from it.
+    WirelessDebugging,
+}
+
+impl SettingsPage {
+    fn as_str(self) -> &'static str {
+        match self {
+            SettingsPage::App => "app",
+            SettingsPage::System => "system",
+            SettingsPage::Developer => "developer",
+            SettingsPage::WirelessDebugging => "wirelessDebugging",
+        }
+    }
+}
+
+/// Opens a system settings screen. Returns `false` when the screen cannot be opened.
+///
+/// - Android: [`SettingsPage::Developer`] and [`SettingsPage::WirelessDebugging`] open
+///   `ACTION_APPLICATION_DEVELOPMENT_SETTINGS`. When developer options are turned off, the system
+///   shows its own "not available" screen.
+/// - iOS: apps can only open their own page in Settings, so [`SettingsPage::App`] and
+///   [`SettingsPage::System`] both open it, and the Android-only pages return `false`.
+pub fn open_settings(page: SettingsPage) -> NativeResult<bool> {
+    module().call("openSettings", &json!({ "page": page.as_str() }))
+}
+
 /// Screen orientation lock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum OrientationLock {

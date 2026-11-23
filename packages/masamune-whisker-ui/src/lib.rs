@@ -29,7 +29,7 @@ pub mod style;
 
 pub use material::app_bar::{APP_BAR_HEIGHT, AppBar, AppBarAction};
 pub use material::bottom_sheet::{
-    ModalBottomSheet, ModalLayer, ModalLayerHost, provide_modal_layer,
+    ModalBottomSheet, ModalBottomSheetScrollView, ModalLayer, ModalLayerHost, provide_modal_layer,
 };
 pub use material::buttons::{FilledButton, OutlinedButton, TextButton};
 pub use material::dialog::{

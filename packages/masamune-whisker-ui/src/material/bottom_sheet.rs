@@ -16,6 +16,7 @@ use whisker::css::{
     AlignSelf, BackdropFilter, Color, Display, FlexDirection, JustifyContent, Transform,
     TransformFn,
 };
+use whisker::event::{ScrollEvent, TouchEvent};
 use whisker::prelude::*;
 use whisker_safe_area::safe_area_insets;
 
@@ -25,6 +26,85 @@ use crate::style::{column, fill};
 pub const SHEET_ENTER_MS: u32 = 400;
 /// Exit duration (ms), accelerating (easeInCubic).
 pub const SHEET_EXIT_MS: u32 = 250;
+
+const DRAG_SLOP: f64 = 8.0;
+const MIN_FLING_DISTANCE: f64 = 24.0;
+const MIN_FLING_VELOCITY: f64 = 700.0;
+const VELOCITY_TIMEOUT_MS: f64 = 100.0;
+
+#[derive(Clone, Copy, PartialEq)]
+enum DragDirection {
+    Pending,
+    Down,
+    Other,
+}
+
+#[derive(Clone, Copy)]
+struct SheetDrag {
+    pointer_id: i64,
+    start_x: f64,
+    start_y: f64,
+    height: f64,
+    direction: DragDirection,
+    last_y: f64,
+    last_time: f64,
+    last_motion: Option<(f64, f64)>,
+}
+
+impl SheetDrag {
+    fn new(pointer_id: i64, x: f64, y: f64, time: f64, height: f64) -> Self {
+        Self {
+            pointer_id,
+            start_x: x,
+            start_y: y,
+            height,
+            direction: DragDirection::Pending,
+            last_y: y,
+            last_time: time,
+            last_motion: None,
+        }
+    }
+
+    fn update(&mut self, x: f64, y: f64, time: f64) -> f32 {
+        let dx = (x - self.start_x).abs();
+        let dy = y - self.start_y;
+        if self.direction == DragDirection::Pending && dx.max(dy.abs()) >= DRAG_SLOP {
+            self.direction = if dy > dx {
+                DragDirection::Down
+            } else {
+                DragDirection::Other
+            };
+        }
+
+        let elapsed = time - self.last_time;
+        if y != self.last_y && elapsed > 0.0 {
+            self.last_motion = Some((time, (y - self.last_y) * 1000.0 / elapsed));
+            self.last_time = time;
+            self.last_y = y;
+        }
+
+        if self.direction == DragDirection::Down {
+            (dy / self.height).clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        }
+    }
+
+    fn should_dismiss(self, x: f64, y: f64, time: f64) -> bool {
+        let distance = y - self.start_y;
+        if self.direction != DragDirection::Down || distance <= (x - self.start_x).abs() {
+            return false;
+        }
+        distance >= self.height * 0.5
+            || (distance >= MIN_FLING_DISTANCE
+                && self.last_motion.is_some_and(|(at, velocity)| {
+                    time - at <= VELOCITY_TIMEOUT_MS && velocity > MIN_FLING_VELOCITY
+                }))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct CancelSheetDrag(Callback<()>);
 
 #[derive(Clone)]
 struct LayerEntry {
@@ -105,7 +185,7 @@ pub fn modal_bottom_sheet(
     /// Closes the sheet when the barrier is tapped.
     #[prop(default = true)]
     dismissible: bool,
-    /// Ignores barrier taps while true (for example during a request).
+    /// Ignores barrier taps and drag dismissal while true (for example during a request).
     #[prop(default = None)]
     locked: Option<ReadSignal<bool>>,
     #[prop(default = true)] drag_handle: bool,
@@ -157,6 +237,47 @@ pub fn modal_bottom_sheet(
     render! { Fragment {} }
 }
 
+/// A vertical scroll view inside a [`ModalBottomSheet`].
+///
+/// An initial offset above zero leaves the entire gesture with the scroll view. A downward drag
+/// can move the sheet when the viewport is already at the top as the gesture starts.
+#[component]
+pub fn modal_bottom_sheet_scroll_view(
+    #[prop(default = Css::new())] style: Css,
+    /// Receives the viewport's native scroll events.
+    on_scroll: Option<Callback<ScrollEvent>>,
+    /// Receives touches that begin in the viewport.
+    on_touch_start: Option<Callback<TouchEvent>>,
+    children: Children,
+) -> Element {
+    let cancel_drag = use_context::<CancelSheetDrag>();
+    let scroll_top = StoredValue::new(0.0);
+    let content = children.clone();
+    render! {
+        ScrollView(
+            style: style.clone(),
+            on_capture_touchstart: move |_: TouchEvent| {
+                if scroll_top.get() > 0.0 && let Some(cancel_drag) = cancel_drag {
+                    cancel_drag.0.run(());
+                }
+            },
+            on_touchstart: move |event: TouchEvent| {
+                if let Some(on_touch_start) = on_touch_start {
+                    on_touch_start.run(event);
+                }
+            },
+            on_scroll: move |event: ScrollEvent| {
+                scroll_top.set(event.detail.scroll_top);
+                if let Some(on_scroll) = on_scroll {
+                    on_scroll.run(event);
+                }
+            },
+        ) {
+            {content()}
+        }
+    }
+}
+
 #[component]
 fn sheet_state(
     open: RwSignal<bool>,
@@ -189,9 +310,12 @@ fn sheet_state(
     ));
     let enter_progress = enter.value();
     let exit_progress = exit.value();
+    let dragged = signal(0.0_f32);
+    let current_progress =
+        move || (enter_progress.get_untracked() - dragged.get_untracked()).max(0.0);
     let progress = computed(move || {
         if open.get() {
-            enter_progress.get()
+            (enter_progress.get() - dragged.get()).max(0.0)
         } else {
             exit_progress.get()
         }
@@ -212,11 +336,22 @@ fn sheet_state(
                 enter.forward();
             } else {
                 enter.stop();
-                exit.set_value(enter_progress.get_untracked());
+                exit.set_value(current_progress());
+                dragged.set(0.0);
                 exit.reverse();
             }
         });
     }
+    let restore = {
+        let enter = enter.clone();
+        Callback::new(move |()| {
+            if open.get_untracked() && dragged.get_untracked() > 0.0 {
+                enter.set_value(current_progress());
+                dragged.set(0.0);
+                enter.forward();
+            }
+        })
+    };
     let _keep = StoredValue::new((enter, exit));
     let children = content.clone();
     render! {
@@ -224,6 +359,8 @@ fn sheet_state(
             SheetFrame(
                 open: open,
                 progress: progress,
+                dragged: dragged,
+                restore: restore,
                 dismissible: dismissible,
                 locked: locked,
                 drag_handle: drag_handle,
@@ -243,6 +380,8 @@ fn sheet_state(
 fn sheet_frame(
     open: RwSignal<bool>,
     progress: ReadSignal<f32>,
+    dragged: RwSignal<f32>,
+    restore: Callback<()>,
     dismissible: bool,
     locked: ReadSignal<bool>,
     drag_handle: bool,
@@ -282,12 +421,76 @@ fn sheet_frame(
             open.set(false);
         }
     };
+    let drag = StoredValue::new(None::<SheetDrag>);
+    let cancel_drag = Callback::new(move |()| {
+        drag.set(None);
+        restore.run(());
+    });
+    provide_context(CancelSheetDrag(cancel_drag));
+    effect(move || {
+        if locked.get() || !open.get() {
+            cancel_drag.run(());
+        }
+    });
+    let start_drag = move |event: TouchEvent| {
+        cancel_drag.run(());
+        if !open.get_untracked() || locked.get_untracked() || event.touches.len() > 1 {
+            return;
+        }
+        if let Some(size) = event.size.filter(|size| size.height > 0.0) {
+            drag.set(Some(SheetDrag::new(
+                event.pointer_id,
+                event.detail.x,
+                event.detail.y,
+                event.timestamp,
+                size.height,
+            )));
+        }
+    };
+    let move_drag = move |event: TouchEvent| {
+        if event.touches.len() > 1 {
+            cancel_drag.run(());
+            return;
+        }
+        if let Some(mut gesture) = drag
+            .get()
+            .filter(|gesture| gesture.pointer_id == event.pointer_id)
+        {
+            dragged.set(gesture.update(event.detail.x, event.detail.y, event.timestamp));
+            drag.set(Some(gesture));
+        }
+    };
+    let end_drag = move |event: TouchEvent| {
+        let Some(mut gesture) = drag
+            .get()
+            .filter(|gesture| gesture.pointer_id == event.pointer_id)
+        else {
+            return;
+        };
+        let x = event.detail.x;
+        let y = event.detail.y;
+        let time = event.timestamp;
+        dragged.set(gesture.update(x, y, time));
+        if open.get_untracked() && !locked.get_untracked() && gesture.should_dismiss(x, y, time) {
+            drag.set(None);
+            open.set(false);
+        } else {
+            cancel_drag.run(());
+        }
+    };
     let content = content.clone();
     render! {
         View(style: barrier_style) {
             View(style: css!(flex_grow: 1.0), on_tap: close) {
             }
-            View(style: sheet_style, on_tap_catch: |_| {}) {
+            View(
+                style: sheet_style,
+                on_tap_catch: |_| {},
+                on_capture_touchstart: start_drag,
+                on_capture_touchmove: move_drag,
+                on_capture_touchend: end_drag,
+                on_capture_touchcancel: move |_| cancel_drag.run(()),
+            ) {
                 Show(when: move || drag_handle) {
                     View(
                         style: css!(
@@ -320,6 +523,48 @@ fn sheet_surface_style(color: Color, backdrop_blur: f32) -> Css {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn downward_drag_moves_and_dismisses_the_sheet_at_half_height() {
+        let mut drag = SheetDrag::new(1, 40.0, 100.0, 0.0, 300.0);
+        assert_eq!(drag.update(44.0, 220.0, 400.0), 0.4);
+        assert!(!drag.should_dismiss(44.0, 220.0, 400.0));
+        assert_eq!(drag.update(44.0, 250.0, 600.0), 0.5);
+        assert!(drag.should_dismiss(44.0, 250.0, 600.0));
+    }
+
+    #[test]
+    fn recent_downward_fling_can_dismiss_before_half_height() {
+        let mut drag = SheetDrag::new(1, 40.0, 100.0, 0.0, 300.0);
+        drag.update(40.0, 134.0, 40.0);
+        drag.update(40.0, 134.0, 50.0);
+        assert!(drag.should_dismiss(40.0, 134.0, 50.0));
+        assert!(!drag.should_dismiss(40.0, 134.0, 200.0));
+    }
+
+    #[test]
+    fn ignores_taps_upward_swipes_and_swipes_that_start_horizontally() {
+        let mut tap = SheetDrag::new(1, 40.0, 100.0, 0.0, 300.0);
+        assert_eq!(tap.update(41.0, 102.0, 5.0), 0.0);
+        assert!(!tap.should_dismiss(41.0, 102.0, 5.0));
+
+        let mut upward = tap;
+        assert_eq!(upward.update(40.0, 70.0, 30.0), 0.0);
+        assert!(!upward.should_dismiss(40.0, 70.0, 30.0));
+
+        let mut horizontal = tap;
+        assert_eq!(horizontal.update(70.0, 102.0, 30.0), 0.0);
+        assert_eq!(horizontal.update(75.0, 290.0, 300.0), 0.0);
+        assert!(!horizontal.should_dismiss(75.0, 290.0, 300.0));
+    }
+
+    #[test]
+    fn dragging_back_reduces_the_sheet_offset_and_does_not_dismiss() {
+        let mut drag = SheetDrag::new(1, 40.0, 100.0, 0.0, 300.0);
+        assert_eq!(drag.update(40.0, 300.0, 100.0), 2.0 / 3.0);
+        assert_eq!(drag.update(40.0, 130.0, 150.0), 0.1);
+        assert!(!drag.should_dismiss(40.0, 130.0, 150.0));
+    }
 
     #[test]
     fn sheet_surface_has_no_backdrop_blur_by_default() {

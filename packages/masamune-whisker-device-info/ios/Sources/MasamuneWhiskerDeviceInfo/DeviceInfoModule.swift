@@ -49,6 +49,11 @@ public final class DeviceInfoModule: Module {
                 guard let self else { return Bridge.err("DeviceInfo module released") }
                 return Bridge.ok(self.info())
             }
+
+            // developerOptions() — Android only; iOS has no developer options to read.
+            Function("developerOptions") { _ in
+                Bridge.ok(["enabled": false, "adbEnabled": false, "adbWifiEnabled": false])
+            }
         }
     }
 
