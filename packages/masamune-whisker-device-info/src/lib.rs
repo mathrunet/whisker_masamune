@@ -57,6 +57,28 @@ pub fn info() -> NativeResult<DeviceInfo> {
     module().call("info", &serde_json::json!({}))
 }
 
+/// State of the system developer options.
+///
+/// Android only: on iOS every field is `false`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeveloperOptions {
+    /// Developer options are turned on (`Settings.Global.DEVELOPMENT_SETTINGS_ENABLED`).
+    #[serde(default)]
+    pub enabled: bool,
+    /// USB debugging is on (`Settings.Global.ADB_ENABLED`).
+    #[serde(default)]
+    pub adb_enabled: bool,
+    /// Wireless debugging is on (`adb_wifi_enabled`, Android 11 and later).
+    #[serde(default)]
+    pub adb_wifi_enabled: bool,
+}
+
+/// Reads the developer options state. See [`DeveloperOptions`].
+pub fn developer_options() -> NativeResult<DeveloperOptions> {
+    module().call("developerOptions", &serde_json::json!({}))
+}
+
 /// Size of the screen (the app window).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]

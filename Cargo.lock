@@ -1601,6 +1601,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-network"
+version = "0.13.1"
+dependencies = [
+ "masamune-whisker-bridge",
+ "serde",
+ "serde_json",
+ "whisker",
+]
+
+[[package]]
 name = "masamune-whisker-photo-library"
 version = "0.13.1"
 dependencies = [

@@ -14,8 +14,9 @@ git repository or crates.io.
 |---|---|
 | `masamune-whisker-bridge` | Shared JSON bridge used by every native module (Rust only) |
 | `masamune-whisker-fonts` | Register bundled fonts by family name |
-| `masamune-whisker-device-info` | Screen metrics, time zone, app version and appearance settings |
-| `masamune-whisker-app-control` | Open URLs externally, close the app, lock the orientation, style the window, foreground / background changes |
+| `masamune-whisker-device-info` | Screen metrics, time zone, app version, appearance settings and the developer options state |
+| `masamune-whisker-network` | Network interface addresses and mDNS (DNS-SD) service discovery |
+| `masamune-whisker-app-control` | Open URLs externally, open system settings screens, close the app, lock the orientation, style the window, foreground / background changes |
 | `masamune-whisker-date-picker` | Native date and time pickers |
 | `masamune-whisker-view-capture` | Capture a view subtree as PNG |
 | `masamune-whisker-share` | OS share sheet |

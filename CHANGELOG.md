@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **NEW** `masamune-whisker-network`: `interfaces` returns the IPv4 / IPv6 addresses of the active
+  network interfaces (loopback and link-local excluded, VPNs marked `point_to_point`);
+  `discover_services` browses a DNS-SD service type for a fixed time and resolves what it finds
+  (Android `NsdManager`; iOS returns an error for now).
+- **NEW** `masamune-whisker-device-info`: `developer_options` reads whether developer options, USB
+  debugging and Wireless debugging are on (Android; always `false` on iOS).
+- **NEW** `masamune-whisker-app-control`: `open_settings` opens a system settings screen
+  (`SettingsPage::App` / `System` / `Developer` / `WirelessDebugging`). On iOS only the app's own
+  page can be opened; the Android-only pages return `false`.
+
 ## 0.13.1
 
 - **NEW** `masamune-whisker-ui`: `ModalBottomSheet` gains `backdrop_blur`, which blurs whatever is
