@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1
+
+- **NEW** `masamune-whisker-ui`: `ModalBottomSheet` gains `backdrop_blur`, which blurs whatever is
+  behind the sheet surface (Flutter's `BackdropFilter` under a translucent sheet). Pair it with a
+  translucent `color`. The default `0.0` keeps the previous opaque look.
+
 ## 0.13.0
 
 - **NEW** `masamune-whisker-barcode-scanner`: `BarcodeScanner` camera preview element that reports

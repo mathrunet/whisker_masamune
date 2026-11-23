@@ -13,7 +13,8 @@ use masamune_whisker_appearance::{palette, shape};
 use whisker::AnimConfig;
 use whisker::AnimationController;
 use whisker::css::{
-    AlignSelf, Color, Display, FlexDirection, JustifyContent, Transform, TransformFn,
+    AlignSelf, BackdropFilter, Color, Display, FlexDirection, JustifyContent, Transform,
+    TransformFn,
 };
 use whisker::prelude::*;
 use whisker_safe_area::safe_area_insets;
@@ -121,6 +122,11 @@ pub fn modal_bottom_sheet(
     #[prop(default = 0.54)]
     barrier_opacity: f32,
     #[prop(default = palette().surface)] color: Color,
+    /// Blur radius (logical pixels) applied to whatever is behind the sheet surface, like
+    /// Flutter's `BackdropFilter` under a translucent sheet. Pair it with a translucent `color`.
+    /// `0.0` (the default) disables the blur.
+    #[prop(default = 0.0)]
+    backdrop_blur: f32,
     children: Children,
 ) -> Element {
     let children = children.clone();
@@ -138,6 +144,7 @@ pub fn modal_bottom_sheet(
                 drag_handle_spacing: drag_handle_spacing,
                 barrier_opacity: barrier_opacity,
                 color: color,
+                backdrop_blur: backdrop_blur,
                 content: children.clone(),
             )
         }
@@ -161,6 +168,7 @@ fn sheet_state(
     drag_handle_spacing: f32,
     barrier_opacity: f32,
     color: Color,
+    backdrop_blur: f32,
     content: Children,
 ) -> Element {
     // Keep the sheet mounted until the exit animation finishes.
@@ -224,6 +232,7 @@ fn sheet_state(
                 drag_handle_spacing: drag_handle_spacing,
                 barrier_opacity: barrier_opacity,
                 color: color,
+                backdrop_blur: backdrop_blur,
                 content: children.clone(),
             )
         }
@@ -242,12 +251,13 @@ fn sheet_frame(
     drag_handle_spacing: f32,
     barrier_opacity: f32,
     color: Color,
+    backdrop_blur: f32,
     content: Children,
 ) -> Element {
     let insets = safe_area_insets();
     let radius = shape().extra_large;
     let sheet_style = computed(move || {
-        column()
+        sheet_surface_style(color, backdrop_blur)
             .width(percent(100))
             .padding_top(px(12))
             .padding_left(px(horizontal_padding + insets.get().leading as f32))
@@ -255,7 +265,6 @@ fn sheet_frame(
             .padding_bottom(px(bottom_padding + insets.get().bottom as f32))
             .border_top_left_radius(px(radius))
             .border_top_right_radius(px(radius))
-            .background_color(color)
             .transform(Transform::new().push(TransformFn::TranslateY(
                 percent((1.0 - progress.get()) * 100.0).into(),
             )))
@@ -295,5 +304,32 @@ fn sheet_frame(
                 {content()}
             }
         }
+    }
+}
+
+/// Background of the sheet surface: `color`, plus a backdrop blur when `backdrop_blur > 0`.
+fn sheet_surface_style(color: Color, backdrop_blur: f32) -> Css {
+    let style = column().background_color(color);
+    if backdrop_blur > 0.0 {
+        style.backdrop_filter(BackdropFilter::blur(px(backdrop_blur)))
+    } else {
+        style
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sheet_surface_has_no_backdrop_blur_by_default() {
+        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 0.0).to_string();
+        assert!(!style.contains("backdrop-filter"), "{style}");
+    }
+
+    #[test]
+    fn sheet_surface_blurs_the_backdrop_when_requested() {
+        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 4.0).to_string();
+        assert!(style.contains("backdrop-filter: blur(4px)"), "{style}");
     }
 }
