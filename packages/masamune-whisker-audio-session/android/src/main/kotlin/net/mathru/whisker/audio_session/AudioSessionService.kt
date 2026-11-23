@@ -1,5 +1,9 @@
 // Foreground service (type mediaPlayback) that keeps the process alive while a Now Playing item
 // is set, and the receiver of the media notification buttons.
+//
+// The service also holds a Whisker runtime retention lease. Removing the task from Recents
+// destroys the Activity while playback continues; the lease keeps the Rust runtime that answers
+// the notification buttons running until the Now Playing item is cleared.
 
 package net.mathru.whisker.audio_session
 
@@ -10,13 +14,17 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
+import rs.whisker.runtime.WhiskerRuntimeRetention
 
 class AudioSessionService : Service() {
+    private var retention: WhiskerRuntimeRetention.Lease? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         AudioSessions.service = this
+        retention = WhiskerRuntimeRetention.acquire("masamune-whisker-audio-session")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -34,6 +42,8 @@ class AudioSessionService : Service() {
     override fun onDestroy() {
         AudioSessions.service = null
         AudioSessions.releaseWakeLock()
+        retention?.release()
+        retention = null
         super.onDestroy()
     }
 }
