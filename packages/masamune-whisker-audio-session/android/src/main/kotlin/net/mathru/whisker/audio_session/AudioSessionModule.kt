@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.core.util.Consumer
+import java.lang.ref.WeakReference
 import rs.whisker.runtime.Module
 import rs.whisker.runtime.ModuleDefinition
 import rs.whisker.runtime.RuntimeAttachedListener
@@ -17,7 +18,8 @@ import rs.whisker.runtime.WhiskerModule
 @WhiskerModule
 class AudioSessionModule : Module() {
     private val main = Handler(Looper.getMainLooper())
-    private var intentActivity: ComponentActivity? = null
+    // Weak: a runtime retained after its Activity is destroyed must not pin that Activity.
+    private var intentActivity: WeakReference<ComponentActivity>? = null
     private val newIntentListener = Consumer<Intent> { intent -> deliverTap(intent) }
     private val attachListener = RuntimeAttachedListener { main.post { attachTapListener() } }
 
@@ -33,7 +35,7 @@ class AudioSessionModule : Module() {
         OnStopObserving("notificationTap") {
             appContext.removeOnRuntimeAttachedListener(attachListener)
             main.post {
-                intentActivity?.removeOnNewIntentListener(newIntentListener)
+                intentActivity?.get()?.removeOnNewIntentListener(newIntentListener)
                 intentActivity = null
             }
         }
@@ -96,10 +98,10 @@ class AudioSessionModule : Module() {
 
     private fun attachTapListener() {
         val activity = appContext.currentActivity as? ComponentActivity ?: return
-        if (activity === intentActivity) return
-        intentActivity?.removeOnNewIntentListener(newIntentListener)
+        if (activity === intentActivity?.get()) return
+        intentActivity?.get()?.removeOnNewIntentListener(newIntentListener)
         activity.addOnNewIntentListener(newIntentListener)
-        intentActivity = activity
+        intentActivity = WeakReference(activity)
         // The tap that launched the app.
         activity.intent?.let { deliverTap(it) }
     }
