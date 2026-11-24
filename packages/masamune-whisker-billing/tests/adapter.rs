@@ -2,11 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use masamune_whisker_adapter::MasamuneAdapters;
-use masamune_whisker_billing::{load_products, products, BillingMasamuneAdapter};
-use whisker::runtime::module::{with_module_host, ModuleHost};
-use whisker::runtime::{RuntimeContext, RuntimeWakeHandle};
+use masamune_whisker_billing::{BillingMasamuneAdapter, load_products, products};
 use whisker::WhiskerValue;
-use whisker::{spawn_local, Owner};
+use whisker::runtime::module::{ModuleHost, with_module_host};
+use whisker::runtime::{RuntimeContext, RuntimeWakeHandle};
+use whisker::{Owner, spawn_local};
 
 type Calls = Rc<RefCell<Vec<(String, String)>>>;
 

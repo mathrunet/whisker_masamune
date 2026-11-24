@@ -1,7 +1,7 @@
 use masamune_whisker_adapter::{AdapterError, MasamuneAdapter, StartFuture};
 use whisker::prelude::*;
 
-use crate::{query_products, NativeError, NativeResult, Product, StoreFailure};
+use crate::{NativeError, NativeResult, Product, StoreFailure, query_products};
 
 /// Billing settings for [`masamune_whisker_adapter::MasamuneAdapters`] (Masamune's
 /// `PurchaseMasamuneAdapter`): the app's products, loaded after startup into [`products`].

@@ -32,10 +32,10 @@
 mod adapter;
 mod debug;
 
-pub use adapter::{load_products, products, BillingMasamuneAdapter};
+pub use adapter::{BillingMasamuneAdapter, load_products, products};
 pub use debug::{
-    debug_force_purchase, debug_force_unpurchase, debug_is_purchased, debug_purchases,
-    DEBUG_PURCHASE_TOKEN,
+    DEBUG_PURCHASE_TOKEN, debug_force_purchase, debug_force_unpurchase, debug_is_purchased,
+    debug_purchases,
 };
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};

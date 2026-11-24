@@ -185,9 +185,11 @@ mod tests {
 
     #[test]
     fn decodes_events() {
-        let text: NativeEvent = serde_json::from_str(r#"{"id":"speech-1","text":"こんにちは"}"#).unwrap();
+        let text: NativeEvent =
+            serde_json::from_str(r#"{"id":"speech-1","text":"こんにちは"}"#).unwrap();
         assert_eq!(text.text.as_deref(), Some("こんにちは"));
-        let error: NativeEvent = serde_json::from_str(r#"{"id":"speech-1","error":"network"}"#).unwrap();
+        let error: NativeEvent =
+            serde_json::from_str(r#"{"id":"speech-1","error":"network"}"#).unwrap();
         assert_eq!(error.error.as_deref(), Some("network"));
     }
 
