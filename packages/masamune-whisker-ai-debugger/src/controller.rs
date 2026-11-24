@@ -75,10 +75,22 @@ pub(crate) enum Message {
 }
 
 struct Trace {
-    at: Instant,
+    name: String,
+    wall: DateTime<Utc>,
     category: Option<&'static str>,
     threshold: Option<Duration>,
     exceeded: bool,
+    active_elapsed: Duration,
+    active_since: Option<Instant>,
+}
+
+impl Trace {
+    fn active_elapsed_at(&self, at: Instant) -> Duration {
+        self.active_elapsed
+            + self
+                .active_since
+                .map_or(Duration::ZERO, |since| at.saturating_duration_since(since))
+    }
 }
 
 struct State {
@@ -90,6 +102,8 @@ struct State {
     heartbeat: Option<SharedResult>,
     end: Option<Shared<LocalBoxFuture<'static, ()>>>,
     foreground: bool,
+    indicator_foreground: bool,
+    indicator_resumed_at: Option<Instant>,
     heartbeat_generation: u64,
     flush_generation: u64,
     flush_scheduled: bool,
@@ -146,6 +160,8 @@ impl AiDebugController {
                 heartbeat: None,
                 end: None,
                 foreground: false,
+                indicator_foreground: true,
+                indicator_resumed_at: None,
                 heartbeat_generation: 0,
                 flush_generation: 0,
                 flush_scheduled: false,
@@ -362,11 +378,13 @@ impl AiDebugController {
         .map(|_| ())
     }
 
-    /// Sends a heartbeat now and then every `heartbeat_interval` until [`Self::pause`].
+    /// Resumes progress indicator monitoring and sends a heartbeat now and then every
+    /// `heartbeat_interval` until [`Self::pause`].
     pub async fn resume(&self) -> Result<(), AiDebugError> {
         if !self.enabled() {
             return Ok(());
         }
+        self.set_indicator_foreground(true);
         let generation = {
             let mut state = self.0.state.borrow_mut();
             state.foreground = true;
@@ -397,11 +415,47 @@ impl AiDebugController {
         });
     }
 
-    /// Stops heartbeats while the app is in the background.
+    /// Stops heartbeats and pauses progress indicator timers while the app is in the background.
     pub fn pause(&self) {
+        self.set_indicator_foreground(false);
         let mut state = self.0.state.borrow_mut();
         state.foreground = false;
         state.heartbeat_generation += 1;
+    }
+
+    // Open indicator traces keep the part of their budget already spent in the foreground.
+    fn set_indicator_foreground(&self, foreground: bool) {
+        let now = Instant::now();
+        let mut state = self.0.state.borrow_mut();
+        if state.indicator_foreground == foreground {
+            return;
+        }
+        state.indicator_foreground = foreground;
+        if !foreground {
+            for trace in state
+                .traces
+                .values_mut()
+                .filter(|trace| trace.category == Some("indicator"))
+            {
+                trace.active_elapsed = trace.active_elapsed_at(now);
+                trace.active_since = None;
+            }
+            return;
+        }
+        state.indicator_resumed_at = Some(now);
+        let traces = state
+            .traces
+            .iter_mut()
+            .filter(|(_, trace)| trace.category == Some("indicator"))
+            .map(|(&id, trace)| {
+                trace.active_since = Some(now);
+                id
+            })
+            .collect::<Vec<_>>();
+        drop(state);
+        for id in traces {
+            self.schedule_trace_check(id);
+        }
     }
 
     /// Sends one heartbeat; a run the server no longer knows (404/410) is replaced and registered
@@ -871,35 +925,70 @@ impl AiDebugController {
                 settings.indicator_timeout
             }
         });
-        self.0.state.borrow_mut().traces.insert(
+        let mut state = self.0.state.borrow_mut();
+        let active_since = if category == Some("indicator") {
+            state
+                .indicator_foreground
+                .then(|| state.indicator_resumed_at.map_or(at, |since| since.max(at)))
+        } else {
+            Some(at)
+        };
+        state.traces.insert(
             id,
             Trace {
-                at,
+                name,
+                wall,
                 category,
                 threshold,
                 exceeded: false,
+                active_elapsed: Duration::ZERO,
+                active_since,
             },
         );
-        let (Some(category), Some(threshold)) = (category, threshold) else {
-            return;
+        drop(state);
+        self.schedule_trace_check(id);
+    }
+
+    fn schedule_trace_check(&self, id: u64) {
+        let (since, threshold, deadline) = {
+            let state = self.0.state.borrow();
+            let Some(trace) = state.traces.get(&id).filter(|trace| !trace.exceeded) else {
+                return;
+            };
+            let (Some(since), Some(threshold)) = (trace.active_since, trace.threshold) else {
+                return;
+            };
+            if threshold.is_zero() {
+                return;
+            }
+            (
+                since,
+                threshold,
+                since + threshold.saturating_sub(trace.active_elapsed),
+            )
         };
-        if threshold.is_zero() {
-            return;
-        }
         let this = self.clone();
         self.spawn(async move {
-            tokio::time::sleep_until(at + threshold).await;
-            {
+            tokio::time::sleep_until(deadline).await;
+            let (category, name, wall, elapsed) = {
                 let mut state = this.0.state.borrow_mut();
                 let Some(trace) = state.traces.get_mut(&id) else {
                     return;
                 };
-                if trace.exceeded {
+                if trace.exceeded || trace.active_since != Some(since) {
                     return;
                 }
+                let Some(category) = trace.category else {
+                    return;
+                };
                 trace.exceeded = true;
-            }
-            let elapsed = Instant::now().duration_since(at);
+                (
+                    category,
+                    trace.name.clone(),
+                    trace.wall,
+                    trace.active_elapsed_at(Instant::now()),
+                )
+            };
             this.report_performance_trace(category, &name, wall, elapsed, threshold)
                 .await;
         });
@@ -909,11 +998,9 @@ impl AiDebugController {
         let Some(trace) = self.0.state.borrow_mut().traces.remove(&id) else {
             return;
         };
+        let duration = trace.active_elapsed_at(at);
         let mut params = Map::new();
-        params.insert(
-            "duration_ms".into(),
-            (at.duration_since(trace.at).as_millis() as u64).into(),
-        );
+        params.insert("duration_ms".into(), (duration.as_millis() as u64).into());
         if let Some(category) = trace.category {
             params.insert("category".into(), category.into());
         }

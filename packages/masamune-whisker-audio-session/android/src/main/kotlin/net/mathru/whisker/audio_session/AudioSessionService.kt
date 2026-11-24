@@ -12,12 +12,18 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import rs.whisker.runtime.WhiskerRuntimeRetention
 
 class AudioSessionService : Service() {
     private var retention: WhiskerRuntimeRetention.Lease? = null
+
+    // Android can leave the service instance alive after denying or revoking foreground status.
+    internal fun isPlaybackForeground(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            foregroundServiceType and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK != 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 

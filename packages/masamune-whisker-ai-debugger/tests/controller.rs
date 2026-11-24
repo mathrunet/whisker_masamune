@@ -535,6 +535,70 @@ async fn slow_traces_report_one_incident() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn indicator_uses_only_foreground_time() {
+    run(async {
+        let transport = MockTransport::default();
+        let controller = AiDebugController::new(config(&transport)).unwrap();
+        attach(&controller);
+        let adapter = controller.logger_adapter();
+        let name = "masamune.indicator.show|boot_retry";
+        adapter.trace_start(1, name);
+        settle().await;
+        tokio::time::advance(Duration::from_secs(2)).await;
+        controller.pause();
+        tokio::time::advance(Duration::from_secs(600)).await;
+        settle().await;
+        assert!(transport.bodies("/incidents").is_empty());
+
+        controller.resume().await.unwrap();
+        tokio::time::advance(Duration::from_secs(7)).await;
+        settle().await;
+        assert!(transport.bodies("/incidents").is_empty());
+
+        tokio::time::advance(Duration::from_secs(1)).await;
+        settle().await;
+        let incidents = transport.bodies("/incidents");
+        assert_eq!(incidents.len(), 1);
+        assert_eq!(incidents[0]["metadata"]["elapsedMs"], 10000);
+    })
+    .await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn indicator_finishing_on_resume_does_not_report_a_timeout() {
+    run(async {
+        let transport = MockTransport::default();
+        let controller = AiDebugController::new(config(&transport)).unwrap();
+        attach(&controller);
+        let adapter = controller.logger_adapter();
+        let name = "masamune.indicator.show|boot_retry";
+        adapter.trace_start(1, name);
+        settle().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        controller.pause();
+        tokio::time::advance(Duration::from_secs(600)).await;
+        controller.resume().await.unwrap();
+        adapter.trace_stop(1, name);
+        settle().await;
+        tokio::time::advance(Duration::from_secs(20)).await;
+        settle().await;
+
+        assert!(transport.bodies("/incidents").is_empty());
+        controller.flush_logs().await;
+        let message = transport.bodies("/events")[0]["events"][0]["message"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(message.contains(r#""duration_ms":1000"#), "{message}");
+        assert!(
+            message.contains(r#""threshold_exceeded":false"#),
+            "{message}"
+        );
+    })
+    .await;
+}
+
+#[tokio::test(start_paused = true)]
 async fn handled_errors_follow_the_setting() {
     run(async {
         #[derive(Debug)]

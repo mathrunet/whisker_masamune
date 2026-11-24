@@ -353,7 +353,7 @@ internal object AudioSessions {
     // MARK: - Notification and service
 
     private fun startService(context: Context) {
-        if (service != null) return
+        if (service?.isPlaybackForeground() == true) return
         try {
             ContextCompat.startForegroundService(context, Intent(context, AudioSessionService::class.java))
         } catch (error: IllegalStateException) {
