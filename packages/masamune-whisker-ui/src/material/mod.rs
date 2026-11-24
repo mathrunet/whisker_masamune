@@ -3,6 +3,7 @@
 pub mod app_bar;
 pub mod bottom_sheet;
 pub mod buttons;
+pub mod date_picker;
 pub mod dialog;
 pub mod divider;
 pub mod fullscreen;

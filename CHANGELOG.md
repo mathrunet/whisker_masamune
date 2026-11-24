@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.14.3
+
+- **NEW** `DatePickerDialog` in masamune-whisker-ui: a Material 3 date picker ported from Flutter's
+  `showDatePicker`, drawn in Whisker so it looks the same on iOS and Android. Tapping the month
+  title opens a year grid, the previous / next buttons and a horizontal swipe turn the month, and
+  the pencil button switches to typing the date with the number keyboard (separators are inserted
+  while typing; invalid and out-of-range dates show an error). Texts and date formats come from
+  `DatePickerLabels`.
+
 ## 0.14.2
 
 - **NEW** (whisker fork `6bfdb24f`) Builds read cargo's output from the target directory `cargo

@@ -32,6 +32,9 @@ pub use material::bottom_sheet::{
     ModalBottomSheet, ModalBottomSheetScrollView, ModalLayer, ModalLayerHost, provide_modal_layer,
 };
 pub use material::buttons::{FilledButton, OutlinedButton, TextButton};
+pub use material::date_picker::{
+    DateInputOrder, DatePickerDialog, DatePickerEntryMode, DatePickerLabels,
+};
 pub use material::dialog::{
     BusyHost, DIALOG_CANCEL_IDENTIFIER, DIALOG_SUBMIT_IDENTIFIER, Dialog, DialogHost, Overlay,
     OverlayHost, provide_overlay, use_overlay,
