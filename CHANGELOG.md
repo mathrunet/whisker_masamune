@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.14.1
+
+- **FIX** Android audio sessions keep answering media controls after the app task is removed.
+- **NEW** Google Maps accepts a background color on Android and iOS to avoid a light flash
+  before dark map tiles are drawn.
 - **NEW** `masamune-whisker-network`: `interfaces` returns the IPv4 / IPv6 addresses of the active
   network interfaces (loopback and link-local excluded, VPNs marked `point_to_point`);
   `discover_services` browses a DNS-SD service type for a fixed time and resolves what it finds
