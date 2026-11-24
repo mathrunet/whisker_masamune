@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerShareReceive", targets: ["MasamuneWhiskerShareReceive"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mathrunet/whisker.git", revision: "e554539121cde591e129a4fc87aaaf305933abcd"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"),
     ],
     targets: [
         .target(

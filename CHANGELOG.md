@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.14.2
+
+- **NEW** (whisker fork `6bfdb24f`) Builds read cargo's output from the target directory `cargo
+  metadata` reports, so `CARGO_TARGET_DIR` / `build.target-dir` can share one target directory
+  between apps. iOS hot reload no longer compiles every dependency twice, and each successful
+  build deletes stale build artifacts no app still uses (`whisker clean` runs it on demand).
+  iOS and Android dev servers of one workspace keep separate hot reload state, and Android keeps a
+  retained runtime alive after its Activity is destroyed.
+  Apps run `cargo update -p whisker` and reinstall the CLI. The Swift Host SDKs are pinned to the
+  same revision.
+
 ## 0.14.1
 
 - **FIX** Android audio sessions keep answering media controls after the app task is removed.

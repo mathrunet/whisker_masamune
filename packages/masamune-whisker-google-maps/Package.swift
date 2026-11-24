@@ -16,7 +16,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerGoogleMaps", targets: ["MasamuneWhiskerGoogleMaps"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mathrunet/whisker.git", revision: "e554539121cde591e129a4fc87aaaf305933abcd"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"),
         .package(url: "https://github.com/googlemaps/ios-maps-sdk.git", "10.15.0"..<"11.0.0"),
     ],
     targets: [

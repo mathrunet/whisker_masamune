@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "MasamuneWhiskerGoogleSignIn", targets: ["MasamuneWhiskerGoogleSignIn"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mathrunet/whisker.git", revision: "e554539121cde591e129a4fc87aaaf305933abcd"),
+        .package(url: "https://github.com/mathrunet/whisker.git", revision: "6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"),
         .package(url: "https://github.com/firebase/firebase-ios-sdk.git", exact: "12.19.2"),
         .package(url: "https://github.com/google/GoogleSignIn-iOS.git", from: "10.0.0"),
     ],

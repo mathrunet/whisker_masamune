@@ -1060,7 +1060,7 @@ checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
 name = "masamune-whisker-activity"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-adapter"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-logger",
  "whisker",
@@ -1081,7 +1081,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-admob"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-ai-debugger"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-app-control"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-bridge",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-appearance"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-app-control",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-apple-sign-in"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-audio-capture"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-bridge",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-audio-playlist"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-audio-session"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1199,14 +1199,14 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "masamune-whisker-auth-firebase"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-auth",
  "whisker-firebase",
@@ -1214,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth0"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-auth0-firebase"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "futures-util",
  "masamune-whisker-auth",
@@ -1245,7 +1245,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-barcode-scanner"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "image",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-billing"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1272,7 +1272,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-boot"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-app-control",
@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-bridge"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-cached-image"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "whisker",
  "whisker-image",
@@ -1302,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-date-picker"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-deeplink"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1326,7 +1326,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-device-info"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1336,7 +1336,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-ai"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-app-check"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1362,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-firestore-db"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1372,7 +1372,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firebase-remote-config"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1383,7 +1383,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-firestore"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-firebase-firestore-db",
@@ -1394,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-fonts"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1404,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-form"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "chrono",
  "log",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-auth",
@@ -1432,7 +1432,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions-cloudflare"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-functions",
  "serde",
@@ -1443,7 +1443,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-functions-firebase"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-auth-firebase",
  "masamune-whisker-firebase-app-check",
@@ -1456,7 +1456,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-geocoding"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1466,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-google-maps"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "serde",
@@ -1477,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-google-sign-in"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1490,7 +1490,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-image-picker"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-in-app-review"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1514,7 +1514,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-local-notification"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-adapter",
  "masamune-whisker-bridge",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-localize"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-location"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1554,7 +1554,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-logger"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "web-sys",
@@ -1562,7 +1562,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-logger-firebase"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-logger",
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-model"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-model-functions"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-functions",
  "masamune-whisker-model",
@@ -1602,7 +1602,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-network"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-photo-library"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-bridge",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-screen"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-app-control",
@@ -1636,7 +1636,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-share"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde",
@@ -1646,7 +1646,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-share-receive"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "log",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-shimmer"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-appearance",
  "whisker",
@@ -1668,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-speech-recognition"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-bridge",
@@ -1679,7 +1679,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "futures-executor",
  "tempfile",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-cloudflare"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-functions",
@@ -1700,7 +1700,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-firebase"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-storage",
  "whisker-firebase",
@@ -1708,7 +1708,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-storage-functions"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "base64 0.22.1",
  "masamune-whisker-functions",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-tidb"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-functions",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-turso"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-functions",
@@ -1745,7 +1745,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-ui"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "log",
  "masamune-whisker-appearance",
@@ -1761,14 +1761,14 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-view-capture"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "whisker",
 ]
 
 [[package]]
 name = "masamune-whisker-wakelock"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "masamune-whisker-bridge",
  "serde_json",
@@ -1777,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-webview"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "masamune-whisker-adapter",
@@ -1789,7 +1789,7 @@ dependencies = [
 
 [[package]]
 name = "masamune-whisker-youtube"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "serde",
  "tokio",
@@ -3060,7 +3060,7 @@ dependencies = [
 [[package]]
 name = "whisker"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "serde",
  "serde_json",
@@ -3077,7 +3077,7 @@ dependencies = [
 [[package]]
 name = "whisker-animation"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker-css",
  "whisker-runtime",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "whisker-config"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3097,7 +3097,7 @@ dependencies = [
 [[package]]
 name = "whisker-css"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker-macros",
  "whisker-style",
@@ -3106,7 +3106,7 @@ dependencies = [
 [[package]]
 name = "whisker-driver"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker-driver-sys",
  "whisker-engine",
@@ -3116,7 +3116,7 @@ dependencies = [
 [[package]]
 name = "whisker-driver-sys"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "cc",
 ]
@@ -3124,7 +3124,7 @@ dependencies = [
 [[package]]
 name = "whisker-engine"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker-layout",
  "whisker-protocol",
@@ -3134,7 +3134,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "plist",
@@ -3151,7 +3151,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-analytics"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3163,7 +3163,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-auth"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
  "whisker-firebase-core",
@@ -3172,7 +3172,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-core"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3183,7 +3183,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-crashlytics"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3195,7 +3195,7 @@ dependencies = [
 [[package]]
 name = "whisker-firebase-storage"
 version = "0.1.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
  "whisker-firebase-core",
@@ -3204,7 +3204,7 @@ dependencies = [
 [[package]]
 name = "whisker-icons"
 version = "0.14.5"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
  "whisker-svg",
@@ -3213,7 +3213,7 @@ dependencies = [
 [[package]]
 name = "whisker-image"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "serde",
  "serde_json",
@@ -3223,7 +3223,7 @@ dependencies = [
 [[package]]
 name = "whisker-input"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "serde",
  "whisker",
@@ -3232,7 +3232,7 @@ dependencies = [
 [[package]]
 name = "whisker-keyboard"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
 ]
@@ -3240,7 +3240,7 @@ dependencies = [
 [[package]]
 name = "whisker-layout"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "taffy",
  "whisker-protocol",
@@ -3250,7 +3250,7 @@ dependencies = [
 [[package]]
 name = "whisker-local-store"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
 ]
@@ -3258,7 +3258,7 @@ dependencies = [
 [[package]]
 name = "whisker-macro-syntax"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "proc-macro2",
  "syn 2.0.119",
@@ -3267,7 +3267,7 @@ dependencies = [
 [[package]]
 name = "whisker-macros"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3278,7 +3278,7 @@ dependencies = [
 [[package]]
 name = "whisker-paths"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
 ]
@@ -3286,7 +3286,7 @@ dependencies = [
 [[package]]
 name = "whisker-plugin"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3296,7 +3296,7 @@ dependencies = [
 [[package]]
 name = "whisker-protocol"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker-value",
 ]
@@ -3304,7 +3304,7 @@ dependencies = [
 [[package]]
 name = "whisker-router"
 version = "0.14.7"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "anyhow",
  "serde",
@@ -3316,7 +3316,7 @@ dependencies = [
 [[package]]
 name = "whisker-runtime"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -3333,7 +3333,7 @@ dependencies = [
 [[package]]
 name = "whisker-safe-area"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "whisker",
 ]
@@ -3341,12 +3341,12 @@ dependencies = [
 [[package]]
 name = "whisker-style"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 
 [[package]]
 name = "whisker-svg"
 version = "0.14.8"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "base64 0.22.1",
  "roxmltree",
@@ -3356,7 +3356,7 @@ dependencies = [
 [[package]]
 name = "whisker-value"
 version = "0.19.1"
-source = "git+https://github.com/mathrunet/whisker?branch=main#e554539121cde591e129a4fc87aaaf305933abcd"
+source = "git+https://github.com/mathrunet/whisker?branch=main#6bfdb24fb5bb77dda1474d68fbe31c2a7ffec5b4"
 dependencies = [
  "serde",
  "serde_json",
