@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0
+
+- **BREAKING** All crates follow the `mathrunet/whisker` fork at whisker 0.19 (fork revision
+  `e5545391`). Apps raise their `whisker` / `whisker-plugin` requirements to `0.19` and run
+  `cargo update -p whisker`. The Swift Host SDKs are pinned to the same revision.
+- **FIX** (whisker fork) iOS `scroll_snap_stop: Always` paging no longer moves back one page when
+  the user swipes again past the first or last page while the content is still bouncing.
+
 ## 0.13.1
 
 - **NEW** `masamune-whisker-ui`: `ModalBottomSheet` gains `backdrop_blur`, which blurs whatever is
