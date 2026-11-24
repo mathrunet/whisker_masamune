@@ -28,7 +28,7 @@ masamune-whisker-functions-firebase = { path = "packages/masamune-whisker-functi
 masamune-whisker-logger = { path = "packages/masamune-whisker-logger", version = "0.13.1" }
 masamune-whisker-logger-firebase = { path = "packages/masamune-whisker-logger-firebase", version = "0.13.1" }
 whisker-image = "0.14"
-whisker = "0.18"
+whisker = "0.19"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 futures-channel = "0.3"
@@ -41,7 +41,7 @@ tokio = { version = "1", features = ["time", "rt", "macros"] }
 # TLS is chosen per target in each consumer crate: Security.framework on Apple, rustls elsewhere.
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 whisker-paths = "0.14"
-whisker-plugin = "0.18"
+whisker-plugin = "0.19"
 anyhow = "1"
 whisker-firebase = { version = "0.1", default-features = false }
 wiremock = "0.6"
