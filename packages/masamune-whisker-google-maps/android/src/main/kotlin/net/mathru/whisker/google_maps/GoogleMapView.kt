@@ -20,6 +20,7 @@ import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.Log
@@ -59,6 +60,7 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
     private var initialCamera: CameraPosition? = null
     private var lastCamera: CameraPosition? = null
     private var styleJson = ""
+    private var backgroundColor: Int? = null
     private var paddingDp = FloatArray(4) // left, top, right, bottom
     private val gestures = mutableMapOf(Gesture.ZOOM to true, Gesture.SCROLL to true, Gesture.TILT to true, Gesture.ROTATE to true)
     private var myLocation = false
@@ -108,6 +110,13 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         if (initialCamera != null) return
         initialCamera = parse(json)?.let { camera(it) } ?: return
         if (map != null && !readySent) initialCamera?.let { map?.moveCamera(CameraUpdateFactory.newCameraPosition(it)) }
+    }
+
+    // `0xAARRGGBB` as a decimal string; empty restores the SDK default. The map's own background
+    // is fixed when the MapView is created, so a change reaches it on the next attach.
+    fun setBackgroundColor(value: String) {
+        backgroundColor = value.toLongOrNull()?.toInt()
+        applyBackground()
     }
 
     fun setMapStyle(json: String) {
@@ -192,10 +201,14 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
     private fun createMap() {
         if (mapView != null) return
         val camera = lastCamera ?: initialCamera ?: CameraPosition(LatLng(0.0, 0.0), 2f, 0f, 0f)
-        val view = MapView(context, GoogleMapOptions().camera(camera).mapToolbarEnabled(false))
+        val options = GoogleMapOptions().camera(camera).mapToolbarEnabled(false)
+        // Painted until the tiles are drawn, so a dark style does not flash the light default.
+        backgroundColor?.let { options.backgroundColor(it) }
+        val view = MapView(context, options)
         view.onCreate(null)
         view().addView(view, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         mapView = view
+        applyBackground()
         val owner = findActivity(context) as? LifecycleOwner
         if (owner != null) {
             lifecycle = owner.lifecycle
@@ -322,6 +335,12 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         } catch (_: SecurityException) {
             Log.w(TAG, "my location needs the location permission")
         }
+    }
+
+    private fun applyBackground() {
+        val color = backgroundColor ?: Color.TRANSPARENT
+        view().setBackgroundColor(color)
+        mapView?.setBackgroundColor(color)
     }
 
     private fun applyStyle() {

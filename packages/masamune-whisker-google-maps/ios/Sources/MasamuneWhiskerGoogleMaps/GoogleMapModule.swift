@@ -28,6 +28,9 @@ public final class GoogleMapModule: Module {
                 Prop("initial-camera", clear: { (view: GoogleMapView) in view.setInitialCamera("") }) { (view: GoogleMapView, value: WhiskerValue) in
                     view.setInitialCamera(value.asString ?? "")
                 }
+                Prop("background-color", clear: { (view: GoogleMapView) in view.setBackgroundColor("") }) { (view: GoogleMapView, value: WhiskerValue) in
+                    view.setBackgroundColor(value.asString ?? "")
+                }
                 Prop("map-style", clear: { (view: GoogleMapView) in view.setMapStyle("") }) { (view: GoogleMapView, value: WhiskerValue) in
                     view.setMapStyle(value.asString ?? "")
                 }

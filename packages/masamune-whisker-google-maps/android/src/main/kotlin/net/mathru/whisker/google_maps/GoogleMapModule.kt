@@ -16,6 +16,9 @@ class GoogleMapModule : Module() {
             Prop("initial-camera", clear = { view: GoogleMapView -> view.setInitialCamera("") }) { view: GoogleMapView, value ->
                 view.setInitialCamera(value.asString() ?: "")
             }
+            Prop("background-color", clear = { view: GoogleMapView -> view.setBackgroundColor("") }) { view: GoogleMapView, value ->
+                view.setBackgroundColor(value.asString() ?: "")
+            }
             Prop("map-style", clear = { view: GoogleMapView -> view.setMapStyle("") }) { view: GoogleMapView, value ->
                 view.setMapStyle(value.asString() ?: "")
             }

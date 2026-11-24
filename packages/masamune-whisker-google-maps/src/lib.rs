@@ -366,6 +366,11 @@ impl Default for GoogleMapRef {
     }
 }
 
+/// `0xAARRGGBB` as the decimal string the native views parse; an empty string keeps the default.
+fn color_prop(color: Option<u32>) -> String {
+    color.map(|color| color.to_string()).unwrap_or_default()
+}
+
 fn json<T: Serialize>(value: &T) -> String {
     serde_json::to_string(value).unwrap_or_default()
 }
@@ -404,6 +409,7 @@ fn polylines_json(polylines: &[Polyline]) -> String {
 )]
 pub fn native_google_map(
     initial_camera: Signal<String>,
+    background_color: Signal<String>,
     map_style: Signal<String>,
     padding: Signal<String>,
     zoom_gestures: Signal<bool>,
@@ -439,8 +445,11 @@ pub fn __whisker_element_module_definition() -> whisker::ElementModuleDefinition
 /// are diffed by `id`, so update the lists freely.
 ///
 /// `map_style` is a Google Maps style JSON (the array of `featureType` / `elementType` /
-/// `stylers` rules); an empty string uses the default style. `my_location` shows the blue dot
-/// (it needs the location permission, for example from `masamune-whisker-location`).
+/// `stylers` rules); an empty string uses the default style. `background_color` (`0xAARRGGBB`)
+/// fills the map before its tiles are drawn; match it to the style's base color so a dark style
+/// does not flash the SDK's light default background. `None` keeps the SDK default.
+/// `my_location` shows the blue dot (it needs the location permission, for example from
+/// `masamune-whisker-location`).
 ///
 /// Hosts other than iOS and Android render nothing.
 #[component]
@@ -449,6 +458,7 @@ pub fn google_map(
     #[prop(default = Vec::new().into())] markers: Signal<Vec<Marker>>,
     #[prop(default = Vec::new().into())] polylines: Signal<Vec<Polyline>>,
     #[prop(default = String::new().into())] map_style: Signal<String>,
+    #[prop(default = None.into())] background_color: Signal<Option<u32>>,
     #[prop(default = MapPadding::default().into())] padding: Signal<MapPadding>,
     #[prop(default = true.into())] zoom_gestures: Signal<bool>,
     #[prop(default = true.into())] scroll_gestures: Signal<bool>,
@@ -474,6 +484,7 @@ pub fn google_map(
 ) -> Element {
     let mut builder = NativeGoogleMap::builder()
         .initial_camera(computed(move || json(&initial_camera.get())))
+        .background_color(computed(move || color_prop(background_color.get())))
         .map_style(map_style)
         .padding(computed(move || json(&padding.get())))
         .zoom_gestures(zoom_gestures)
@@ -603,6 +614,12 @@ mod tests {
     }
 
     #[test]
+    fn encodes_background_color() {
+        assert_eq!(color_prop(None), "");
+        assert_eq!(color_prop(Some(0xFF11_1827)), "4279310375");
+    }
+
+    #[test]
     fn encodes_camera_commands() {
         let command = CameraCommand {
             update: CameraUpdate::Bounds {
@@ -642,6 +659,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "initial-camera",
+                "background-color",
                 "map-style",
                 "padding",
                 "zoom-gestures",

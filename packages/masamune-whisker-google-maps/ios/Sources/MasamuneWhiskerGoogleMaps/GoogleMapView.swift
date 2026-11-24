@@ -22,6 +22,7 @@ public final class GoogleMapView: WhiskerUI<UIView> {
     private var mapView: GMSMapView?
     private var initialCamera: GMSCameraPosition?
     private var styleJSON = ""
+    private var mapBackgroundColor: UIColor?
     private var padding = UIEdgeInsets.zero
     private var gestures: [Gesture: Bool] = [.zoom: true, .scroll: true, .tilt: true, .rotate: true]
     private var myLocation = false
@@ -43,6 +44,7 @@ public final class GoogleMapView: WhiskerUI<UIView> {
         containerView.addSubview(map)
         mapView = map
         // Props can arrive before createView(); apply what is known.
+        applyBackground()
         applySettings()
         applyStyle()
         syncMarkers()
@@ -63,6 +65,13 @@ public final class GoogleMapView: WhiskerUI<UIView> {
             initialCamera = camera
             if let mapView, !readySent { mapView.camera = camera }
         }
+    }
+
+    /// `0xAARRGGBB` as a decimal string; empty restores the SDK default. Painted until the tiles
+    /// are drawn, so a dark style does not flash the light default.
+    func setBackgroundColor(_ value: String) {
+        mapBackgroundColor = UInt32(value).flatMap { Self.color(NSNumber(value: $0)) }
+        applyBackground()
     }
 
     func setMapStyle(_ json: String) {
@@ -153,6 +162,11 @@ public final class GoogleMapView: WhiskerUI<UIView> {
         mapView.settings.consumesGesturesInView = true
         mapView.isMyLocationEnabled = myLocation
         mapView.padding = padding
+    }
+
+    private func applyBackground() {
+        containerView.backgroundColor = mapBackgroundColor
+        mapView?.backgroundColor = mapBackgroundColor
     }
 
     private func applyStyle() {
