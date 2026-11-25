@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.14.4
+
+- **FIX** Android Google Maps applies the requested background before creating the map view.
+- **FIX** AI debugger controller coverage and Android audio session wiring.
+
 ## 0.14.3
 
 - **NEW** `DatePickerDialog` in masamune-whisker-ui: a Material 3 date picker ported from Flutter's
