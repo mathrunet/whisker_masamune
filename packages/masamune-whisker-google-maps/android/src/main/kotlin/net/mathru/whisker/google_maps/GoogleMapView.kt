@@ -72,6 +72,9 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
     private var pendingCamera: JSONObject? = null
     private var readySent = false
 
+    private val createMapAfterProps = Runnable {
+        if (view().isAttachedToWindow) createMap()
+    }
     private var lifecycle: Lifecycle? = null
     private var started = false
     private var resumed = false
@@ -96,10 +99,13 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        createMap()
+        // Whisker can attach the view before applying its initial props in the same frame.
+        // Wait for those props so the renderer starts with the requested background color.
+        view().post(createMapAfterProps)
     }
 
     override fun onDetachedFromWindow() {
+        view().removeCallbacks(createMapAfterProps)
         destroyMap()
         super.onDetachedFromWindow()
     }
@@ -205,10 +211,10 @@ class GoogleMapView(context: WhiskerContext) : WhiskerUI<FrameLayout>(context) {
         // Painted until the tiles are drawn, so a dark style does not flash the light default.
         backgroundColor?.let { options.backgroundColor(it) }
         val view = MapView(context, options)
+        backgroundColor?.let { view.setBackgroundColor(it) }
         view.onCreate(null)
         view().addView(view, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         mapView = view
-        applyBackground()
         val owner = findActivity(context) as? LifecycleOwner
         if (owner != null) {
             lifecycle = owner.lifecycle
