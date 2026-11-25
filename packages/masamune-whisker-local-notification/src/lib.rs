@@ -569,6 +569,30 @@ pub fn schedule_once_with_options(
     module().call("scheduleOnce", &request)
 }
 
+/// Posts a notification immediately without going through a scheduled alarm, replacing any
+/// notification with the same ID.
+pub fn show(id: &str, title: &str, text: &str, payload: Option<&str>) -> NativeResult<bool> {
+    show_with_options(id, title, text, payload, &NotificationOptions::default())
+}
+
+/// [`show`] with [`NotificationOptions`] (channel, full-screen intent, interruption level).
+pub fn show_with_options(
+    id: &str,
+    title: &str,
+    text: &str,
+    payload: Option<&str>,
+    options: &NotificationOptions,
+) -> NativeResult<bool> {
+    let mut request = json!({
+        "id": id,
+        "title": title,
+        "text": text,
+        "payload": payload,
+    });
+    options.extend(&mut request);
+    module().call("show", &request)
+}
+
 /// Returns the saved schedule (`None` for a one-off schedule that has already fired).
 pub fn schedule(id: &str) -> NativeResult<Option<Schedule>> {
     module().call("schedule", &json!({ "id": id }))

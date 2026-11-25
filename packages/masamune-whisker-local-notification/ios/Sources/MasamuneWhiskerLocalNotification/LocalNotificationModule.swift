@@ -145,6 +145,15 @@ public final class LocalNotificationModule: Module {
                 return Bridge.ok(atMs)
             }
 
+            // show({ id, title, text, payload, interruptionLevel? }) — posts immediately.
+            Function("show") { args in
+                let json = Bridge.args(args)
+                guard let id = json["id"] as? String else { return Bridge.err("No value for id") }
+                LocalNotifications.installDelegate()
+                LocalNotifications.showNow(id: id, schedule: json)
+                return Bridge.ok(true)
+            }
+
             // schedule({ id }) -> saved schedule (null if missing or a one-off that has fired)
             Function("schedule") { args in
                 let id = Bridge.args(args)["id"] as? String ?? ""
@@ -289,7 +298,9 @@ enum LocalNotifications {
         var schedules = saved()
         schedules[id] = nil
         UserDefaults.standard.set(schedules, forKey: defaultsKey)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifierPrefix + id])
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifierPrefix + id])
+        center.removeDeliveredNotifications(withIdentifiers: [identifierPrefix + id])
     }
 
     static func removeAll() {
@@ -337,6 +348,26 @@ enum LocalNotifications {
             else { return }
             trigger = UNCalendarNotificationTrigger(dateMatching: DateComponents(hour: hour, minute: minute), repeats: true)
         }
+        let content = makeContent(id: id, schedule: schedule)
+        let request = UNNotificationRequest(identifier: identifierPrefix + id, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                NSLog("MasamuneWhiskerLocalNotification: failed to schedule %@: %@", id, Bridge.message(error))
+            }
+        }
+    }
+
+    static func showNow(id: String, schedule: [String: Any]) {
+        let content = makeContent(id: id, schedule: schedule)
+        let request = UNNotificationRequest(identifier: identifierPrefix + id, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                NSLog("MasamuneWhiskerLocalNotification: failed to show %@: %@", id, Bridge.message(error))
+            }
+        }
+    }
+
+    private static func makeContent(id: String, schedule: [String: Any]) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = schedule["title"] as? String ?? ""
         content.body = schedule["text"] as? String ?? ""
@@ -345,12 +376,7 @@ enum LocalNotifications {
         var userInfo: [String: Any] = [idKey: id]
         if let payload = schedule["payload"] as? String { userInfo[payloadKey] = payload }
         content.userInfo = userInfo
-        let request = UNNotificationRequest(identifier: identifierPrefix + id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                NSLog("MasamuneWhiskerLocalNotification: failed to schedule %@: %@", id, Bridge.message(error))
-            }
-        }
+        return content
     }
 
     /// The interruption level of a schedule (`active`, the iOS default, when missing or unknown).

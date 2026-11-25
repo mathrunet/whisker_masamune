@@ -222,6 +222,7 @@ internal object LocalNotifications {
     fun remove(context: Context, id: String) {
         schedules(context).edit().remove(id).apply()
         cancelAlarm(context, id)
+        NotificationManagerCompat.from(context).cancel(requestCode(id))
     }
 
     fun removeAll(context: Context) {
@@ -297,6 +298,10 @@ internal object LocalNotifications {
 
     fun show(context: Context, id: String) {
         val schedule = load(context, id) ?: return
+        showNow(context, id, schedule)
+    }
+
+    fun showNow(context: Context, id: String, schedule: JSONObject) {
         ensureChannel(context)
         val channel = scheduleChannel(context, schedule)
         if (!channelEnabled(context, channel)) return
@@ -542,6 +547,19 @@ class LocalNotificationModule : Module() {
                 LocalNotifications.save(context, id, json)
                 LocalNotifications.arm(context, id)
                 Bridge.ok(at)
+            } catch (error: Throwable) {
+                Bridge.err(error)
+            }
+        }
+
+        // show({ id, title, text, payload, channelId?, fullScreen?, interruptionLevel? }) — posts immediately.
+        Function("show") { args ->
+            try {
+                val json = Bridge.args(args)
+                val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
+                val id = json.getString("id")
+                LocalNotifications.showNow(context, id, json)
+                Bridge.ok(true)
             } catch (error: Throwable) {
                 Bridge.err(error)
             }

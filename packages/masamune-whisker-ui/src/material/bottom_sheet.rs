@@ -10,14 +10,14 @@
 use std::rc::Rc;
 
 use masamune_whisker_appearance::{palette, shape};
-use whisker::AnimConfig;
-use whisker::AnimationController;
 use whisker::css::{
     AlignSelf, BackdropFilter, Color, Display, FlexDirection, JustifyContent, Transform,
     TransformFn,
 };
 use whisker::event::{ScrollEvent, TouchEvent};
 use whisker::prelude::*;
+use whisker::AnimConfig;
+use whisker::AnimationController;
 use whisker_safe_area::safe_area_insets;
 
 use crate::style::{column, fill};
@@ -202,6 +202,9 @@ pub fn modal_bottom_sheet(
     #[prop(default = 0.54)]
     barrier_opacity: f32,
     #[prop(default = palette().surface)] color: Color,
+    /// Radius of the top corners in logical pixels. The default comes from the theme.
+    #[prop(default = shape().extra_large)]
+    top_corner_radius: f32,
     /// Blur radius (logical pixels) applied to whatever is behind the sheet surface, like
     /// Flutter's `BackdropFilter` under a translucent sheet. Pair it with a translucent `color`.
     /// `0.0` (the default) disables the blur.
@@ -224,6 +227,7 @@ pub fn modal_bottom_sheet(
                 drag_handle_spacing: drag_handle_spacing,
                 barrier_opacity: barrier_opacity,
                 color: color,
+                top_corner_radius: top_corner_radius,
                 backdrop_blur: backdrop_blur,
                 content: children.clone(),
             )
@@ -234,7 +238,10 @@ pub fn modal_bottom_sheet(
     };
     let id = layer.register(open, Rc::new(sheet));
     on_cleanup(move || layer.unregister(id));
-    render! { Fragment {} }
+    render! {
+        Fragment {
+        }
+    }
 }
 
 /// A vertical scroll view inside a [`ModalBottomSheet`].
@@ -289,6 +296,7 @@ fn sheet_state(
     drag_handle_spacing: f32,
     barrier_opacity: f32,
     color: Color,
+    top_corner_radius: f32,
     backdrop_blur: f32,
     content: Children,
 ) -> Element {
@@ -369,6 +377,7 @@ fn sheet_state(
                 drag_handle_spacing: drag_handle_spacing,
                 barrier_opacity: barrier_opacity,
                 color: color,
+                top_corner_radius: top_corner_radius,
                 backdrop_blur: backdrop_blur,
                 content: children.clone(),
             )
@@ -390,31 +399,31 @@ fn sheet_frame(
     drag_handle_spacing: f32,
     barrier_opacity: f32,
     color: Color,
+    top_corner_radius: f32,
     backdrop_blur: f32,
     content: Children,
 ) -> Element {
     let insets = safe_area_insets();
-    let radius = shape().extra_large;
     let sheet_style = computed(move || {
-        sheet_surface_style(color, backdrop_blur)
-            .width(percent(100))
+        sheet_surface_style(color, backdrop_blur, top_corner_radius)
             .padding_top(px(12))
             .padding_left(px(horizontal_padding + insets.get().leading as f32))
             .padding_right(px(horizontal_padding + insets.get().trailing as f32))
             .padding_bottom(px(bottom_padding + insets.get().bottom as f32))
-            .border_top_left_radius(px(radius))
-            .border_top_right_radius(px(radius))
             .transform(Transform::new().push(TransformFn::TranslateY(
                 percent((1.0 - progress.get()) * 100.0).into(),
             )))
     });
-    let barrier_style = computed(move || {
-        fill()
-            .z_index(800)
-            .justify_content(JustifyContent::FlexEnd)
-            .display(Display::Flex)
-            .flex_direction(FlexDirection::Column)
-            .background_color(Color::rgba(0, 0, 0, barrier_opacity * progress.get()))
+    let barrier_style = fill()
+        .z_index(800)
+        .justify_content(JustifyContent::FlexEnd)
+        .display(Display::Flex)
+        .flex_direction(FlexDirection::Column);
+    // The dimming is a sibling painted before the sheet rather than the sheet's own parent: a
+    // backdrop blur on the sheet then references it instead of baking it into its capture, so
+    // fading it in does not re-record the blur on every frame.
+    let scrim_style = computed(move || {
+        fill().background_color(Color::rgba(0, 0, 0, barrier_opacity * progress.get()))
     });
     let close = move |_| {
         if dismissible && !locked.get_untracked() {
@@ -481,6 +490,8 @@ fn sheet_frame(
     let content = content.clone();
     render! {
         View(style: barrier_style) {
+            View(style: scrim_style, on_tap: close) {
+            }
             View(style: css!(flex_grow: 1.0), on_tap: close) {
             }
             View(
@@ -510,9 +521,13 @@ fn sheet_frame(
     }
 }
 
-/// Background of the sheet surface: `color`, plus a backdrop blur when `backdrop_blur > 0`.
-fn sheet_surface_style(color: Color, backdrop_blur: f32) -> Css {
-    let style = column().background_color(color);
+/// Full-width shape and background of the sheet surface.
+fn sheet_surface_style(color: Color, backdrop_blur: f32, top_corner_radius: f32) -> Css {
+    let style = column()
+        .width(percent(100))
+        .background_color(color)
+        .border_top_left_radius(px(top_corner_radius))
+        .border_top_right_radius(px(top_corner_radius));
     if backdrop_blur > 0.0 {
         style.backdrop_filter(BackdropFilter::blur(px(backdrop_blur)))
     } else {
@@ -568,13 +583,21 @@ mod tests {
 
     #[test]
     fn sheet_surface_has_no_backdrop_blur_by_default() {
-        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 0.0).to_string();
+        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 0.0, 28.0).to_string();
         assert!(!style.contains("backdrop-filter"), "{style}");
     }
 
     #[test]
     fn sheet_surface_blurs_the_backdrop_when_requested() {
-        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 4.0).to_string();
+        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 4.0, 28.0).to_string();
         assert!(style.contains("backdrop-filter: blur(4px)"), "{style}");
+    }
+
+    #[test]
+    fn sheet_surface_spans_the_width_with_square_top_corners() {
+        let style = sheet_surface_style(Color::rgba(0, 0, 0, 0.45), 4.0, 0.0).to_string();
+        assert!(style.contains("width: 100%"), "{style}");
+        assert!(style.contains("border-top-left-radius: 0px"), "{style}");
+        assert!(style.contains("border-top-right-radius: 0px"), "{style}");
     }
 }
