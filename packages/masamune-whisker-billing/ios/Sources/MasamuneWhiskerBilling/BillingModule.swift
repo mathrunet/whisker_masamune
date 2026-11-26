@@ -30,7 +30,7 @@ public final class BillingModule: Module {
                 }
             }
 
-            // queryProducts({ ids: [...] }) -> [{ id, title, description, price, priceMicros, currency, period, offers }]
+            // queryProducts({ ids: [...] }) -> [{ id, kind, title, description, price, priceMicros, currency, period, offers }]
             AsyncFunction("queryProducts") { [weak self] args, promise in
                 let ids = Bridge.args(args)["ids"] as? [String] ?? []
                 self?.run { store in
@@ -42,14 +42,28 @@ public final class BillingModule: Module {
                 }
             }
 
-            // purchase({ productId, offerToken?, oldPurchaseToken? }) -> { status, code, message }.
+            // queryInAppProducts({ ids: [...] }) -> StoreKit 2 uses Product.products(for:) for all product types.
+            AsyncFunction("queryInAppProducts") { [weak self] args, promise in
+                let ids = Bridge.args(args)["ids"] as? [String] ?? []
+                self?.run { store in
+                    do {
+                        Bridge.resolve(promise, try await store.queryProducts(ids))
+                    } catch {
+                        Bridge.reject(promise, error)
+                    }
+                }
+            }
+
+            // purchase({ productId, offerToken?, oldPurchaseToken?, accountToken? }) -> { status, code, message }.
             // The offer token and the replaced purchase are Play-only: StoreKit applies introductory offers and
             // subscription-group upgrades itself. The outcome arrives through the "purchases" event.
             AsyncFunction("purchase") { [weak self] args, promise in
-                let productId = Bridge.args(args)["productId"] as? String ?? ""
+                let parsed = Bridge.args(args)
+                let productId = parsed["productId"] as? String ?? ""
+                let accountToken = parsed["accountToken"] as? String ?? ""
                 self?.run { store in
                     do {
-                        Bridge.resolve(promise, try await store.purchase(productId))
+                        Bridge.resolve(promise, try await store.purchase(productId, accountToken: accountToken))
                     } catch {
                         Bridge.reject(promise, error)
                     }
@@ -63,11 +77,31 @@ public final class BillingModule: Module {
                 }
             }
 
+            // queryInAppPurchases() -> unfinished & entitled non-subscription transactions
+            AsyncFunction("queryInAppPurchases") { [weak self] _, promise in
+                self?.run { store in
+                    Bridge.resolve(promise, await store.queryInAppPurchases())
+                }
+            }
+
             // finish({ token, transactionId }) — finishes the transaction.
             AsyncFunction("finish") { [weak self] args, promise in
                 let id = (Bridge.args(args)["transactionId"] as? String).flatMap { UInt64($0) }
                 guard let id else {
                     Bridge.reject(promise, "finish: invalid transactionId")
+                    return
+                }
+                self?.run { store in
+                    await store.finish(id)
+                    Bridge.resolve(promise, nil)
+                }
+            }
+
+            // consume({ token, transactionId }) — finishes a consumable transaction in StoreKit 2.
+            AsyncFunction("consume") { [weak self] args, promise in
+                let id = (Bridge.args(args)["transactionId"] as? String).flatMap { UInt64($0) }
+                guard let id else {
+                    Bridge.reject(promise, "consume: invalid transactionId")
                     return
                 }
                 self?.run { store in
@@ -126,7 +160,7 @@ final class BillingStore {
         return encoded
     }
 
-    func purchase(_ productId: String) async throws -> [String: Any?] {
+    func purchase(_ productId: String, accountToken: String = "") async throws -> [String: Any?] {
         let product: Product
         if let cached = products[productId] {
             product = cached
@@ -136,12 +170,19 @@ final class BillingStore {
         } else {
             throw BillingError("product not found: \(productId)")
         }
+        var options: Set<Product.PurchaseOption> = []
+        if !accountToken.isEmpty {
+            guard let uuid = UUID(uuidString: accountToken) else {
+                throw BillingError("invalid accountToken: expected UUID")
+            }
+            options.insert(.appAccountToken(uuid))
+        }
         let result: Product.PurchaseResult
         do {
             if #available(iOS 17.0, *), let scene = Self.keyWindow()?.windowScene {
-                result = try await product.purchase(confirmIn: scene)
+                result = try await product.purchase(confirmIn: scene, options: options)
             } else {
-                result = try await product.purchase()
+                result = try await product.purchase(options: options)
             }
         } catch {
             // The sheet could not be shown or the store rejected the request.
@@ -187,6 +228,27 @@ final class BillingStore {
             purchases.append(
                 await encode(transaction, jws: result.jwsRepresentation, finished: !unfinished.contains(transaction.id))
             )
+        }
+        return purchases
+    }
+
+    func queryInAppPurchases() async -> [[String: Any?]] {
+        var seen = Set<UInt64>()
+        var purchases: [[String: Any?]] = []
+        for await result in Transaction.unfinished {
+            guard case .verified(let transaction) = result,
+                  transaction.productType == .consumable || transaction.productType == .nonConsumable
+            else { continue }
+            transactions[transaction.id] = transaction
+            seen.insert(transaction.id)
+            purchases.append(await encode(transaction, jws: result.jwsRepresentation, finished: false))
+        }
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  transaction.productType == .nonConsumable,
+                  !seen.contains(transaction.id)
+            else { continue }
+            purchases.append(await encode(transaction, jws: result.jwsRepresentation, finished: true))
         }
         return purchases
     }
@@ -287,8 +349,15 @@ final class BillingStore {
                 offers.append(offer(kind: "introductory", freeTrial: intro.paymentMode == .freeTrial, phases: [phase, regular]))
             }
         }
+        let kind: String
+        switch product.type {
+        case .consumable: kind = "consumable"
+        case .nonConsumable: kind = "non_consumable"
+        default: kind = "subscription"
+        }
         return [
             "id": product.id,
+            "kind": kind,
             "title": product.displayName,
             "description": product.description,
             "price": product.displayPrice,

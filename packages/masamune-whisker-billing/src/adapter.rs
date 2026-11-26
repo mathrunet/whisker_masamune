@@ -1,7 +1,9 @@
 use masamune_whisker_adapter::{AdapterError, MasamuneAdapter, StartFuture};
 use whisker::prelude::*;
 
-use crate::{NativeError, NativeResult, Product, StoreFailure, query_products};
+use crate::{
+    NativeError, NativeResult, Product, StoreFailure, query_inapp_products, query_products,
+};
 
 /// Billing settings for [`masamune_whisker_adapter::MasamuneAdapters`] (Masamune's
 /// `PurchaseMasamuneAdapter`): the app's products, loaded after startup into [`products`].
@@ -10,8 +12,10 @@ use crate::{NativeError, NativeResult, Product, StoreFailure, query_products};
 /// [`crate::connect`] so iOS delivers the unfinished transactions to the handler.
 #[derive(Debug, Clone)]
 pub struct BillingMasamuneAdapter {
-    /// Store product ids, in display order.
+    /// Subscription product ids, in display order.
     pub product_ids: Vec<String>,
+    /// One-time / consumable product ids, in display order.
+    pub consumable_ids: Vec<String>,
     /// Load the products after startup.
     pub load_on_start: bool,
 }
@@ -20,8 +24,21 @@ impl BillingMasamuneAdapter {
     pub fn new(product_ids: impl IntoIterator<Item = impl Into<String>>) -> Self {
         Self {
             product_ids: product_ids.into_iter().map(Into::into).collect(),
+            consumable_ids: Vec::new(),
             load_on_start: true,
         }
+    }
+
+    /// Adds one-time / consumable product ids loaded alongside subscriptions.
+    pub fn consumables(mut self, ids: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.consumable_ids = ids.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Controls whether products are loaded automatically after startup.
+    pub fn load_on_start(mut self, enabled: bool) -> Self {
+        self.load_on_start = enabled;
+        self
     }
 }
 
@@ -60,9 +77,18 @@ pub fn products() -> ReadSignal<Vec<Product>> {
 pub async fn load_products() -> NativeResult<Vec<Product>> {
     let adapter = BillingMasamuneAdapter::primary()
         .ok_or_else(|| NativeError("BillingMasamuneAdapter is not installed".into()))?;
-    let ids: Vec<&str> = adapter.product_ids.iter().map(String::as_str).collect();
-    let mut found = query_products(&ids).await?;
-    found.sort_by_key(|product| ids.iter().position(|id| *id == product.id));
+    let sub_ids: Vec<&str> = adapter.product_ids.iter().map(String::as_str).collect();
+    let inapp_ids: Vec<&str> = adapter.consumable_ids.iter().map(String::as_str).collect();
+    let mut found = if sub_ids.is_empty() {
+        Vec::new()
+    } else {
+        query_products(&sub_ids).await?
+    };
+    if !inapp_ids.is_empty() {
+        found.extend(query_inapp_products(&inapp_ids).await?);
+    }
+    let order: Vec<&str> = sub_ids.iter().chain(inapp_ids.iter()).copied().collect();
+    found.sort_by_key(|product| order.iter().position(|id| *id == product.id));
     PRODUCTS.with(|products| products.set(found.clone()));
     Ok(found)
 }

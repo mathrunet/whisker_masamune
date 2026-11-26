@@ -10,12 +10,13 @@ use masamune_whisker_functions::{
     FunctionRequest, FunctionsAdapter, FunctionsError, FunctionsFuture, RestApiFunctionsAdapter,
 };
 
-/// Routes actions to edge or region Workers, using the same bearer token provider.
+/// Routes actions to edge or region Workers, using the same bearer token and App Check providers.
 #[derive(Clone)]
 pub struct CloudflareFunctionsAdapter {
     edge: RestApiFunctionsAdapter,
     region: Option<RestApiFunctionsAdapter>,
     auth: Auth,
+    app_check: Option<Auth>,
     timeout: Duration,
     allow_local_http: bool,
 }
@@ -27,14 +28,18 @@ impl CloudflareFunctionsAdapter {
             edge: RestApiFunctionsAdapter::new(endpoint),
             region: None,
             auth: Auth::none(),
+            app_check: None,
             timeout: Duration::from_secs(30),
             allow_local_http: false,
         }
     }
     pub fn with_region_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        let adapter = RestApiFunctionsAdapter::new(endpoint)
+        let mut adapter = RestApiFunctionsAdapter::new(endpoint)
             .with_auth(self.auth.clone())
             .with_timeout(self.timeout);
+        if let Some(app_check) = self.app_check.clone() {
+            adapter = adapter.with_app_check(app_check);
+        }
         self.region = Some(if self.allow_local_http {
             adapter.allow_local_http()
         } else {
@@ -53,6 +58,15 @@ impl CloudflareFunctionsAdapter {
         self.edge = self.edge.with_auth(auth.clone());
         self.region = self.region.map(|adapter| adapter.with_auth(auth.clone()));
         self.auth = auth;
+        self
+    }
+    /// Requires a nonempty App Check token (`X-Firebase-AppCheck`) on edge and region requests.
+    pub fn with_app_check(mut self, provider: Auth) -> Self {
+        self.edge = self.edge.with_app_check(provider.clone());
+        self.region = self
+            .region
+            .map(|adapter| adapter.with_app_check(provider.clone()));
+        self.app_check = Some(provider);
         self
     }
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -79,5 +93,47 @@ impl FunctionsAdapter for CloudflareFunctionsAdapter {
                 )))
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn attaches_app_check_header_to_edge_and_region_requests() {
+        let edge = MockServer::start().await;
+        let region = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/ping"))
+            .and(header("X-Firebase-AppCheck", "app-check-tok"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": "edge"})),
+            )
+            .mount(&edge)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/ping"))
+            .and(header("X-Firebase-AppCheck", "app-check-tok"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": "region"})),
+            )
+            .mount(&region)
+            .await;
+
+        let adapter = CloudflareFunctionsAdapter::new(edge.uri())
+            .with_region_endpoint(region.uri())
+            .allow_local_http()
+            .with_app_check(Auth::fixed("app-check-tok"));
+
+        let edge_res = adapter.send(FunctionRequest::new("ping")).await.unwrap();
+        assert_eq!(edge_res["ok"], "edge");
+        let region_res = adapter
+            .send(FunctionRequest::new("ping").with_worker_type("region"))
+            .await
+            .unwrap();
+        assert_eq!(region_res["ok"], "region");
     }
 }

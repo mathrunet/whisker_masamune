@@ -1,0 +1,40 @@
+[package]
+name = "masamune-whisker-messaging-firebase"
+description = "Firebase Cloud Messaging (FCM) push notifications adapter and CNG plugin for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**", "bin/**", "android/**", "build.gradle.kts", "Package.swift", "ios/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[package.metadata.whisker.module.platforms]
+android = { manifest = "build.gradle.kts" }
+ios = { manifest = "Package.swift" }
+
+# CNG plugin: `app.project_plugin::<MasamuneFirebaseMessaging>(|c| …)` in whisker.rs adds the
+# Push Notifications entitlement (`aps-environment`) and remote-notification background mode on iOS.
+[package.metadata.whisker.plugins.masamune-whisker-messaging-firebase]
+bin = "masamune-whisker-messaging-firebase-plugin"
+protocol = "project"
+
+[[bin]]
+name = "masamune-whisker-messaging-firebase-plugin"
+path = "bin/masamune_whisker_messaging_firebase_plugin.rs"
+test = false
+bench = false
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+masamune-whisker-bridge.workspace = true
+masamune-whisker-messaging.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+whisker-plugin.workspace = true
+anyhow.workspace = true

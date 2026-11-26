@@ -11,6 +11,7 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
 import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
@@ -47,16 +48,29 @@ class BillingModule : Module() {
         // connect() -> true
         AsyncFunction("connect") { _, promise -> connect(promise) { Bridge.resolve(promise, true) } }
 
-        // queryProducts({ ids: [...] }) -> [{ id, title, description, price, priceMicros, currency, period, offers }]
+        // queryProducts({ ids: [...] }) -> [{ id, kind, title, description, price, priceMicros, currency, period, offers }]
         AsyncFunction("queryProducts") { args, promise ->
             val ids = Bridge.args(args).optJSONArray("ids")
             val list = (0 until (ids?.length() ?: 0)).map { ids!!.getString(it) }
             connect(promise) {
-                loadDetails(list, promise) { products -> Bridge.resolve(promise, products.map(::encodeDetails)) }
+                loadDetails(list, BillingClient.ProductType.SUBS, promise) { products ->
+                    Bridge.resolve(promise, products.map(::encodeDetails))
+                }
             }
         }
 
-        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> { status, code, message } of the launch.
+        // queryInAppProducts({ ids: [...] }) -> one-time / consumable products (ProductType.INAPP)
+        AsyncFunction("queryInAppProducts") { args, promise ->
+            val ids = Bridge.args(args).optJSONArray("ids")
+            val list = (0 until (ids?.length() ?: 0)).map { ids!!.getString(it) }
+            connect(promise) {
+                loadDetails(list, BillingClient.ProductType.INAPP, promise) { products ->
+                    Bridge.resolve(promise, products.map(::encodeDetails))
+                }
+            }
+        }
+
+        // purchase({ productId, productType?, offerToken?, oldPurchaseToken?, accountToken? }) -> { status, code, message }
         // The outcome arrives through the "purchases" event.
         AsyncFunction("purchase") { args, promise ->
             val json = Bridge.args(args)
@@ -66,16 +80,28 @@ class BillingModule : Module() {
                 return@AsyncFunction
             }
             val productId = json.getString("productId")
+            val productType = if (json.optString("productType") == "inapp") {
+                BillingClient.ProductType.INAPP
+            } else {
+                BillingClient.ProductType.SUBS
+            }
+            val accountToken = json.optString("accountToken")
             connect(promise) {
                 val launch = { product: ProductDetails ->
                     val offers = product.subscriptionOfferDetails.orEmpty()
-                    val offerToken = json.optString("offerToken").ifBlank { null }
-                        ?: offers.firstOrNull()?.offerToken
+                    val offerToken = if (product.productType == BillingClient.ProductType.SUBS) {
+                        json.optString("offerToken").ifBlank { null } ?: offers.firstOrNull()?.offerToken
+                    } else {
+                        null
+                    }
                     val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
                         .setProductDetails(product)
                         .apply { if (offerToken != null) setOfferToken(offerToken) }
                         .build()
                     val builder = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams))
+                    if (accountToken.isNotBlank()) {
+                        builder.setObfuscatedAccountId(accountToken)
+                    }
                     val old = json.optString("oldPurchaseToken")
                     if (old.isNotBlank()) {
                         builder.setSubscriptionUpdateParams(
@@ -96,7 +122,7 @@ class BillingModule : Module() {
                 if (cached != null) {
                     launch(cached)
                 } else {
-                    loadDetails(listOf(productId), promise) { products ->
+                    loadDetails(listOf(productId), productType, promise) { products ->
                         val product = products.firstOrNull { it.productId == productId }
                         if (product == null) Bridge.reject(promise, "product not found: $productId") else launch(product)
                     }
@@ -112,6 +138,21 @@ class BillingModule : Module() {
                 ) { result, purchases ->
                     if (result.responseCode != BillingClient.BillingResponseCode.OK) {
                         rejectStore(promise, "queryPurchases", result)
+                    } else {
+                        Bridge.resolve(promise, purchases.map(::encode))
+                    }
+                }
+            }
+        }
+
+        // queryInAppPurchases() -> current one-time / consumable purchases
+        AsyncFunction("queryInAppPurchases") { _, promise ->
+            connect(promise) {
+                client!!.queryPurchasesAsync(
+                    QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build(),
+                ) { result, purchases ->
+                    if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                        rejectStore(promise, "queryInAppPurchases", result)
                     } else {
                         Bridge.resolve(promise, purchases.map(::encode))
                     }
@@ -138,9 +179,34 @@ class BillingModule : Module() {
                 }
             }
         }
+
+        // consume({ token, transactionId }) — consumes a verified consumable purchase.
+        AsyncFunction("consume") { args, promise ->
+            val token = Bridge.args(args).optString("token")
+            if (token.isBlank()) {
+                Bridge.reject(promise, "consume: token is empty")
+                return@AsyncFunction
+            }
+            connect(promise) {
+                client!!.consumeAsync(
+                    ConsumeParams.newBuilder().setPurchaseToken(token).build(),
+                ) { result, _ ->
+                    if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                        Bridge.resolve(promise, null)
+                    } else {
+                        rejectStore(promise, "consume", result)
+                    }
+                }
+            }
+        }
     }
 
-    private fun loadDetails(ids: List<String>, promise: WhiskerPromise, then: (List<ProductDetails>) -> Unit) {
+    private fun loadDetails(
+        ids: List<String>,
+        productType: String,
+        promise: WhiskerPromise,
+        then: (List<ProductDetails>) -> Unit,
+    ) {
         if (ids.isEmpty()) {
             then(emptyList())
             return
@@ -149,7 +215,7 @@ class BillingModule : Module() {
             ids.map {
                 QueryProductDetailsParams.Product.newBuilder()
                     .setProductId(it)
-                    .setProductType(BillingClient.ProductType.SUBS)
+                    .setProductType(productType)
                     .build()
             },
         ).build()
@@ -275,8 +341,10 @@ class BillingModule : Module() {
         // The regular price is the last phase of the base plan (the offer without an offer id).
         val regular = (offers.firstOrNull { it.offerId == null } ?: offers.firstOrNull())
             ?.pricingPhases?.pricingPhaseList?.lastOrNull()
+        val kind = if (product.productType == BillingClient.ProductType.INAPP) "consumable" else "subscription"
         return mapOf(
             "id" to product.productId,
+            "kind" to kind,
             "title" to product.name.ifBlank { product.title },
             "description" to product.description,
             "price" to (regular?.formattedPrice ?: product.oneTimePurchaseOfferDetails?.formattedPrice.orEmpty()),

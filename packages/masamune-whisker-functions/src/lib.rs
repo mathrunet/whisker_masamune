@@ -273,12 +273,13 @@ impl Functions {
     }
 }
 
-/// Generic JSON REST API adapter with an optional bearer [`Auth`].
+/// Generic JSON REST API adapter with an optional bearer [`Auth`] and optional App Check provider.
 /// Adapted from `katana_functions/lib/adapter/rest_api_functions_adapter.dart`.
 #[derive(Clone, Debug)]
 pub struct RestApiFunctionsAdapter {
     endpoint: String,
     auth: Auth,
+    app_check: Option<Auth>,
     timeout: Duration,
     allow_local_http: bool,
 }
@@ -288,12 +289,19 @@ impl RestApiFunctionsAdapter {
         Self {
             endpoint: endpoint.into().trim_end_matches('/').to_owned(),
             auth: Auth::none(),
+            app_check: None,
             timeout: Duration::from_secs(30),
             allow_local_http: false,
         }
     }
     pub fn with_auth(mut self, auth: Auth) -> Self {
         self.auth = auth;
+        self
+    }
+    /// Requires a nonempty App Check token (`X-Firebase-AppCheck`) for every request;
+    /// acquisition failure prevents HTTP dispatch.
+    pub fn with_app_check(mut self, provider: Auth) -> Self {
+        self.app_check = Some(provider);
         self
     }
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -307,7 +315,7 @@ impl RestApiFunctionsAdapter {
         self
     }
 
-    /// Managed authentication and JSON headers take precedence over request headers.
+    /// Managed authentication, App Check and JSON headers take precedence over request headers.
     /// The deadline includes token acquisition as well as the HTTP exchange.
     async fn dispatch(&self, request: FunctionRequest) -> FunctionsResult<Value> {
         let path = request.path.as_deref().unwrap_or(&request.action);
@@ -329,17 +337,40 @@ impl RestApiFunctionsAdapter {
             if token.is_some() {
                 headers.remove("authorization");
             }
+            let app_check_token = if let Some(provider) = &self.app_check {
+                headers.remove("x-firebase-appcheck");
+                let value = provider
+                    .token(false)
+                    .await?
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        FunctionsError::Api(ApiError::Other(
+                            "required App Check token is missing".into(),
+                        ))
+                    })?;
+                Some(value)
+            } else {
+                None
+            };
             if body.is_some() {
                 headers.remove("content-type");
             }
-            let mut http = functions_client(&url, &headers, token.is_some(), self.allow_local_http)
-                .map_err(|message| FunctionsError::Configuration(message.into()))?
-                .request(request.method, url)
-                .headers(headers)
-                .header("Accept", "application/json")
-                .timeout(timeout);
+            let mut http = functions_client(
+                &url,
+                &headers,
+                token.is_some() || app_check_token.is_some(),
+                self.allow_local_http,
+            )
+            .map_err(|message| FunctionsError::Configuration(message.into()))?
+            .request(request.method, url)
+            .headers(headers)
+            .header("Accept", "application/json")
+            .timeout(timeout);
             if let Some(token) = token {
                 http = http.bearer_auth(token);
+            }
+            if let Some(app_check) = app_check_token {
+                http = http.header("X-Firebase-AppCheck", app_check);
             }
             if let Some(body) = &body {
                 http = http.json(body);

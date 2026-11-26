@@ -36,7 +36,7 @@ git repository or crates.io.
 | `masamune-whisker-google-maps` | [Google Map element with markers, polylines, map styles and camera control (iOS 16+)](packages/masamune-whisker-google-maps/README.md) |
 | `masamune-whisker-wakelock` | [Keep the screen awake (iOS idle timer, Android `FLAG_KEEP_SCREEN_ON`)](packages/masamune-whisker-wakelock/README.md) |
 | `masamune-whisker-in-app-review` | In-app review with store fallback |
-| `masamune-whisker-billing` | In-app subscriptions |
+| `masamune-whisker-billing` | In-app subscriptions and consumable / one-time purchases |
 | `masamune-whisker-admob` | AdMob banners and full-screen ads |
 | `masamune-whisker-google-sign-in` | Google Sign-In (Firebase Auth) |
 | `masamune-whisker-apple-sign-in` | Sign in with Apple (Firebase Auth) |
@@ -44,6 +44,7 @@ git repository or crates.io.
 | `masamune-whisker-firebase-remote-config` | Firebase Remote Config |
 | `masamune-whisker-firebase-firestore-db` | Cloud Firestore on named databases |
 | `masamune-whisker-firebase-ai` | Firebase AI Logic (Gemini) |
+| `masamune-whisker-messaging-firebase` | [Firebase Cloud Messaging (FCM) push notifications and iOS Push CNG plugin](packages/masamune-whisker-messaging-firebase/README.md) |
 
 ### Foundations
 
@@ -67,6 +68,7 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-storage-firebase` | Cloud Storage for Firebase as a `StorageAdapter` (needs `whisker-firebase-storage` in the app's `[patch.crates-io]`) |
 | `masamune-whisker-storage-cloudflare` | Cloudflare R2 through the Masamune storage worker (any `FunctionsAdapter`) as a `StorageAdapter` |
 | `masamune-whisker-storage-functions` | [Files through the Masamune storage Functions callable](packages/masamune-whisker-storage-functions/README.md) (`storage_firebase`; any `FunctionsAdapter`; Masamune's `FunctionsStorageAdapter`) as a `StorageAdapter` |
+| `masamune-whisker-messaging` | [Push messaging adapter interface, `RuntimeMessagingAdapter` and `MessagingMasamuneAdapter`](packages/masamune-whisker-messaging/README.md) |
 | `masamune-whisker-appearance` | App-wide Material theme (`ThemeConfig`: palettes, typography, shapes, spacing, elevation), light/dark/system modes and app-wide rebuilds |
 | `masamune-whisker-localize` | Everything about languages: system languages (Android, iOS, Web), system or pinned language saved across launches, typed strings in Rust (`localize!`) and the localize YAML generator (feature `build`) |
 | `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |
@@ -131,7 +133,7 @@ Depend on a release tag:
 
 ```toml
 [dependencies]
-masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.14.5" }
+masamune-whisker-billing = { git = "https://github.com/mathrunet/whisker_masamune", tag = "v0.14.6" }
 
 # Use the same fork main source as the other whisker crates, including the router fixes.
 [patch.crates-io]
