@@ -386,6 +386,20 @@ pub async fn purchase(
     offer: Option<&Offer>,
     replacing: Option<&Purchase>,
 ) -> NativeResult<BillingResult> {
+    purchase_with_account(product_id, offer, replacing, None).await
+}
+
+/// Shows the purchase sheet with an optional store account token.
+///
+/// - `account_token`: opaque account identifier attached to the store transaction so the server can
+///   verify which app account owns the purchase (Android `setObfuscatedAccountId`, iOS
+///   `Product.PurchaseOption.appAccountToken` as a UUID string).
+pub async fn purchase_with_account(
+    product_id: &str,
+    offer: Option<&Offer>,
+    replacing: Option<&Purchase>,
+    account_token: Option<&str>,
+) -> NativeResult<BillingResult> {
     module()
         .call_async(
             "purchase",
@@ -393,6 +407,7 @@ pub async fn purchase(
                 "productId": product_id,
                 "offerToken": offer.map(|o| o.token.as_str()).unwrap_or(""),
                 "oldPurchaseToken": replacing.map(|p| p.token.as_str()).unwrap_or(""),
+                "accountToken": account_token.unwrap_or(""),
             }),
         )
         .await

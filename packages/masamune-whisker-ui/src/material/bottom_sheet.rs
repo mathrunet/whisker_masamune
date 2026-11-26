@@ -333,23 +333,45 @@ fn sheet_state(
             mounted.set(false);
         }
     });
+    let enter_pending = StoredValue::new(false);
     {
         let enter = enter.clone();
         let exit = exit.clone();
         effect(move || {
             if open.get() {
                 exit.stop();
-                enter.set_value(exit_progress.get_untracked());
-                mounted.set(true);
-                enter.forward();
+                if mounted.get_untracked() {
+                    enter_pending.set(false);
+                    enter.set_value(exit_progress.get_untracked());
+                    enter.forward();
+                } else {
+                    enter.set_value(0.0);
+                    enter_pending.set(true);
+                    mounted.set(true);
+                }
             } else {
+                enter_pending.set(false);
                 enter.stop();
-                exit.set_value(current_progress());
+                let progress_now = current_progress();
+                exit.set_value(progress_now);
                 dragged.set(0.0);
-                exit.reverse();
+                if progress_now <= 0.0 {
+                    mounted.set(false);
+                } else {
+                    exit.reverse();
+                }
             }
         });
     }
+    let start_enter = {
+        let enter = enter.clone();
+        Callback::new(move |()| {
+            if enter_pending.get() && open.get_untracked() {
+                enter_pending.set(false);
+                enter.forward();
+            }
+        })
+    };
     let restore = {
         let enter = enter.clone();
         Callback::new(move |()| {
@@ -368,6 +390,7 @@ fn sheet_state(
                 open: open,
                 progress: progress,
                 dragged: dragged,
+                start_enter: start_enter,
                 restore: restore,
                 dismissible: dismissible,
                 locked: locked,
@@ -390,6 +413,7 @@ fn sheet_frame(
     open: RwSignal<bool>,
     progress: ReadSignal<f32>,
     dragged: RwSignal<f32>,
+    start_enter: Callback<()>,
     restore: Callback<()>,
     dismissible: bool,
     locked: ReadSignal<bool>,
@@ -404,6 +428,28 @@ fn sheet_frame(
     content: Children,
 ) -> Element {
     let insets = safe_area_insets();
+    let sheet_ref = ElementRef::new();
+    // Wait until the initial off-screen mount frame has been applied before starting the enter
+    // animation. Otherwise the mount/layout/rasterization cost eats the beginning of the steep
+    // easeOutCubic curve and teleports the sheet into view on its first visible frame.
+    {
+        let scheduled = StoredValue::new(false);
+        effect(move || {
+            if !sheet_ref.bound().get() || scheduled.get() {
+                return;
+            }
+            scheduled.set(true);
+            let Some(element) = sheet_ref.element() else {
+                start_enter.run(());
+                return;
+            };
+            if !whisker::runtime::view::on_next_frame_applied(element, move |_| {
+                start_enter.run(());
+            }) {
+                start_enter.run(());
+            }
+        });
+    }
     let sheet_style = computed(move || {
         sheet_surface_style(color, backdrop_blur, top_corner_radius)
             .padding_top(px(12))
@@ -421,10 +467,9 @@ fn sheet_frame(
         .flex_direction(FlexDirection::Column);
     // The dimming is a sibling painted before the sheet rather than the sheet's own parent: a
     // backdrop blur on the sheet then references it instead of baking it into its capture, so
-    // fading it in does not re-record the blur on every frame.
-    let scrim_style = computed(move || {
-        fill().background_color(Color::rgba(0, 0, 0, barrier_opacity * progress.get()))
-    });
+    // fading it in does not re-record the blur on every frame. Animating opacity instead of
+    // background-color keeps the scrim's box paint constant and updates only the compositor alpha.
+    let scrim_style = computed(move || scrim_surface_style(barrier_opacity, progress.get()));
     let close = move |_| {
         if dismissible && !locked.get_untracked() {
             open.set(false);
@@ -496,6 +541,7 @@ fn sheet_frame(
             }
             View(
                 style: sheet_style,
+                element_ref: sheet_ref,
                 on_tap_catch: |_| {},
                 on_capture_touchstart: start_drag,
                 on_capture_touchmove: move_drag,
@@ -519,6 +565,13 @@ fn sheet_frame(
             }
         }
     }
+}
+
+/// Full-screen scrim that keeps a constant black paint and fades via compositor opacity.
+fn scrim_surface_style(barrier_opacity: f32, progress: f32) -> Css {
+    fill()
+        .background_color(Color::rgba(0, 0, 0, 1.0))
+        .opacity((barrier_opacity * progress).clamp(0.0, 1.0))
 }
 
 /// Full-width shape and background of the sheet surface.
@@ -599,5 +652,18 @@ mod tests {
         assert!(style.contains("width: 100%"), "{style}");
         assert!(style.contains("border-top-left-radius: 0px"), "{style}");
         assert!(style.contains("border-top-right-radius: 0px"), "{style}");
+    }
+
+    #[test]
+    fn scrim_surface_animates_compositor_opacity_with_constant_black_background() {
+        let start = scrim_surface_style(0.54, 0.0).to_string();
+        let mid = scrim_surface_style(0.54, 0.5).to_string();
+        let end = scrim_surface_style(0.54, 1.0).to_string();
+        for style in [&start, &mid, &end] {
+            assert!(style.contains("background-color: rgb(0, 0, 0)"), "{style}");
+        }
+        assert!(start.contains("opacity: 0"), "{start}");
+        assert!(mid.contains("opacity: 0.27"), "{mid}");
+        assert!(end.contains("opacity: 0.54"), "{end}");
     }
 }

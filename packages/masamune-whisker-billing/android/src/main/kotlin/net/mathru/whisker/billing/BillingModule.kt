@@ -56,7 +56,7 @@ class BillingModule : Module() {
             }
         }
 
-        // purchase({ productId, offerToken?, oldPurchaseToken? }) -> { status, code, message } of the launch.
+        // purchase({ productId, offerToken?, oldPurchaseToken?, accountToken? }) -> { status, code, message } of the launch.
         // The outcome arrives through the "purchases" event.
         AsyncFunction("purchase") { args, promise ->
             val json = Bridge.args(args)
@@ -66,6 +66,7 @@ class BillingModule : Module() {
                 return@AsyncFunction
             }
             val productId = json.getString("productId")
+            val accountToken = json.optString("accountToken")
             connect(promise) {
                 val launch = { product: ProductDetails ->
                     val offers = product.subscriptionOfferDetails.orEmpty()
@@ -76,6 +77,9 @@ class BillingModule : Module() {
                         .apply { if (offerToken != null) setOfferToken(offerToken) }
                         .build()
                     val builder = BillingFlowParams.newBuilder().setProductDetailsParamsList(listOf(productParams))
+                    if (accountToken.isNotBlank()) {
+                        builder.setObfuscatedAccountId(accountToken)
+                    }
                     val old = json.optString("oldPurchaseToken")
                     if (old.isNotBlank()) {
                         builder.setSubscriptionUpdateParams(

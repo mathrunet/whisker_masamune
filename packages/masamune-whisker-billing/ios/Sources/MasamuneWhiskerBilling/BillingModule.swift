@@ -42,14 +42,16 @@ public final class BillingModule: Module {
                 }
             }
 
-            // purchase({ productId, offerToken?, oldPurchaseToken? }) -> { status, code, message }.
+            // purchase({ productId, offerToken?, oldPurchaseToken?, accountToken? }) -> { status, code, message }.
             // The offer token and the replaced purchase are Play-only: StoreKit applies introductory offers and
             // subscription-group upgrades itself. The outcome arrives through the "purchases" event.
             AsyncFunction("purchase") { [weak self] args, promise in
-                let productId = Bridge.args(args)["productId"] as? String ?? ""
+                let parsed = Bridge.args(args)
+                let productId = parsed["productId"] as? String ?? ""
+                let accountToken = parsed["accountToken"] as? String ?? ""
                 self?.run { store in
                     do {
-                        Bridge.resolve(promise, try await store.purchase(productId))
+                        Bridge.resolve(promise, try await store.purchase(productId, accountToken: accountToken))
                     } catch {
                         Bridge.reject(promise, error)
                     }
@@ -126,7 +128,7 @@ final class BillingStore {
         return encoded
     }
 
-    func purchase(_ productId: String) async throws -> [String: Any?] {
+    func purchase(_ productId: String, accountToken: String = "") async throws -> [String: Any?] {
         let product: Product
         if let cached = products[productId] {
             product = cached
@@ -136,12 +138,19 @@ final class BillingStore {
         } else {
             throw BillingError("product not found: \(productId)")
         }
+        var options: Set<Product.PurchaseOption> = []
+        if !accountToken.isEmpty {
+            guard let uuid = UUID(uuidString: accountToken) else {
+                throw BillingError("invalid accountToken: expected UUID")
+            }
+            options.insert(.appAccountToken(uuid))
+        }
         let result: Product.PurchaseResult
         do {
             if #available(iOS 17.0, *), let scene = Self.keyWindow()?.windowScene {
-                result = try await product.purchase(confirmIn: scene)
+                result = try await product.purchase(confirmIn: scene, options: options)
             } else {
-                result = try await product.purchase()
+                result = try await product.purchase(options: options)
             }
         } catch {
             // The sheet could not be shown or the store rejected the request.

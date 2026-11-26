@@ -172,3 +172,62 @@ fn unavailable_startup_can_reload_products_and_unexpected_errors_are_reported() 
         assert!(StoreFailure::from_native(&NativeError(message.into())).is_none());
     }
 }
+
+#[test]
+fn purchase_with_account_sends_account_token() {
+    use masamune_whisker_billing::purchase_with_account;
+
+    let calls = Calls::default();
+    let host = ModuleHost::new(
+        {
+            let calls = calls.clone();
+            move |_, method, args, _, result| {
+                let json = match args.first() {
+                    Some(WhiskerValue::String(json)) => json.clone(),
+                    _ => String::new(),
+                };
+                calls.borrow_mut().push((method.to_owned(), json));
+                result(WhiskerValue::String(
+                    r#"{"value":{"status":"ok","code":0,"message":""}}"#.into(),
+                ));
+                true
+            }
+        },
+        |_, _, _| {},
+    );
+    let runtime = RuntimeContext::new(RuntimeWakeHandle::new(|| {}));
+    runtime.enter(|| {
+        with_module_host(&host, || {
+            let root = Owner::new(None);
+            root.with(|| {
+                spawn_local(async {
+                    let res = purchase_with_account(
+                        "monthly",
+                        None,
+                        None,
+                        Some("11111111-2222-8333-8444-555555555555"),
+                    )
+                    .await
+                    .unwrap();
+                    assert!(res.is_ok());
+                });
+            });
+            whisker::run_until_stalled();
+            root.dispose();
+        });
+    });
+    runtime.shutdown();
+    let calls = calls.take();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "purchase");
+    let args: serde_json::Value = serde_json::from_str(&calls[0].1).unwrap();
+    assert_eq!(
+        args,
+        serde_json::json!({
+            "productId": "monthly",
+            "offerToken": "",
+            "oldPurchaseToken": "",
+            "accountToken": "11111111-2222-8333-8444-555555555555",
+        })
+    );
+}
