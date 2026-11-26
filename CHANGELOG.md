@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.5
+
+- **NEW** (whisker fork `3aec2029`) Follow upstream whisker `v0.19.2` (`whisker-map`, `whisker-scene`, `wheel` events) and add engine sub-pixel motion deferral, idle background wake suppression, Android backdrop blur caching, and iOS box path / shadow / SVG redraw optimizations.
+- **NEW** `DatePickerDialog` in `masamune-whisker-ui` supports smooth horizontal drag/fling month switching (`MonthDrag`).
+- **FIX** Improve local notification scheduling/handling on Android and iOS and refine Material bottom sheet behavior.
+
 ## 0.14.4
 
 - **FIX** Android Google Maps applies the requested background before creating the map view.
