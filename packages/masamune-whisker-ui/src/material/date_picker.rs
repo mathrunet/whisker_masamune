@@ -32,7 +32,7 @@ use masamune_whisker_appearance::{ColorExt, TextKind, bold, palette, shape, text
 use whisker::AnimConfig;
 use whisker::AnimationController;
 use whisker::ScrollViewHandle;
-use whisker::css::{Border, JustifyContent, PositionKind};
+use whisker::css::{Border, JustifyContent, Overflow, PositionKind, Transform, TransformFn};
 use whisker::event::TouchEvent;
 use whisker::prelude::*;
 use whisker_icons::{Icon, lucide};
@@ -57,8 +57,16 @@ const YEAR_ROW_HEIGHT: f32 = 52.0;
 const YEAR_COLUMNS: usize = 3;
 /// Fade of the dialog (Flutter's `showDialog` transition).
 const FADE_MS: u32 = 150;
-/// Horizontal movement (px) after which a touch on the day grid turns the month.
-const SWIPE_DISTANCE: f32 = 48.0;
+/// Slide duration (ms) when changing months (Flutter's `_monthScrollDuration`).
+const MONTH_SCROLL_MS: u32 = 200;
+/// Movement (px) before a touch locks into a horizontal swipe or vertical gesture.
+const SWIPE_SLOP: f64 = 8.0;
+/// Horizontal movement (px) after which a drag on the day grid turns the month.
+const SWIPE_DISTANCE: f64 = 48.0;
+/// Horizontal velocity (px/s) after which a quick flick turns the month.
+const MIN_FLING_VELOCITY: f64 = 350.0;
+/// Maximum age (ms) of the last move sample that still counts as a fling.
+const VELOCITY_TIMEOUT_MS: f64 = 100.0;
 
 /// Which picker the dialog opens with (Flutter's `DatePickerEntryMode`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -584,6 +592,258 @@ fn date_picker_frame(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SwipeAxis {
+    Pending,
+    Horizontal,
+    Vertical,
+}
+
+/// Tracks a horizontal drag across the day grid and decides whether releasing turns the month.
+#[derive(Clone, Copy, Debug)]
+struct MonthDrag {
+    pointer_id: i64,
+    start_x: f64,
+    start_y: f64,
+    width: f64,
+    can_prev: bool,
+    can_next: bool,
+    axis: SwipeAxis,
+    last_x: f64,
+    last_time: f64,
+    last_motion: Option<(f64, f64)>,
+}
+
+impl MonthDrag {
+    fn new(
+        pointer_id: i64,
+        x: f64,
+        y: f64,
+        time: f64,
+        width: f64,
+        can_prev: bool,
+        can_next: bool,
+    ) -> Self {
+        Self {
+            pointer_id,
+            start_x: x,
+            start_y: y,
+            width: if width > 0.0 {
+                width
+            } else {
+                f64::from(DIALOG_WIDTH)
+            },
+            can_prev,
+            can_next,
+            axis: SwipeAxis::Pending,
+            last_x: x,
+            last_time: time,
+            last_motion: None,
+        }
+    }
+
+    /// Updates the drag and returns the current page offset in `[-1.0, 1.0]` when locked
+    /// horizontally (`> 0` reveals the previous month, `< 0` reveals the next month).
+    fn update(&mut self, x: f64, y: f64, time: f64) -> Option<f32> {
+        let dx = x - self.start_x;
+        let dy = y - self.start_y;
+        if self.axis == SwipeAxis::Pending && dx.abs().max(dy.abs()) >= SWIPE_SLOP {
+            self.axis = if dx.abs() >= dy.abs() {
+                SwipeAxis::Horizontal
+            } else {
+                SwipeAxis::Vertical
+            };
+        }
+
+        let elapsed = time - self.last_time;
+        if x != self.last_x && elapsed > 0.0 {
+            self.last_motion = Some((time, (x - self.last_x) * 1000.0 / elapsed));
+            self.last_time = time;
+            self.last_x = x;
+        }
+
+        if self.axis != SwipeAxis::Horizontal {
+            return None;
+        }
+
+        let mut fraction = (dx / self.width).clamp(-1.0, 1.0);
+        if !self.can_prev && fraction > 0.0 {
+            fraction = 0.0;
+        }
+        if !self.can_next && fraction < 0.0 {
+            fraction = 0.0;
+        }
+        Some(fraction as f32)
+    }
+
+    /// Month step (`-1`, `0`, or `1`) to settle on when the touch ends.
+    fn target_delta(self, fraction: f32, time: f64) -> i32 {
+        if self.axis != SwipeAxis::Horizontal || fraction == 0.0 {
+            return 0;
+        }
+        let threshold = (SWIPE_DISTANCE / self.width).min(0.25) as f32;
+        let velocity = self
+            .last_motion
+            .filter(|(at, _)| time - at <= VELOCITY_TIMEOUT_MS)
+            .map(|(_, v)| v)
+            .unwrap_or(0.0);
+        if self.can_next
+            && (fraction <= -threshold || (fraction < 0.0 && velocity <= -MIN_FLING_VELOCITY))
+        {
+            1
+        } else if self.can_prev
+            && (fraction >= threshold || (fraction > 0.0 && velocity >= MIN_FLING_VELOCITY))
+        {
+            -1
+        } else {
+            0
+        }
+    }
+}
+
+/// Animates the horizontal slide between months (Flutter's month `PageView`).
+#[derive(Clone)]
+struct MonthSlider {
+    shown_month: RwSignal<(i32, u32)>,
+    first_month: (i32, u32),
+    last_month: (i32, u32),
+    /// Horizontal offset in page widths (`-1.0..=1.0`).
+    offset: RwSignal<f32>,
+    controller: AnimationController,
+    from: Rc<Cell<f32>>,
+    to: Rc<Cell<f32>>,
+    pending_delta: Rc<Cell<i32>>,
+    active: Rc<Cell<bool>>,
+}
+
+impl MonthSlider {
+    fn new(
+        shown_month: RwSignal<(i32, u32)>,
+        first_month: (i32, u32),
+        last_month: (i32, u32),
+    ) -> Self {
+        // Flutter's `Curves.ease` over `_monthScrollDuration`.
+        let controller = AnimationController::new(AnimConfig::cubic_bezier(
+            MONTH_SCROLL_MS,
+            0.25,
+            0.1,
+            0.25,
+            1.0,
+        ));
+        let offset = signal(0.0_f32);
+        let from = Rc::new(Cell::new(0.0_f32));
+        let to = Rc::new(Cell::new(0.0_f32));
+        let pending_delta = Rc::new(Cell::new(0_i32));
+        let active = Rc::new(Cell::new(false));
+        let progress = controller.value();
+        {
+            let (from, to, active) = (from.clone(), to.clone(), active.clone());
+            effect(move || {
+                let t = progress.get();
+                if active.get() {
+                    let start = from.get();
+                    offset.set(start + (to.get() - start) * t);
+                }
+            });
+        }
+        {
+            let (pending_delta, active) = (pending_delta.clone(), active.clone());
+            controller.on_finish(move |finished| {
+                if finished && active.get() {
+                    active.set(false);
+                    let delta = pending_delta.replace(0);
+                    if delta != 0 {
+                        let target = add_months(shown_month.get_untracked(), delta);
+                        if target >= first_month && target <= last_month {
+                            shown_month.set(target);
+                        }
+                    }
+                    offset.set(0.0);
+                }
+            });
+        }
+        Self {
+            shown_month,
+            first_month,
+            last_month,
+            offset,
+            controller,
+            from,
+            to,
+            pending_delta,
+            active,
+        }
+    }
+
+    fn can_go(&self, delta: i32) -> bool {
+        let target = add_months(self.shown_month.get(), delta);
+        target >= self.first_month && target <= self.last_month
+    }
+
+    fn can_go_untracked(&self, delta: i32) -> bool {
+        let target = add_months(self.shown_month.get_untracked(), delta);
+        target >= self.first_month && target <= self.last_month
+    }
+
+    fn apply_delta(&self, delta: i32) {
+        if delta != 0 {
+            let target = add_months(self.shown_month.get_untracked(), delta);
+            if target >= self.first_month && target <= self.last_month {
+                self.shown_month.set(target);
+            }
+        }
+    }
+
+    /// Finishes any in-flight slide immediately so a new interaction starts from a clean page.
+    fn commit_pending(&self) {
+        if self.active.replace(false) {
+            self.controller.stop();
+            let delta = self.pending_delta.replace(0);
+            self.apply_delta(delta);
+        }
+        self.offset.set(0.0);
+    }
+
+    /// Slides to the previous (`-1`) or next (`1`) month when triggered by the header arrows.
+    fn step(&self, delta: i32) {
+        self.commit_pending();
+        if !self.can_go_untracked(delta) {
+            return;
+        }
+        self.animate(0.0, -(delta as f32), delta);
+    }
+
+    /// Follows a live horizontal drag.
+    fn set_drag(&self, value: f32) {
+        self.offset.set(value);
+    }
+
+    /// Settles from the current drag offset to `delta` (`-1`, `0`, or `1`).
+    fn settle(&self, delta: i32) {
+        let current = self.offset.get_untracked();
+        let target = -(delta as f32);
+        if (current - target).abs() < 1e-4 {
+            self.active.set(false);
+            self.controller.stop();
+            self.pending_delta.set(0);
+            self.apply_delta(delta);
+            self.offset.set(0.0);
+            return;
+        }
+        self.animate(current, target, delta);
+    }
+
+    fn animate(&self, start: f32, end: f32, delta: i32) {
+        self.controller.stop();
+        self.from.set(start);
+        self.to.set(end);
+        self.pending_delta.set(delta);
+        self.active.set(true);
+        self.controller.set_value(0.0);
+        self.controller.forward();
+    }
+}
+
 /// The "month year" row and either the day grid or the year grid.
 #[component]
 fn calendar_picker(
@@ -598,6 +858,8 @@ fn calendar_picker(
     let labels = Rc::new(labels.clone());
     let first_month = (first_date.year(), first_date.month());
     let last_month = (last_date.year(), last_date.month());
+    let slider = MonthSlider::new(shown_month, first_month, last_month);
+    let _keep_slider = StoredValue::new(slider.clone());
     let title = {
         let labels = labels.clone();
         computed(move || {
@@ -618,12 +880,6 @@ fn calendar_picker(
         let target = add_months(shown_month.get(), delta);
         target >= first_month && target <= last_month
     };
-    let go = move |delta: i32| {
-        let target = add_months(shown_month.get_untracked(), delta);
-        if target >= first_month && target <= last_month {
-            shown_month.set(target);
-        }
-    };
     let arrow_color = move |delta: i32| {
         computed(move || {
             let color = if can_go(delta) {
@@ -634,15 +890,26 @@ fn calendar_picker(
             css_color(color)
         })
     };
-    let toggle_years = move |_: TouchEvent| picking_year.set(!picking_year.get_untracked());
-    let on_year = Callback::new(move |year: i32| {
-        // Keep the month, but stay inside the range (Flutter's `_handleYearChanged`).
-        let (_, month) = shown_month.get_untracked();
-        let target = (year, month).clamp(first_month, last_month);
-        shown_month.set(target);
-        picking_year.set(false);
-    });
+    let toggle_years = {
+        let slider = slider.clone();
+        move |_: TouchEvent| {
+            slider.commit_pending();
+            picking_year.set(!picking_year.get_untracked());
+        }
+    };
+    let on_year = {
+        let slider = slider.clone();
+        Callback::new(move |year: i32| {
+            slider.commit_pending();
+            // Keep the month, but stay inside the range (Flutter's `_handleYearChanged`).
+            let (_, month) = shown_month.get_untracked();
+            let target = (year, month).clamp(first_month, last_month);
+            shown_month.set(target);
+            picking_year.set(false);
+        })
+    };
     let day_labels = StoredValue::new(labels.clone());
+    let day_slider = StoredValue::new(slider);
     render! {
         View(style: column().width(percent(100))) {
             View(
@@ -668,13 +935,13 @@ fn calendar_picker(
                     View(style: row()) {
                         View(
                             style: center().width(px(48)).height(px(48)),
-                            on_tap: move |_| go(-1),
+                            on_tap: move |_| day_slider.with(|s| s.step(-1)),
                         ) {
                             Icon(svg: lucide::ChevronLeft, color: arrow_color(-1), size: "24")
                         }
                         View(
                             style: center().width(px(48)).height(px(48)),
-                            on_tap: move |_| go(1),
+                            on_tap: move |_| day_slider.with(|s| s.step(1)),
                         ) {
                             Icon(svg: lucide::ChevronRight, color: arrow_color(1), size: "24")
                         }
@@ -697,7 +964,7 @@ fn calendar_picker(
                     shown_month: shown_month,
                     first_date: first_date,
                     last_date: last_date,
-                    on_swipe: Callback::new(go),
+                    slider: day_slider.get(),
                     labels: day_labels.with(|l| (**l).clone()),
                 )
             }
@@ -713,18 +980,16 @@ struct Week {
     days: [Option<u32>; 7],
 }
 
-/// Weekday names and the days of the shown month.
+/// Weekday names and the days of the shown month, with horizontal swipe and slide animation.
 #[component]
 fn day_grid(
     selected: RwSignal<NaiveDate>,
     shown_month: RwSignal<(i32, u32)>,
     first_date: NaiveDate,
     last_date: NaiveDate,
-    /// Called with -1 / 1 after a swipe to the right / left.
-    on_swipe: Callback<i32>,
+    slider: MonthSlider,
     labels: DatePickerLabels,
 ) -> Element {
-    let palette = palette();
     let first_day_of_week = labels.first_day_of_week;
     let weekdays: Vec<(usize, String)> = (0..7)
         .map(|i| {
@@ -732,54 +997,209 @@ fn day_grid(
             (i, labels.weekday_narrow_names[index].clone())
         })
         .collect();
+    let today = Local::now().date_naive();
+
+    // A horizontal swipe follows the finger and settles onto the adjacent month (Flutter's `PageView`).
+    let drag = StoredValue::new(None::<MonthDrag>);
+    let on_start = {
+        let slider = slider.clone();
+        move |event: TouchEvent| {
+            if event.touches.len() > 1 {
+                drag.set(None);
+                slider.settle(0);
+                return;
+            }
+            slider.commit_pending();
+            let width = event
+                .size
+                .map(|size| size.width)
+                .filter(|width| *width > 0.0)
+                .unwrap_or(f64::from(DIALOG_WIDTH));
+            drag.set(Some(MonthDrag::new(
+                event.pointer_id,
+                event.detail.x,
+                event.detail.y,
+                event.timestamp,
+                width,
+                slider.can_go_untracked(-1),
+                slider.can_go_untracked(1),
+            )));
+        }
+    };
+    let on_move = {
+        let slider = slider.clone();
+        move |event: TouchEvent| {
+            if event.touches.len() > 1 {
+                drag.set(None);
+                slider.settle(0);
+                return;
+            }
+            if let Some(mut gesture) = drag
+                .get()
+                .filter(|gesture| gesture.pointer_id == event.pointer_id)
+            {
+                if let Some(fraction) =
+                    gesture.update(event.detail.x, event.detail.y, event.timestamp)
+                {
+                    slider.set_drag(fraction);
+                }
+                drag.set(Some(gesture));
+            }
+        }
+    };
+    let on_end = {
+        let slider = slider.clone();
+        move |event: TouchEvent| {
+            let Some(mut gesture) = drag
+                .get()
+                .filter(|gesture| gesture.pointer_id == event.pointer_id)
+            else {
+                return;
+            };
+            drag.set(None);
+            let fraction = gesture
+                .update(event.detail.x, event.detail.y, event.timestamp)
+                .unwrap_or_else(|| slider.offset.get_untracked());
+            let delta = gesture.target_delta(fraction, event.timestamp);
+            slider.settle(delta);
+        }
+    };
+    let on_cancel = {
+        let slider = slider.clone();
+        move |_: TouchEvent| {
+            if drag.get().is_some() {
+                drag.set(None);
+                slider.settle(0);
+            }
+        }
+    };
+
+    let offset = slider.offset;
+    let track_style = computed(move || {
+        css!(
+            position: PositionKind::Absolute,
+            top: px(0),
+            left: px(0),
+            width: percent(100),
+            height: percent(100),
+        )
+        .transform(Transform::new().push(TransformFn::TranslateX(
+            percent(offset.get() * 100.0).into(),
+        )))
+    });
+    let page_style = move |shift_percent: f32| {
+        let style = css!(
+            position: PositionKind::Absolute,
+            top: px(0),
+            left: px(0),
+            width: percent(100),
+            height: percent(100),
+        );
+        if shift_percent == 0.0 {
+            style
+        } else {
+            style.transform(
+                Transform::new().push(TransformFn::TranslateX(percent(shift_percent).into())),
+            )
+        }
+    };
+
+    let prev_month = computed(move || add_months(shown_month.get(), -1));
+    let current_month = shown_month.read_only();
+    let next_month = computed(move || add_months(shown_month.get(), 1));
+    let show_prev = {
+        let slider = slider.clone();
+        move || offset.get() > 0.0 && slider.can_go(-1)
+    };
+    let show_next = {
+        let slider = slider.clone();
+        move || offset.get() < 0.0 && slider.can_go(1)
+    };
+    let weekdays = StoredValue::new(weekdays.clone());
+    render! {
+        View(
+            style: css!(
+                position: PositionKind::Relative,
+                overflow: Overflow::Hidden,
+                width: percent(100),
+                height: px(DAY_ROW_HEIGHT * (DAY_ROWS + 1) as f32),
+            ),
+            on_capture_touchstart: on_start,
+            on_capture_touchmove: on_move,
+            on_capture_touchend: on_end,
+            on_capture_touchcancel: on_cancel,
+        ) {
+            View(style: track_style) {
+                Show(when: show_prev) {
+                    View(style: page_style(-100.0)) {
+                        MonthPage(
+                            month: prev_month,
+                            selected: selected,
+                            first_date: first_date,
+                            last_date: last_date,
+                            today: today,
+                            first_day_of_week: first_day_of_week,
+                            weekdays: weekdays.get(),
+                        )
+                    }
+                }
+                View(style: page_style(0.0)) {
+                    MonthPage(
+                        month: current_month,
+                        selected: selected,
+                        first_date: first_date,
+                        last_date: last_date,
+                        today: today,
+                        first_day_of_week: first_day_of_week,
+                        weekdays: weekdays.get(),
+                    )
+                }
+                Show(when: show_next) {
+                    View(style: page_style(100.0)) {
+                        MonthPage(
+                            month: next_month,
+                            selected: selected,
+                            first_date: first_date,
+                            last_date: last_date,
+                            today: today,
+                            first_day_of_week: first_day_of_week,
+                            weekdays: weekdays.get(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// One page of the calendar grid: weekday headers and the weeks of `month`.
+#[component]
+fn month_page(
+    month: ReadSignal<(i32, u32)>,
+    selected: RwSignal<NaiveDate>,
+    first_date: NaiveDate,
+    last_date: NaiveDate,
+    today: NaiveDate,
+    first_day_of_week: u32,
+    weekdays: Vec<(usize, String)>,
+) -> Element {
+    let palette = palette();
     let weeks = move || {
-        let month = shown_month.get();
+        let month = month.get();
         month_weeks(month, first_day_of_week)
             .into_iter()
             .enumerate()
             .map(|(index, days)| Week { month, index, days })
             .collect::<Vec<_>>()
     };
-    let today = Local::now().date_naive();
-
-    // A horizontal swipe turns the month (Flutter's month `PageView`).
-    let touch_start = Rc::new(Cell::new(None::<(f32, f32)>));
-    let touch_last = Rc::new(Cell::new(None::<(f32, f32)>));
-    let on_start = {
-        let (start, last) = (touch_start.clone(), touch_last.clone());
-        move |event: TouchEvent| {
-            let point = Some((event.detail.x as f32, event.detail.y as f32));
-            start.set(point);
-            last.set(point);
-        }
-    };
-    let on_move = {
-        let last = touch_last.clone();
-        move |event: TouchEvent| last.set(Some((event.detail.x as f32, event.detail.y as f32)))
-    };
-    let on_end = {
-        let (start, last) = (touch_start.clone(), touch_last.clone());
-        move |_: TouchEvent| {
-            let (Some((x0, y0)), Some((x1, y1))) = (start.take(), last.take()) else {
-                return;
-            };
-            let (dx, dy) = (x1 - x0, y1 - y0);
-            if dx.abs() >= SWIPE_DISTANCE && dx.abs() > dy.abs() {
-                on_swipe.run(if dx < 0.0 { 1 } else { -1 });
-            }
-        }
-    };
-    let weekdays = StoredValue::new(weekdays);
+    let weekdays = StoredValue::new(weekdays.clone());
     render! {
         View(
             style: column()
                 .width(percent(100))
-                .height(px(DAY_ROW_HEIGHT * (DAY_ROWS + 1) as f32))
+                .height(percent(100))
                 .padding_left(px(12))
                 .padding_right(px(12)),
-            on_capture_touchstart: on_start,
-            on_capture_touchmove: on_move,
-            on_capture_touchend: on_end,
         ) {
             View(style: row().height(px(DAY_ROW_HEIGHT))) {
                 ForEach(
@@ -1207,5 +1627,44 @@ mod tests {
         assert_eq!(ja.format(&ja.headline_format, day), "1月1日(月)");
         assert_eq!(ja.format(&ja.month_year_format, day), "2001年1月");
         assert_eq!(ja.format_input(day), "2001/01/01");
+    }
+
+    #[test]
+    fn month_drag_tracks_horizontal_swipe_and_bounds() {
+        let mut drag = MonthDrag::new(1, 200.0, 100.0, 0.0, 320.0, true, true);
+        // Small movement inside slop stays pending.
+        assert_eq!(drag.update(196.0, 100.0, 16.0), None);
+        // Past slop locks horizontally and reports fraction of page width.
+        let frac = drag.update(120.0, 102.0, 100.0).unwrap();
+        assert!((frac - (-0.25)).abs() < 1e-5);
+        assert_eq!(drag.target_delta(frac, 100.0), 1);
+
+        // At the first month, dragging right clamps to 0 and snaps back.
+        let mut at_first = MonthDrag::new(1, 100.0, 100.0, 0.0, 320.0, false, true);
+        assert_eq!(at_first.update(180.0, 100.0, 50.0), Some(0.0));
+        assert_eq!(at_first.target_delta(0.0, 50.0), 0);
+
+        // At the last month, dragging left clamps to 0 and snaps back.
+        let mut at_last = MonthDrag::new(1, 200.0, 100.0, 0.0, 320.0, true, false);
+        assert_eq!(at_last.update(120.0, 100.0, 50.0), Some(0.0));
+        assert_eq!(at_last.target_delta(0.0, 50.0), 0);
+    }
+
+    #[test]
+    fn month_drag_ignores_vertical_and_distinguishes_fling_from_snap_back() {
+        let mut vertical = MonthDrag::new(1, 100.0, 100.0, 0.0, 320.0, true, true);
+        assert_eq!(vertical.update(102.0, 160.0, 50.0), None);
+        assert_eq!(vertical.target_delta(0.2, 50.0), 0);
+
+        // Slow short drag snaps back to current month.
+        let mut slow = MonthDrag::new(1, 100.0, 100.0, 0.0, 320.0, true, true);
+        let frac = slow.update(124.0, 100.0, 200.0).unwrap();
+        assert_eq!(slow.target_delta(frac, 200.0), 0);
+
+        // Fast short flick turns the month, unless the finger paused before lifting.
+        let mut flick = MonthDrag::new(1, 100.0, 100.0, 0.0, 320.0, true, true);
+        let frac = flick.update(124.0, 100.0, 40.0).unwrap();
+        assert_eq!(flick.target_delta(frac, 50.0), -1);
+        assert_eq!(flick.target_delta(frac, 200.0), 0);
     }
 }
