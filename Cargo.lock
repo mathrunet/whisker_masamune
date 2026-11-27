@@ -1335,6 +1335,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "masamune-whisker-experiment"
+version = "0.14.5"
+dependencies = [
+ "masamune-whisker-adapter",
+ "masamune-whisker-firebase-remote-config",
+ "masamune-whisker-logger",
+ "tokio",
+ "whisker",
+]
+
+[[package]]
 name = "masamune-whisker-firebase-ai"
 version = "0.14.5"
 dependencies = [

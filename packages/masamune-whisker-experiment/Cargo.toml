@@ -1,0 +1,25 @@
+[package]
+name = "masamune-whisker-experiment"
+description = "Remote Config backed A/B tests and feature switches for Whisker apps (Masamune's masamune_experiment)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "src/**", "README.md"]
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = ["firebase-remote-config"]
+firebase-remote-config = ["dep:masamune-whisker-firebase-remote-config"]
+
+[dependencies]
+whisker.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+masamune-whisker-adapter.workspace = true
+masamune-whisker-logger.workspace = true
+masamune-whisker-firebase-remote-config = { workspace = true, optional = true }

@@ -71,6 +71,7 @@ Application logs use [`masamune-whisker-logger`](packages/masamune-whisker-logge
 | `masamune-whisker-localize` | Everything about languages: system languages (Android, iOS, Web), system or pinned language saved across launches, typed strings in Rust (`localize!`) and the localize YAML generator (feature `build`) |
 | `masamune-whisker-screen` | Screen size/orientation signals, orientation lock and `configChanges` CNG plugin |
 | `masamune-whisker-adapter` | [Plugin settings and startup work registered in one place](packages/masamune-whisker-adapter/README.md) (Masamune's `MasamuneAdapter`) |
+| `masamune-whisker-experiment` | [Remote Config backed A/B tests and feature switches with automatic GA4 exposure logging](packages/masamune-whisker-experiment/README.md) (Masamune's `masamune_experiment`) |
 | `masamune-whisker-boot` | Boot screen with startup work, retry/quit and forced updates |
 | `masamune-whisker-cached-image` | URL-keyed temporary images, sized decoding and a byte-bounded memory LRU ([usage](packages/masamune-whisker-cached-image/README.md)) |
 | `masamune-whisker-ui` | Material-style widgets (Scaffold, AppBar, navigation, sheets, dialogs, buttons, pull to refresh, Material 3 time picker) with accessibility labels, roles and `identifier` props for UI automation such as Maestro ([usage](packages/masamune-whisker-ui/README.md)) |

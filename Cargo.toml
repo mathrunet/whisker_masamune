@@ -57,6 +57,8 @@ serde_yaml = "0.9"
 base64 = "0.22"
 masamune-whisker-bridge = { path = "packages/masamune-whisker-bridge", version = "0.14.5" }
 masamune-whisker-firebase-app-check = { path = "packages/masamune-whisker-firebase-app-check", version = "0.14.5" }
+masamune-whisker-firebase-remote-config = { path = "packages/masamune-whisker-firebase-remote-config", version = "0.14.5" }
+masamune-whisker-experiment = { path = "packages/masamune-whisker-experiment", version = "0.14.5" }
 masamune-whisker-model = { path = "packages/masamune-whisker-model", version = "0.14.5" }
 masamune-whisker-appearance = { path = "packages/masamune-whisker-appearance", version = "0.14.5" }
 masamune-whisker-ui = { path = "packages/masamune-whisker-ui", version = "0.14.5" }

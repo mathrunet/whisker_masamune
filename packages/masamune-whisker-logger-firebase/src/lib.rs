@@ -93,6 +93,12 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
         let Some(analytics) = self.analytics else {
             return;
         };
+        if let Some((user_property, value)) = experiment_exposure(event) {
+            self.on_ui(move || {
+                let _ = analytics.set_user_property(&user_property, Some(&value));
+            });
+            return;
+        }
         let name = event.name().to_owned();
         let params: Vec<(String, Param)> = event
             .params()
@@ -132,6 +138,35 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
 /// email address or a name.
 pub fn set_user_id(id: Option<&str>) -> Result<(), FirebaseError> {
     Analytics::instance()?.set_user_id(id)
+}
+
+/// Sets (or, with `None`, clears) an Analytics user property, like
+/// `FirebaseAnalytics.setUserProperty`.
+///
+/// Call it on the UI thread after Firebase is initialized.
+pub fn set_user_property(name: &str, value: Option<&str>) -> Result<(), FirebaseError> {
+    Analytics::instance()?.set_user_property(name, value)
+}
+
+// Event name and parameter keys of `ExperimentLoggerEvent.exposure` in `masamune-whisker-experiment`.
+const EXPERIMENT_EXPOSURE_EVENT: &str = "ExperimentLoggerEvent.exposure";
+const EXPERIMENT_USER_PROPERTY_KEY: &str = "user_property";
+const EXPERIMENT_VALUE_KEY: &str = "value";
+
+fn experiment_exposure(event: &LogEvent) -> Option<(String, String)> {
+    if event.name() != EXPERIMENT_EXPOSURE_EVENT {
+        return None;
+    }
+    let string_param = |key: &str| {
+        event.params().iter().find_map(|(k, v)| match v {
+            LogValue::String(s) if k == key && !s.is_empty() => Some(s.clone()),
+            _ => None,
+        })
+    };
+    Some((
+        string_param(EXPERIMENT_USER_PROPERTY_KEY)?,
+        string_param(EXPERIMENT_VALUE_KEY)?,
+    ))
 }
 
 fn param(value: &LogValue) -> Param {
@@ -220,5 +255,25 @@ mod tests {
         assert_eq!(report.name, "HandledError");
         assert_eq!(report.reason, safe_error.to_string());
         assert!(report.frames.is_empty());
+    }
+
+    #[test]
+    fn extracts_experiment_exposure_user_property() {
+        let event = LogEvent::new(EXPERIMENT_EXPOSURE_EVENT)
+            .param(EXPERIMENT_USER_PROPERTY_KEY, "shinogi_ab_5")
+            .param(EXPERIMENT_VALUE_KEY, "F-20261127-02:treatment");
+        assert_eq!(
+            experiment_exposure(&event),
+            Some(("shinogi_ab_5".into(), "F-20261127-02:treatment".into()))
+        );
+
+        let missing = LogEvent::new(EXPERIMENT_EXPOSURE_EVENT)
+            .param(EXPERIMENT_USER_PROPERTY_KEY, "shinogi_ab_5");
+        assert_eq!(experiment_exposure(&missing), None);
+
+        let other = LogEvent::new("track_saved")
+            .param(EXPERIMENT_USER_PROPERTY_KEY, "shinogi_ab_5")
+            .param(EXPERIMENT_VALUE_KEY, "F-20261127-02:treatment");
+        assert_eq!(experiment_exposure(&other), None);
     }
 }

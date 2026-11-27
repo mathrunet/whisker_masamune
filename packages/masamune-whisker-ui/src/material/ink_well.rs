@@ -12,7 +12,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use masamune_whisker_appearance::{ColorExt, palette};
-use whisker::css::{Color, Overflow, PointerEvents, PositionKind};
+use whisker::css::{Color, Overflow, PointerEvents, PositionKind, Transform, TransformFn};
 use whisker::event::TouchEvent;
 use whisker::prelude::*;
 use whisker::{AnimConfig, AnimationController};
@@ -204,7 +204,10 @@ pub fn ink_well(
     let (grow_value, fade_value) = (grow.value(), fade.value());
     let splash_style = computed(move || {
         let (x, y) = center.get();
-        let r = radius.get() * grow_value.get();
+        let r = radius.get();
+        let scale = grow_value.get();
+        // Keep layout bounds fixed at the full splash radius and animate via compositor scale +
+        // opacity so the ripple never triggers per-frame Taffy layout or box-paint re-recording.
         css!(
             position: PositionKind::Absolute,
             left: px(x - r),
@@ -216,6 +219,7 @@ pub fn ink_well(
             opacity: fade_value.get(),
             pointer_events: PointerEvents::None,
         )
+        .transform(Transform::new().push(TransformFn::Scale(scale.into(), scale.into())))
     });
     // The controllers live as long as the widget.
     let _keep = StoredValue::new((delay, grow, fade, highlight));
