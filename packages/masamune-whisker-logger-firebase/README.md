@@ -51,3 +51,16 @@ Add `whisker-firebase-analytics` and `whisker-firebase-crashlytics` to the app's
 Handled error reports omit the error text, cause chain and context. Analytics
 events, explicit log breadcrumbs and panic messages can still leave the device.
 Keep tokens, passwords, personal data and full payloads out of those inputs.
+
+
+## Consent-based Analytics
+
+Start with Analytics collection disabled in the native project. When the app
+restores or receives consent, use `FirebaseAnalyticsAdapter::enable_without_advertising`
+and pass only approved events to `send`. On withdrawal, call `stop_and_reset`.
+Keep the Firebase logger registered with `without_analytics()` if other app
+events should stay outside this path.
+
+The `analytics_startup` module provides native sources that switch off
+collection at process startup before the app restores its consent. Keep
+advertising identifiers disabled independently in the app's native project.

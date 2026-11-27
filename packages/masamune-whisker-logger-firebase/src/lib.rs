@@ -3,7 +3,7 @@
 use masamune_whisker_logger::{LevelFilter, LogEvent, LogValue, LoggerAdapter};
 use std::error::Error;
 use whisker::RuntimeDispatcher;
-use whisker_firebase::analytics::{Analytics, Param};
+use whisker_firebase::analytics::{Analytics, Consent, Param};
 use whisker_firebase::crashlytics::{Crashlytics, ErrorReport};
 
 pub use whisker_firebase::analytics::FirebaseError;
@@ -94,11 +94,7 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
             return;
         };
         let name = event.name().to_owned();
-        let params: Vec<(String, Param)> = event
-            .params()
-            .iter()
-            .map(|(key, value)| (key.clone(), param(value)))
-            .collect();
+        let params = event_params(event);
         self.on_ui(move || {
             let _ = if name == "screen_view" {
                 screen_view(analytics, &params)
@@ -124,6 +120,56 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
     }
 }
 
+/// Firebase Analytics for apps that own their consent and event allowlist.
+///
+/// Call on the active Whisker runtime. Event calls are forwarded immediately
+/// so a later consent change cannot leave any work pending on a Rust dispatcher.
+pub struct FirebaseAnalyticsAdapter(Analytics);
+
+impl FirebaseAnalyticsAdapter {
+    pub fn new() -> Result<Self, FirebaseError> {
+        Ok(Self(Analytics::instance()?))
+    }
+
+    /// Enables Analytics storage and collection with all advertising consent denied.
+    pub fn enable_without_advertising(&self) -> Result<(), FirebaseError> {
+        self.0.set_consent(analytics_consent(true))?;
+        self.0.set_collection_enabled(true)
+    }
+
+    /// Stops collection and deletes the local Analytics data and app instance ID.
+    /// Each SDK operation is attempted even when an earlier operation fails.
+    pub fn stop_and_reset(&self) -> Result<(), FirebaseError> {
+        let stopped = self.0.set_collection_enabled(false);
+        let denied = self.0.set_consent(analytics_consent(false));
+        let reset = self.0.reset_analytics_data();
+        stopped.and(denied).and(reset)
+    }
+
+    /// Submits one app-approved event to the SDK on the current runtime.
+    pub fn send(&self, event: &LogEvent) -> Result<(), FirebaseError> {
+        self.0.log_event(event.name(), event_params(event))
+    }
+}
+
+fn analytics_consent(allowed: bool) -> Consent {
+    Consent::new()
+        .analytics_storage(allowed)
+        .ad_storage(false)
+        .ad_user_data(false)
+        .ad_personalization(false)
+}
+
+/// Native startup helpers for CNG projects that restore consent after launch.
+pub mod analytics_startup {
+    /// Swift helper. Call `FirebaseAnalyticsStartup.close()` before configuring Firebase.
+    pub const IOS_SOURCE: &str = include_str!("startup/FirebaseAnalyticsStartup.swift");
+
+    /// Register `rs.masamune.logger.firebase.AnalyticsStartupProvider` with
+    /// `android:exported="false"` and an init order higher than FirebaseInitProvider.
+    pub const ANDROID_SOURCE: &str = include_str!("startup/AnalyticsStartupProvider.java");
+}
+
 /// Sets (or, with `None`, clears) the Analytics user ID attached to later events, like
 /// `FirebaseAnalytics.setUserId`.
 ///
@@ -132,6 +178,14 @@ impl LoggerAdapter for FirebaseLoggerAdapter {
 /// email address or a name.
 pub fn set_user_id(id: Option<&str>) -> Result<(), FirebaseError> {
     Analytics::instance()?.set_user_id(id)
+}
+
+fn event_params(event: &LogEvent) -> Vec<(String, Param)> {
+    event
+        .params()
+        .iter()
+        .map(|(key, value)| (key.clone(), param(value)))
+        .collect()
 }
 
 fn param(value: &LogValue) -> Param {
@@ -186,6 +240,17 @@ impl Error for HandledError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn advertising_remains_denied_for_both_consent_states() {
+        for allowed in [false, true] {
+            let consent = analytics_consent(allowed);
+            assert_eq!(consent.analytics_storage, Some(allowed));
+            assert_eq!(consent.ad_storage, Some(false));
+            assert_eq!(consent.ad_user_data, Some(false));
+            assert_eq!(consent.ad_personalization, Some(false));
+        }
+    }
 
     #[test]
     fn converts_values() {
