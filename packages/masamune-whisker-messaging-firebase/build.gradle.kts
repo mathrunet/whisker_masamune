@@ -41,4 +41,5 @@ dependencies {
     ksp("rs.whisker:ksp:0.1.21")
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-messaging")
+    implementation("androidx.activity:activity-ktx:1.9.3")
 }

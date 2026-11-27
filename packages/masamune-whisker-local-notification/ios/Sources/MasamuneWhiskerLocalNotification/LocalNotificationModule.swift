@@ -260,7 +260,7 @@ enum LocalNotifications {
     static func installDelegate() {
         Bridge.onMain {
             let center = UNUserNotificationCenter.current()
-            guard center.delegate !== proxy else { return }
+            guard !proxy.isInChain(startingAt: center.delegate) else { return }
             proxy.next = center.delegate
             center.delegate = proxy
         }
@@ -419,6 +419,21 @@ enum LocalNotifications {
 /// everything else (and every other delegate method) to the previously installed delegate.
 private final class NotificationCenterProxy: NSObject, UNUserNotificationCenterDelegate {
     weak var next: UNUserNotificationCenterDelegate?
+
+    @objc var masamunePreviousNotificationDelegate: AnyObject? { next }
+
+    // Reinstall only if another module did not already chain this delegate.
+    func isInChain(startingAt delegate: UNUserNotificationCenterDelegate?) -> Bool {
+        let previous = NSSelectorFromString("masamunePreviousNotificationDelegate")
+        var current = delegate as? NSObject
+        var visited = Set<ObjectIdentifier>()
+        while let candidate = current, visited.insert(ObjectIdentifier(candidate)).inserted {
+            if candidate === self { return true }
+            guard candidate.responds(to: previous) else { return false }
+            current = candidate.perform(previous)?.takeUnretainedValue() as? NSObject
+        }
+        return false
+    }
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
