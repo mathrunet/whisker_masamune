@@ -1,0 +1,23 @@
+[package]
+name = "masamune-whisker-messaging"
+description = "Push messaging adapter interface, runtime adapter and MasamuneAdapter for Whisker apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+include = ["Cargo.toml", "README.md", "src/**"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+whisker.workspace = true
+masamune-whisker-adapter.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

@@ -174,6 +174,116 @@ fn unavailable_startup_can_reload_products_and_unexpected_errors_are_reported() 
 }
 
 #[test]
+fn consumable_apis_and_runtime_billing_adapter_work() {
+    use masamune_whisker_billing::{
+        Product, ProductKind, Purchase, PurchaseState, RuntimeBillingAdapter, consume,
+        purchase_consumable, query_inapp_products, query_inapp_purchases,
+    };
+
+    let runtime = RuntimeBillingAdapter::new().with_products([
+        Product {
+            id: "single".into(),
+            kind: ProductKind::Consumable,
+            price: "¥980".into(),
+            ..Default::default()
+        },
+        Product {
+            id: "monthly".into(),
+            kind: ProductKind::Subscription,
+            price: "¥680".into(),
+            ..Default::default()
+        },
+    ]);
+    assert_eq!(
+        runtime
+            .query_products(&["single", "monthly"], Some(ProductKind::Consumable))
+            .len(),
+        1
+    );
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _sub = runtime.on_purchases({
+        let seen = seen.clone();
+        move |u| seen.borrow_mut().push(u)
+    });
+    assert!(
+        runtime
+            .purchase("single", None, None, None)
+            .unwrap()
+            .is_ok()
+    );
+    assert_eq!(seen.borrow().len(), 1);
+    let purchased = runtime.query_purchases();
+    assert_eq!(purchased.len(), 1);
+    assert_eq!(purchased[0].state, PurchaseState::Purchased);
+    runtime.consume(&purchased[0]);
+    assert!(runtime.query_purchases().is_empty());
+    assert_eq!(runtime.consumed_tokens().len(), 1);
+
+    let calls = Calls::default();
+    let host = ModuleHost::new(
+        {
+            let calls = calls.clone();
+            move |_, method, args, _, result| {
+                let json = match args.first() {
+                    Some(WhiskerValue::String(json)) => json.clone(),
+                    _ => String::new(),
+                };
+                calls.borrow_mut().push((method.to_owned(), json));
+                let reply = match method {
+                    "queryInAppProducts" => {
+                        r#"{"value":[{"id":"single","kind":"consumable","price":"¥980"}]}"#
+                    }
+                    "queryInAppPurchases" => {
+                        r#"{"value":[{"productId":"single","transactionId":"t1","token":"tok1","state":"purchased"}]}"#
+                    }
+                    "purchase" => r#"{"value":{"status":"ok","code":0,"message":""}}"#,
+                    _ => r#"{"value":null}"#,
+                };
+                result(WhiskerValue::String(reply.into()));
+                true
+            }
+        },
+        |_, _, _| {},
+    );
+    let rt = RuntimeContext::new(RuntimeWakeHandle::new(|| {}));
+    rt.enter(|| {
+        with_module_host(&host, || {
+            let root = Owner::new(None);
+            root.with(|| {
+                spawn_local(async {
+                    let products = query_inapp_products(&["single"]).await.unwrap();
+                    assert_eq!(products[0].kind, ProductKind::Consumable);
+                    assert!(purchase_consumable("single", None).await.unwrap().is_ok());
+                    let purchases = query_inapp_purchases().await.unwrap();
+                    assert_eq!(purchases.len(), 1);
+                    consume(&Purchase {
+                        token: "tok1".into(),
+                        transaction_id: "t1".into(),
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+                });
+            });
+            whisker::run_until_stalled();
+            root.dispose();
+        });
+    });
+    rt.shutdown();
+    let recorded = calls.borrow();
+    let methods: Vec<&str> = recorded.iter().map(|(m, _)| m.as_str()).collect();
+    assert_eq!(
+        methods,
+        [
+            "queryInAppProducts",
+            "purchase",
+            "queryInAppPurchases",
+            "consume"
+        ]
+    );
+}
+
+#[test]
 fn purchase_with_account_sends_account_token() {
     use masamune_whisker_billing::purchase_with_account;
 

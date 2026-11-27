@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.6
+
+- **NEW** `masamune-whisker-messaging` and `masamune-whisker-messaging-firebase`: push messaging adapter interface, `RuntimeMessagingAdapter`, `MessagingMasamuneAdapter`, native FCM module (iOS/Android) and `MasamuneFirebaseMessaging` CNG plugin (`aps-environment`).
+- **NEW** `masamune-whisker-billing`: one-time / consumable purchase APIs (`ProductKind`, `query_inapp_products`, `purchase_consumable`, `purchase_with_account`, `query_inapp_purchases`, `consume`, `RuntimeBillingAdapter`) and `BillingMasamuneAdapter::consumables`.
+- **NEW** `masamune-whisker-functions` and `masamune-whisker-functions-cloudflare`: `with_app_check(Auth)` to attach `X-Firebase-AppCheck` headers on REST / Cloudflare edge & region requests.
+
 ## 0.14.5
 
 - **NEW** (whisker fork `3aec2029`) Follow upstream whisker `v0.19.2` (`whisker-map`, `whisker-scene`, `wheel` events) and add engine sub-pixel motion deferral, idle background wake suppression, Android backdrop blur caching, and iOS box path / shadow / SVG redraw optimizations.

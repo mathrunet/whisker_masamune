@@ -30,8 +30,20 @@ public final class BillingModule: Module {
                 }
             }
 
-            // queryProducts({ ids: [...] }) -> [{ id, title, description, price, priceMicros, currency, period, offers }]
+            // queryProducts({ ids: [...] }) -> [{ id, kind, title, description, price, priceMicros, currency, period, offers }]
             AsyncFunction("queryProducts") { [weak self] args, promise in
+                let ids = Bridge.args(args)["ids"] as? [String] ?? []
+                self?.run { store in
+                    do {
+                        Bridge.resolve(promise, try await store.queryProducts(ids))
+                    } catch {
+                        Bridge.reject(promise, error)
+                    }
+                }
+            }
+
+            // queryInAppProducts({ ids: [...] }) -> StoreKit 2 uses Product.products(for:) for all product types.
+            AsyncFunction("queryInAppProducts") { [weak self] args, promise in
                 let ids = Bridge.args(args)["ids"] as? [String] ?? []
                 self?.run { store in
                     do {
@@ -65,11 +77,31 @@ public final class BillingModule: Module {
                 }
             }
 
+            // queryInAppPurchases() -> unfinished & entitled non-subscription transactions
+            AsyncFunction("queryInAppPurchases") { [weak self] _, promise in
+                self?.run { store in
+                    Bridge.resolve(promise, await store.queryInAppPurchases())
+                }
+            }
+
             // finish({ token, transactionId }) — finishes the transaction.
             AsyncFunction("finish") { [weak self] args, promise in
                 let id = (Bridge.args(args)["transactionId"] as? String).flatMap { UInt64($0) }
                 guard let id else {
                     Bridge.reject(promise, "finish: invalid transactionId")
+                    return
+                }
+                self?.run { store in
+                    await store.finish(id)
+                    Bridge.resolve(promise, nil)
+                }
+            }
+
+            // consume({ token, transactionId }) — finishes a consumable transaction in StoreKit 2.
+            AsyncFunction("consume") { [weak self] args, promise in
+                let id = (Bridge.args(args)["transactionId"] as? String).flatMap { UInt64($0) }
+                guard let id else {
+                    Bridge.reject(promise, "consume: invalid transactionId")
                     return
                 }
                 self?.run { store in
@@ -200,6 +232,27 @@ final class BillingStore {
         return purchases
     }
 
+    func queryInAppPurchases() async -> [[String: Any?]] {
+        var seen = Set<UInt64>()
+        var purchases: [[String: Any?]] = []
+        for await result in Transaction.unfinished {
+            guard case .verified(let transaction) = result,
+                  transaction.productType == .consumable || transaction.productType == .nonConsumable
+            else { continue }
+            transactions[transaction.id] = transaction
+            seen.insert(transaction.id)
+            purchases.append(await encode(transaction, jws: result.jwsRepresentation, finished: false))
+        }
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  transaction.productType == .nonConsumable,
+                  !seen.contains(transaction.id)
+            else { continue }
+            purchases.append(await encode(transaction, jws: result.jwsRepresentation, finished: true))
+        }
+        return purchases
+    }
+
     func finish(_ id: UInt64) async {
         if let transaction = transactions.removeValue(forKey: id) {
             await transaction.finish()
@@ -296,8 +349,15 @@ final class BillingStore {
                 offers.append(offer(kind: "introductory", freeTrial: intro.paymentMode == .freeTrial, phases: [phase, regular]))
             }
         }
+        let kind: String
+        switch product.type {
+        case .consumable: kind = "consumable"
+        case .nonConsumable: kind = "non_consumable"
+        default: kind = "subscription"
+        }
         return [
             "id": product.id,
+            "kind": kind,
             "title": product.displayName,
             "description": product.description,
             "price": product.displayPrice,

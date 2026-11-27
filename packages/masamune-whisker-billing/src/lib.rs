@@ -31,6 +31,7 @@
 
 mod adapter;
 mod debug;
+mod runtime;
 
 pub use adapter::{BillingMasamuneAdapter, load_products, products};
 pub use debug::{
@@ -39,6 +40,7 @@ pub use debug::{
 };
 use masamune_whisker_bridge::NativeModule;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
+pub use runtime::RuntimeBillingAdapter;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -251,11 +253,27 @@ pub struct Offer {
     pub phases: Vec<PricingPhase>,
 }
 
-/// A subscription product.
+/// Kind of store product.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProductKind {
+    /// Auto-renewable subscription (Android `SUBS`, iOS `.autoRenewable`).
+    #[default]
+    Subscription,
+    /// One-time consumable purchase (Android `INAPP`, iOS `.consumable`).
+    Consumable,
+    /// One-time non-consumable purchase (Android `INAPP`, iOS `.nonConsumable`).
+    NonConsumable,
+}
+
+/// A store product (subscription, consumable or non-consumable).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Product {
     pub id: String,
+    /// Product type (defaults to [`ProductKind::Subscription`] for wire compatibility).
+    #[serde(default)]
+    pub kind: ProductKind,
     /// Display name (Android `ProductDetails.name`, iOS `displayName`).
     #[serde(default)]
     pub title: String,
@@ -373,6 +391,14 @@ pub async fn query_products(ids: &[&str]) -> NativeResult<Vec<Product>> {
         .await
 }
 
+/// Looks up one-time (consumable / non-consumable) products (Android `ProductType.INAPP`,
+/// iOS `Product.products(for:)`). Unknown ids are left out.
+pub async fn query_inapp_products(ids: &[&str]) -> NativeResult<Vec<Product>> {
+    module()
+        .call_async("queryInAppProducts", &json!({ "ids": ids }))
+        .await
+}
+
 /// Shows the purchase sheet. Returns whether it could be shown; the outcome (purchased, pending, canceled
 /// or failed) is delivered to [`on_purchases`] on both platforms, so subscribe before calling this.
 ///
@@ -413,6 +439,25 @@ pub async fn purchase_with_account(
         .await
 }
 
+/// Shows the purchase sheet for a one-time / consumable product with an optional store account token.
+pub async fn purchase_consumable(
+    product_id: &str,
+    account_token: Option<&str>,
+) -> NativeResult<BillingResult> {
+    module()
+        .call_async(
+            "purchase",
+            &json!({
+                "productId": product_id,
+                "productType": "inapp",
+                "offerToken": "",
+                "oldPurchaseToken": "",
+                "accountToken": account_token.unwrap_or(""),
+            }),
+        )
+        .await
+}
+
 /// Lists the purchases the user currently owns: active subscriptions (Android `queryPurchasesAsync`
 /// for subscriptions, iOS `Transaction.currentEntitlements`, which excludes expired and revoked ones).
 ///
@@ -426,8 +471,18 @@ pub async fn query_purchases() -> NativeResult<Vec<Purchase>> {
     }
 }
 
-/// Marks a purchase as delivered after the server verified it (Android acknowledge, iOS
-/// `Transaction.finish()`). Does nothing when it is already finished.
+/// Lists owned or unfinished one-time / consumable purchases (Android `queryPurchasesAsync(INAPP)`,
+/// iOS unfinished & entitled non-subscription transactions).
+pub async fn query_inapp_purchases() -> NativeResult<Vec<Purchase>> {
+    match module().call_async("queryInAppPurchases", &json!({})).await {
+        Ok(purchases) => Ok(debug::merge(purchases)),
+        Err(_) if !debug_purchases().is_empty() => Ok(debug_purchases()),
+        Err(error) => Err(error),
+    }
+}
+
+/// Marks a subscription or non-consumable purchase as delivered after the server verified it
+/// (Android acknowledge, iOS `Transaction.finish()`). Does nothing when it is already finished.
 pub async fn finish(purchase: &Purchase) -> NativeResult<()> {
     if purchase.finished {
         return Ok(());
@@ -435,6 +490,18 @@ pub async fn finish(purchase: &Purchase) -> NativeResult<()> {
     let _: serde_json::Value = module()
         .call_async(
             "finish",
+            &json!({ "token": purchase.token, "transactionId": purchase.transaction_id }),
+        )
+        .await?;
+    Ok(())
+}
+
+/// Consumes a verified consumable purchase so it can be bought again (Android `consumeAsync`,
+/// iOS `Transaction.finish()`). Call only after the server has recorded and granted the entitlement.
+pub async fn consume(purchase: &Purchase) -> NativeResult<()> {
+    let _: serde_json::Value = module()
+        .call_async(
+            "consume",
             &json!({ "token": purchase.token, "transactionId": purchase.transaction_id }),
         )
         .await?;
