@@ -76,12 +76,10 @@ impl ExperimentSource for FirebaseRemoteConfigSource {
         let timeout = self.fetch_timeout;
         let min_interval = self.minimum_fetch_interval;
         Box::pin(async move {
-            let raw = masamune_whisker_firebase_remote_config::fetch_and_activate(
-                timeout,
-                min_interval,
-            )
-            .await
-            .map_err(|err| ExperimentError::new(err.to_string()))?;
+            let raw =
+                masamune_whisker_firebase_remote_config::fetch_and_activate(timeout, min_interval)
+                    .await
+                    .map_err(|err| ExperimentError::new(err.to_string()))?;
             Ok(raw
                 .into_iter()
                 .map(|(k, v)| (k, ExperimentValue::String(v)))

@@ -515,9 +515,7 @@ mod tests {
             let _ = exp.run(
                 |c| c.get_string("flag"),
                 [ExperimentCase::otherwise("control", || ())],
-                RunOptions::new()
-                    .fixed("control")
-                    .exposure(fixed_exposure),
+                RunOptions::new().fixed("control").exposure(fixed_exposure),
             );
             assert_eq!(logger.entries().len(), 1);
         });
@@ -526,9 +524,8 @@ mod tests {
     #[test]
     fn reactive_computed_updates_on_apply_values() {
         with_runtime(|| {
-            let exp = Experiment::new(
-                ExperimentMasamuneAdapter::test().default_value("flag", "control"),
-            );
+            let exp =
+                Experiment::new(ExperimentMasamuneAdapter::test().default_value("flag", "control"));
             let variant = computed(move || {
                 exp.run(
                     |c| c.get_string("flag"),

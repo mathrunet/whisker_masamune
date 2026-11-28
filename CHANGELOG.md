@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.14.7
+
+- **NEW** `masamune-whisker-audio-playlist`: add monotonic sleep-aware `output_clock_ns()`, output deadlines (`QueueItem::with_output_before_ns`, `InterruptOptions::with_output_before_ns`, `AudioPlaylist::set_output_deadline`, `EndReason::Expired`) enforced on iOS and Android before playback latency bounds, and output boundary events (`PlaylistEvent::OutputStarted`, `PlaylistEvent::OutputEnded`).
+- **NEW** `masamune-whisker-experiment`: add experiment framework crate with Firebase Remote Config source, reactive evaluation, and exposure logging.
+- **FIX** `masamune-whisker-billing` and `masamune-whisker-ui`: extend billing adapter tests and improve Material bottom sheet behavior.
+
 ## 0.14.6
 
 - **NEW** `masamune-whisker-messaging` and `masamune-whisker-messaging-firebase`: push messaging adapter interface, `RuntimeMessagingAdapter`, `MessagingMasamuneAdapter`, native FCM module (iOS/Android) and `MasamuneFirebaseMessaging` CNG plugin (`aps-environment`).
