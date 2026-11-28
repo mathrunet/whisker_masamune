@@ -4,7 +4,7 @@ use masamune_whisker_logger::{LevelFilter, LogEvent, LogValue, LoggerAdapter};
 use std::error::Error;
 use whisker::RuntimeDispatcher;
 use whisker_firebase::analytics::{Analytics, Consent, Param};
-use whisker_firebase::crashlytics::{Crashlytics, ErrorReport};
+use whisker_firebase::crashlytics::{Crashlytics, ErrorReport, StackFrame};
 
 pub use whisker_firebase::analytics::FirebaseError;
 
@@ -152,6 +152,157 @@ impl FirebaseAnalyticsAdapter {
     }
 }
 
+/// A vetted code location attached to a [`DiagnosticReport`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticFrame {
+    pub symbol: String,
+    pub file: Option<String>,
+    pub line: Option<u32>,
+}
+
+/// An allowlisted handled-error diagnostic payload.
+///
+/// Only a fixed classification code and vetted code frames are serialized;
+/// raw error strings, messages, user IDs, custom keys, and breadcrumbs are omitted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticReport {
+    classification: String,
+    frames: Vec<DiagnosticFrame>,
+}
+
+impl DiagnosticReport {
+    /// Builds a sanitized diagnostic report from a fixed classification code
+    /// (`[a-z][a-z0-9_]{0,63}`; invalid inputs fall back to `"handled_error"`)
+    /// and vetted stack frames.
+    pub fn new(classification: &str, frames: Vec<DiagnosticFrame>) -> Self {
+        let classification = if is_valid_classification(classification) {
+            classification.to_owned()
+        } else {
+            "handled_error".to_owned()
+        };
+        let frames = frames
+            .into_iter()
+            .filter_map(sanitize_frame)
+            .take(32)
+            .collect();
+        Self {
+            classification,
+            frames,
+        }
+    }
+
+    pub fn classification(&self) -> &str {
+        &self.classification
+    }
+
+    pub fn frames(&self) -> &[DiagnosticFrame] {
+        &self.frames
+    }
+
+    fn to_error_report(&self) -> ErrorReport {
+        ErrorReport {
+            name: "HandledError".into(),
+            reason: self.classification.clone(),
+            frames: self
+                .frames
+                .iter()
+                .map(|frame| StackFrame {
+                    symbol: frame.symbol.clone(),
+                    file: frame.file.clone(),
+                    line: frame.line,
+                })
+                .collect(),
+        }
+    }
+}
+
+fn is_valid_classification(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    value.len() <= 64
+        && first.is_ascii_lowercase()
+        && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+fn is_valid_symbol(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b':'))
+}
+
+fn is_valid_relative_file(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && !value.starts_with('/')
+        && !value.contains("..")
+        && !value.contains("://")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'))
+}
+
+fn sanitize_frame(frame: DiagnosticFrame) -> Option<DiagnosticFrame> {
+    if !is_valid_symbol(&frame.symbol) {
+        return None;
+    }
+    let file = frame.file.filter(|path| is_valid_relative_file(path));
+    let line = frame.line.filter(|line| *line > 0);
+    Some(DiagnosticFrame {
+        symbol: frame.symbol,
+        file,
+        line,
+    })
+}
+
+/// Firebase Crashlytics for apps that own manual unsent-report dispatch and deletion gating.
+///
+/// Initializes only Crashlytics (not Analytics), keeps automatic collection disabled,
+/// and never attaches breadcrumbs, custom user IDs, or custom keys.
+pub struct FirebaseCrashlyticsAdapter(Crashlytics);
+
+impl FirebaseCrashlyticsAdapter {
+    /// Initializes Crashlytics only and ensures automatic collection is disabled.
+    pub fn new() -> Result<Self, FirebaseError> {
+        let crashlytics = Crashlytics::instance()?;
+        crashlytics.set_collection_enabled(false)?;
+        Ok(Self(crashlytics))
+    }
+
+    /// Ensures automatic Crashlytics collection remains disabled.
+    pub fn disable_automatic_collection(&self) -> Result<(), FirebaseError> {
+        self.0.set_collection_enabled(false)
+    }
+
+    /// Returns whether Crashlytics automatic collection is currently enabled.
+    pub fn is_collection_enabled(&self) -> Result<bool, FirebaseError> {
+        self.0.is_collection_enabled()
+    }
+
+    /// Records a sanitized handled-error report locally without enabling automatic sending.
+    pub fn record(&self, report: &DiagnosticReport) -> Result<(), FirebaseError> {
+        self.0.record_report(&report.to_error_report())
+    }
+
+    /// Checks whether unsent reports are waiting on the device.
+    pub async fn check_for_unsent_reports(&self) -> Result<bool, FirebaseError> {
+        self.0.check_for_unsent_reports().await
+    }
+
+    /// Sends queued unsent reports once without enabling automatic collection.
+    pub fn send_unsent_reports(&self) -> Result<(), FirebaseError> {
+        self.0.send_unsent_reports()
+    }
+
+    /// Deletes all queued unsent reports on the device without sending them.
+    pub fn delete_unsent_reports(&self) -> Result<(), FirebaseError> {
+        self.0.delete_unsent_reports()
+    }
+}
+
 fn analytics_consent(allowed: bool) -> Consent {
     Consent::new()
         .analytics_storage(allowed)
@@ -285,5 +436,51 @@ mod tests {
         assert_eq!(report.name, "HandledError");
         assert_eq!(report.reason, safe_error.to_string());
         assert!(report.frames.is_empty());
+    }
+
+    #[test]
+    fn diagnostic_report_sanitizes_classification_and_frames() {
+        let report = DiagnosticReport::new(
+            "storage_error",
+            vec![
+                DiagnosticFrame {
+                    symbol: "mizuhiki::pages::delete::execute".into(),
+                    file: Some("src/pages/delete.rs".into()),
+                    line: Some(616),
+                },
+                DiagnosticFrame {
+                    symbol: "bad symbol with secret token=abc".into(),
+                    file: Some("src/pages/delete.rs".into()),
+                    line: Some(10),
+                },
+                DiagnosticFrame {
+                    symbol: "mizuhiki::boot::restore".into(),
+                    file: Some("/Users/private/secret.rs".into()),
+                    line: Some(0),
+                },
+            ],
+        );
+        assert_eq!(report.classification(), "storage_error");
+        assert_eq!(report.frames().len(), 2);
+        assert_eq!(
+            report.frames()[0].symbol,
+            "mizuhiki::pages::delete::execute"
+        );
+        assert_eq!(
+            report.frames()[0].file.as_deref(),
+            Some("src/pages/delete.rs")
+        );
+        assert_eq!(report.frames()[0].line, Some(616));
+        assert_eq!(report.frames()[1].symbol, "mizuhiki::boot::restore");
+        assert_eq!(report.frames()[1].file, None);
+        assert_eq!(report.frames()[1].line, None);
+
+        let error_report = report.to_error_report();
+        assert_eq!(error_report.name, "HandledError");
+        assert_eq!(error_report.reason, "storage_error");
+        assert_eq!(error_report.frames.len(), 2);
+
+        let fallback = DiagnosticReport::new("https://secret.example/token?a=1", Vec::new());
+        assert_eq!(fallback.classification(), "handled_error");
     }
 }

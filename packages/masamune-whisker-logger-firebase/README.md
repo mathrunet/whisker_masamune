@@ -64,3 +64,11 @@ events should stay outside this path.
 The `analytics_startup` module provides native sources that switch off
 collection at process startup before the app restores its consent. Keep
 advertising identifiers disabled independently in the app's native project.
+
+## Manual Crashlytics dispatch
+
+Start with Crashlytics collection disabled in the native project (`collection_enabled = Some(false)`).
+Use `FirebaseCrashlyticsAdapter::new()` to initialize Crashlytics independently of Analytics with
+automatic collection disabled, record only allowlisted `DiagnosticReport` payloads (fixed
+classification and vetted code locations), and explicitly call `check_for_unsent_reports`,
+`send_unsent_reports`, or `delete_unsent_reports` after verifying session and deletion state.
