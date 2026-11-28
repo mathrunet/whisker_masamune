@@ -9,6 +9,11 @@
 // - The audio session category is set to `.playback` before playing only when it is neither
 //   `.playback` nor `.playAndRecord`, so a configuration made by masamune-whisker-audio-session
 //   (mixWithOthers, duckOthers) is kept. Background playback needs the `audio` background mode.
+// - Output deadlines and output events use `mach_continuous_time` (keeps counting while the
+//   device sleeps). While something plays, a monitor runs every `monitorInterval`: it ends items
+//   and announcements early enough that no frame is presented at or after their deadline (the
+//   session's output latency and two monitor periods are kept as a margin) and reports when audio
+//   starts reaching the output (the playback position advances) and when it stops.
 // - Everything runs on the main thread; KVO callbacks are moved there.
 
 import AVFoundation
@@ -20,6 +25,7 @@ public final class AudioPlaylistModule: Module {
     private struct Entry {
         let id: String
         let item: AVPlayerItem
+        var deadline: UInt64?
     }
 
     private struct Announcement {
@@ -29,7 +35,23 @@ public final class AudioPlaylistModule: Module {
         let player: AVPlayer
         let item: AVPlayerItem
         var observation: NSKeyValueObservation?
+        var deadline: UInt64?
     }
+
+    /// Output of the queue or the announcement: whether `id` reaches the output.
+    private struct Output {
+        let id: String
+        let item: AVPlayerItem
+        var audible = false
+        /// Last monitor time at which no new frame had been presented (earliest first frame).
+        var silentAt: UInt64
+        var silentPosition: Double
+    }
+
+    private static let monitorInterval: UInt64 = 40_000_000
+    private var monitor: DispatchSourceTimer?
+    private var queueOutput: Output?
+    private var announcementOutput: Output?
 
     private let queue: AVQueuePlayer = {
         let player = AVQueuePlayer()
@@ -136,8 +158,19 @@ public final class AudioPlaylistModule: Module {
                 let duck = json["mode"] as? String == "duck"
                 let duckVolume = Float((json["duckVolume"] as? NSNumber)?.doubleValue ?? 0.2)
                 let volume = Float((json["volume"] as? NSNumber)?.doubleValue ?? 1)
-                self.interrupt(id: id, url: url, duck: duck, duckVolume: duckVolume, volume: volume)
+                let deadline = (json["outputBeforeNs"] as? NSNumber)?.uint64Value
+                self.interrupt(id: id, url: url, duck: duck, duckVolume: duckVolume, volume: volume, deadline: deadline)
                 return Bridge.ok(true)
+            }
+
+            // setOutputDeadline({ id, outputBeforeNs }) -> whether the id was queued or announcing
+            Function("setOutputDeadline") { [weak self] args in
+                guard let self else { return Bridge.ok(false) }
+                let json = Bridge.args(args)
+                guard let id = json["id"] as? String, let deadline = (json["outputBeforeNs"] as? NSNumber)?.uint64Value else {
+                    return Bridge.err("invalid output deadline")
+                }
+                return Bridge.ok(self.setOutputDeadline(id: id, deadline: deadline))
             }
 
             // cancelInterrupt() -> whether an announcement was playing
@@ -154,15 +187,15 @@ public final class AudioPlaylistModule: Module {
 
     // MARK: - Queue
 
-    private func setQueue(_ items: [(id: String, url: URL)]) {
+    private func setQueue(_ items: [(id: String, url: URL, deadline: UInt64?)]) {
         if let current = entries.first {
             emit(["type": "itemEnded", "id": current.id, "reason": "removed"])
         }
         entries.forEach { forget($0.item) }
         queue.removeAllItems()
         entries = []
-        for (id, url) in items {
-            enqueue(id: id, url: url)
+        for (id, url, deadline) in items {
+            enqueue(id: id, url: url, deadline: deadline)
         }
         if !entries.isEmpty {
             startCurrent()
@@ -170,10 +203,10 @@ public final class AudioPlaylistModule: Module {
         applyPlayback()
     }
 
-    private func append(_ items: [(id: String, url: URL)]) {
+    private func append(_ items: [(id: String, url: URL, deadline: UInt64?)]) {
         let wasEmpty = entries.isEmpty
-        for (id, url) in items {
-            enqueue(id: id, url: url)
+        for (id, url, deadline) in items {
+            enqueue(id: id, url: url, deadline: deadline)
         }
         if wasEmpty && !entries.isEmpty {
             startCurrent()
@@ -181,7 +214,7 @@ public final class AudioPlaylistModule: Module {
         applyPlayback()
     }
 
-    private func enqueue(id: String, url: URL) {
+    private func enqueue(id: String, url: URL, deadline: UInt64?) {
         let item = AVPlayerItem(url: url)
         let key = ObjectIdentifier(item)
         itemObservations[key] = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -190,7 +223,7 @@ public final class AudioPlaylistModule: Module {
             Bridge.onMain { self?.fail(item, message: message) }
         }
         queue.insert(item, after: nil)
-        entries.append(Entry(id: id, item: item))
+        entries.append(Entry(id: id, item: item, deadline: deadline))
     }
 
     private func remove(_ id: String) -> Bool {
@@ -215,6 +248,8 @@ public final class AudioPlaylistModule: Module {
         entries.forEach { forget($0.item) }
         queue.removeAllItems()
         entries = []
+        updateOutputs()
+        updateMonitor()
     }
 
     /// Ends the current item with `reason`, drops it from the player and reports the next one.
@@ -226,6 +261,7 @@ public final class AudioPlaylistModule: Module {
         if queue.items().contains(entry.item) {
             queue.remove(entry.item)
         }
+        updateOutputs()
         startNext()
     }
 
@@ -256,6 +292,7 @@ public final class AudioPlaylistModule: Module {
             let entry = entries.removeFirst()
             forget(entry.item)
             emit(["type": "itemEnded", "id": entry.id, "reason": "completed"])
+            updateOutputs()
             startNext()
         } else if let announcement, announcement.item === item {
             endAnnouncement(completed: true)
@@ -287,6 +324,7 @@ public final class AudioPlaylistModule: Module {
 
     /// Plays the queue when the playlist is playing and no pausing announcement runs.
     private func applyPlayback() {
+        enforceDeadlines()
         let pausedByAnnouncement = announcement.map { !$0.duck } ?? false
         if playing && !pausedByAnnouncement && !entries.isEmpty {
             Self.ensureCategory()
@@ -294,6 +332,7 @@ public final class AudioPlaylistModule: Module {
         } else {
             queue.pause()
         }
+        updateMonitor()
     }
 
     private func applyVolume() {
@@ -323,12 +362,12 @@ public final class AudioPlaylistModule: Module {
 
     // MARK: - Announcements
 
-    private func interrupt(id: String, url: URL, duck: Bool, duckVolume: Float, volume: Float) {
+    private func interrupt(id: String, url: URL, duck: Bool, duckVolume: Float, volume: Float, deadline: UInt64?) {
         endAnnouncement(completed: false, resume: false)
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         player.volume = min(max(volume, 0), 1)
-        var next = Announcement(id: id, duck: duck, duckVolume: min(max(duckVolume, 0), 1), player: player, item: item)
+        var next = Announcement(id: id, duck: duck, duckVolume: min(max(duckVolume, 0), 1), player: player, item: item, deadline: deadline)
         next.observation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard item.status == .failed else { return }
             let message = item.error.map(Bridge.message) ?? "failed to load the source"
@@ -338,8 +377,14 @@ public final class AudioPlaylistModule: Module {
         applyVolume()
         applyPlayback()
         emit(["type": "interruptStarted", "id": id])
+        if let deadline, Self.now() &+ guardNs() >= deadline {
+            // Too close to its deadline to be presented in full: it never starts.
+            endAnnouncement(completed: false)
+            return
+        }
         Self.ensureCategory()
         player.play()
+        updateMonitor()
     }
 
     /// Stops the announcement and, with `resume`, restores the queue. Returns whether one ran.
@@ -354,8 +399,152 @@ public final class AudioPlaylistModule: Module {
         if resume {
             applyPlayback()
         }
+        updateOutputs()
         emit(["type": "interruptEnded", "id": current.id, "completed": completed])
+        updateMonitor()
         return true
+    }
+
+    // MARK: - Output deadlines and output events
+
+    private func setOutputDeadline(id: String, deadline: UInt64) -> Bool {
+        let tightened: (UInt64?) -> UInt64 = { current in current.map { min($0, deadline) } ?? deadline }
+        if var current = announcement, current.id == id {
+            current.deadline = tightened(current.deadline)
+            announcement = current
+        } else if let index = entries.firstIndex(where: { $0.id == id }) {
+            entries[index].deadline = tightened(entries[index].deadline)
+        } else {
+            return false
+        }
+        tick()
+        return true
+    }
+
+    /// Output latency of the session plus two monitor periods and 20 ms: stopping at
+    /// `deadline - guardNs()` keeps every presented frame before the deadline.
+    private func guardNs() -> UInt64 {
+        let session = AVAudioSession.sharedInstance()
+        let latency = max(session.outputLatency, 0) + max(session.ioBufferDuration, 0)
+        return UInt64(latency * 1_000_000_000) + 2 * Self.monitorInterval + 20_000_000
+    }
+
+    private func latencyNs() -> UInt64 {
+        let session = AVAudioSession.sharedInstance()
+        return UInt64((max(session.outputLatency, 0) + max(session.ioBufferDuration, 0)) * 1_000_000_000)
+    }
+
+    /// Runs the monitor while something plays or could start playing.
+    private func updateMonitor() {
+        let needed = announcement != nil || (playing && !entries.isEmpty)
+            || queueOutput?.audible == true || announcementOutput?.audible == true
+        if needed && monitor == nil {
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now(), repeating: .nanoseconds(Int(Self.monitorInterval)), leeway: .milliseconds(5))
+            timer.setEventHandler { [weak self] in self?.tick() }
+            monitor = timer
+            timer.resume()
+        } else if !needed, let timer = monitor {
+            monitor = nil
+            timer.cancel()
+        }
+    }
+
+    private func tick() {
+        enforceDeadlines()
+        updateOutputs()
+        updateMonitor()
+    }
+
+    private func enforceDeadlines() {
+        let limit = Self.now() &+ guardNs()
+        if let deadline = announcement?.deadline, limit >= deadline {
+            endAnnouncement(completed: false)
+        }
+        var index = 1
+        while index < entries.count {
+            if let deadline = entries[index].deadline, limit >= deadline {
+                let entry = entries.remove(at: index)
+                forget(entry.item)
+                queue.remove(entry.item)
+                emit(["type": "itemEnded", "id": entry.id, "reason": "expired"])
+            } else {
+                index += 1
+            }
+        }
+        while let deadline = entries.first?.deadline, limit >= deadline {
+            endCurrent("expired")
+        }
+    }
+
+    /// Reports `outputStarted` once the position of an audible item advances and `outputEnded`
+    /// as soon as it stops reaching the output.
+    private func updateOutputs() {
+        let now = Self.now()
+        let latency = latencyNs()
+        let pausedByAnnouncement = announcement.map { !$0.duck } ?? false
+        let queueTarget = playing && !pausedByAnnouncement ? entries.first.map { ($0.id, $0.item) } : nil
+        queueOutput = update(
+            queueOutput, target: queueTarget, player: queue,
+            running: queue.timeControlStatus == .playing && queue.currentItem === queueTarget?.1,
+            now: now, latency: latency
+        )
+        let announcementTarget = announcement.map { ($0.id, $0.item) }
+        announcementOutput = update(
+            announcementOutput, target: announcementTarget, player: announcement?.player,
+            running: announcement?.player.timeControlStatus == .playing,
+            now: now, latency: latency
+        )
+    }
+
+    private func update(
+        _ output: Output?, target: (String, AVPlayerItem)?, player: AVPlayer?,
+        running: Bool, now: UInt64, latency: UInt64
+    ) -> Output? {
+        var output = output
+        let position = player.map { CMTimeGetSeconds($0.currentTime()) }.flatMap { $0.isFinite ? $0 : nil } ?? 0
+        if let current = output, current.id != target?.0 || current.item !== target?.1 || (current.audible && !running) {
+            if current.audible {
+                emit(["type": "outputEnded", "id": current.id, "lastFrameNs": now &+ latency])
+            }
+            output = nil
+        }
+        guard let (id, item) = target else { return nil }
+        var next = output ?? Output(id: id, item: item, silentAt: now, silentPosition: position)
+        if !next.audible {
+            if running && position > next.silentPosition + 0.001 {
+                // Frames rendered after `silentAt` reach the output `latency` later.
+                let earliest = next.silentAt
+                let latest = now &+ latency
+                let played = UInt64((position - next.silentPosition) * 1_000_000_000)
+                let estimate = min(max(latest &- min(played, latest), earliest), latest)
+                emit([
+                    "type": "outputStarted", "id": id,
+                    "firstFrameNs": estimate, "earliestNs": earliest, "latestNs": latest,
+                ])
+                next.audible = true
+            } else {
+                next.silentAt = now
+                next.silentPosition = position
+            }
+        }
+        return next
+    }
+
+    private static let timebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    /// Nanoseconds of `mach_continuous_time` (the `output_clock_ns` clock in Rust).
+    private static func now() -> UInt64 {
+        let ticks = mach_continuous_time()
+        let info = timebase
+        guard info.denom != 0 else { return UInt64.max }
+        let product = ticks.multipliedFullWidth(by: UInt64(info.numer))
+        guard product.high < UInt64(info.denom) else { return UInt64.max }
+        return UInt64(info.denom).dividingFullWidth(product).quotient
     }
 
     // MARK: - Helpers
@@ -404,7 +593,7 @@ public final class AudioPlaylistModule: Module {
         let errorDescription: String?
     }
 
-    private static func items(_ json: [String: Any]) throws -> [(id: String, url: URL)] {
+    private static func items(_ json: [String: Any]) throws -> [(id: String, url: URL, deadline: UInt64?)] {
         guard let raw = json["items"] as? [[String: Any]] else {
             throw InvalidArgument(errorDescription: "items are missing")
         }
@@ -412,7 +601,7 @@ public final class AudioPlaylistModule: Module {
             guard let id = item["id"] as? String, !id.isEmpty,
                   let uri = item["uri"] as? String, let url = url(uri)
             else { throw InvalidArgument(errorDescription: "invalid queue item") }
-            return (id, url)
+            return (id, url, (item["outputBeforeNs"] as? NSNumber)?.uint64Value)
         }
     }
 

@@ -80,6 +80,13 @@ impl AudioPlaylistAdapter for NativeAudioPlaylistAdapter {
         module().call("cancelInterrupt", &json!({}))
     }
 
+    fn set_output_deadline(&self, id: &str, output_before_ns: u64) -> NativeResult<bool> {
+        module().call(
+            "setOutputDeadline",
+            &json!({ "id": id, "outputBeforeNs": output_before_ns }),
+        )
+    }
+
     fn subscribe(&self, handler: Rc<dyn Fn(PlaylistEvent)>) -> Subscription {
         module().subscribe("event", move |event: PlaylistEvent| handler(event))
     }

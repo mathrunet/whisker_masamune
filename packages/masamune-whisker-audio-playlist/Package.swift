@@ -26,5 +26,15 @@ let package = Package(
                 .plugin(name: "WhiskerModuleCodegenPlugin", package: "whisker"),
             ]
         ),
+        // Plays generated audio on an iOS simulator or device and checks output deadlines and
+        // output events against the clock (`xcodebuild test -scheme masamune-whisker-audio-playlist`).
+        .testTarget(
+            name: "MasamuneWhiskerAudioPlaylistTests",
+            dependencies: [
+                "MasamuneWhiskerAudioPlaylist",
+                .product(name: "WhiskerModule", package: "whisker"),
+            ],
+            path: "ios/Tests/MasamuneWhiskerAudioPlaylistTests"
+        ),
     ]
 )

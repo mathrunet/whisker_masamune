@@ -4,12 +4,19 @@ use crate::{NativeError, NativeResult};
 
 /// One entry of the queue.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueItem {
     /// Unique within the queue. Events and [`PlaylistStatus`] refer to the item by this ID.
     pub id: String,
     /// `https://` URL, `file://` URL or absolute file path (for example a file in the app's
     /// cache directory). See [`validate_uri`].
     pub uri: String,
+    /// Output deadline on the [`crate::output_clock_ns`] clock. No frame of the item is
+    /// presented at or after it: the player stops the item early enough to cover its output
+    /// latency and ends it with [`EndReason::Expired`], and an item whose deadline is too close
+    /// never starts. `None` plays without a deadline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_before_ns: Option<u64>,
 }
 
 impl QueueItem {
@@ -17,7 +24,14 @@ impl QueueItem {
         Self {
             id: id.into(),
             uri: uri.into(),
+            output_before_ns: None,
         }
+    }
+
+    /// Sets the output deadline ([`QueueItem::output_before_ns`]).
+    pub fn with_output_before_ns(mut self, output_before_ns: u64) -> Self {
+        self.output_before_ns = Some(output_before_ns);
+        self
     }
 }
 
@@ -60,6 +74,9 @@ pub enum EndReason {
     Failed,
     /// [`crate::AudioPlaylist::stop`].
     Stopped,
+    /// Reached its output deadline ([`QueueItem::output_before_ns`]) before it finished, or the
+    /// deadline was too close for it to start.
+    Expired,
 }
 
 /// Something that happened to the playlist.
@@ -86,6 +103,20 @@ pub enum PlaylistEvent {
     /// An announcement ended and the queue was restored. `completed` is `false` when it failed,
     /// was cancelled or was replaced by another announcement.
     InterruptEnded { id: String, completed: bool },
+    /// Audio of the queue item or announcement `id` started reaching the output: its first
+    /// frame was presented at `first_frame_ns` (an estimate), which lies between
+    /// `earliest_ns` and `latest_ns`. All values are on the [`crate::output_clock_ns`] clock.
+    /// Reported again whenever the output resumes after [`PlaylistEvent::OutputEnded`].
+    OutputStarted {
+        id: String,
+        first_frame_ns: u64,
+        earliest_ns: u64,
+        latest_ns: u64,
+    },
+    /// Audio of `id` stopped reaching the output (it ended, paused, expired or was removed).
+    /// Its last frame was presented before `last_frame_ns` on the [`crate::output_clock_ns`]
+    /// clock.
+    OutputEnded { id: String, last_frame_ns: u64 },
 }
 
 /// Snapshot of the playlist.
@@ -141,6 +172,9 @@ pub struct InterruptOptions {
     pub mode: InterruptMode,
     /// Volume of the announcement (`0.0..=1.0`).
     pub volume: f64,
+    /// Output deadline of the announcement, like [`QueueItem::output_before_ns`]. The
+    /// announcement ends with `completed: false` when it is reached.
+    pub output_before_ns: Option<u64>,
 }
 
 impl Default for InterruptOptions {
@@ -149,6 +183,7 @@ impl Default for InterruptOptions {
         Self {
             mode: InterruptMode::Pause,
             volume: 1.0,
+            output_before_ns: None,
         }
     }
 }
@@ -161,6 +196,12 @@ impl InterruptOptions {
             ..Self::default()
         }
     }
+
+    /// Sets the output deadline ([`InterruptOptions::output_before_ns`]).
+    pub fn with_output_before_ns(mut self, output_before_ns: u64) -> Self {
+        self.output_before_ns = Some(output_before_ns);
+        self
+    }
 }
 
 /// A validated announcement passed to [`crate::AudioPlaylistAdapter::interrupt`].
@@ -172,6 +213,8 @@ pub struct InterruptRequest {
     #[serde(flatten)]
     pub mode: InterruptMode,
     pub volume: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_before_ns: Option<u64>,
 }
 
 #[cfg(test)]
@@ -241,6 +284,32 @@ mod tests {
                 completed: true
             }
         );
+        assert_eq!(
+            decode(json!({ "type": "itemEnded", "id": "a", "reason": "expired" })).unwrap(),
+            PlaylistEvent::ItemEnded {
+                id: "a".into(),
+                reason: EndReason::Expired
+            }
+        );
+        assert_eq!(
+            decode(json!({
+                "type": "outputStarted", "id": "a", "firstFrameNs": 5, "earliestNs": 4, "latestNs": 6
+            }))
+            .unwrap(),
+            PlaylistEvent::OutputStarted {
+                id: "a".into(),
+                first_frame_ns: 5,
+                earliest_ns: 4,
+                latest_ns: 6
+            }
+        );
+        assert_eq!(
+            decode(json!({ "type": "outputEnded", "id": "a", "lastFrameNs": 9 })).unwrap(),
+            PlaylistEvent::OutputEnded {
+                id: "a".into(),
+                last_frame_ns: 9
+            }
+        );
         assert!(decode(json!({ "type": "unknown" })).is_err());
     }
 
@@ -251,6 +320,7 @@ mod tests {
             uri: "/a.m4a".into(),
             mode: InterruptMode::Duck { volume: 0.2 },
             volume: 1.0,
+            output_before_ns: None,
         };
         assert_eq!(
             serde_json::to_value(&request).unwrap(),
@@ -261,6 +331,22 @@ mod tests {
             ..request
         };
         assert_eq!(serde_json::to_value(&request).unwrap()["mode"], "pause");
+        let request = InterruptRequest {
+            output_before_ns: Some(42),
+            ..request
+        };
+        assert_eq!(
+            serde_json::to_value(&request).unwrap()["outputBeforeNs"],
+            42
+        );
+        assert_eq!(
+            serde_json::to_value(QueueItem::new("a", "/a.m4a").with_output_before_ns(7)).unwrap(),
+            json!({ "id": "a", "uri": "/a.m4a", "outputBeforeNs": 7 })
+        );
+        assert_eq!(
+            serde_json::to_value(QueueItem::new("a", "/a.m4a")).unwrap(),
+            json!({ "id": "a", "uri": "/a.m4a" })
+        );
         let status: PlaylistStatus = serde_json::from_value(json!({
             "currentId": "a", "positionMs": 10, "durationMs": null, "playing": true,
             "interrupting": false, "queue": ["a", "b"], "volume": 0.5,

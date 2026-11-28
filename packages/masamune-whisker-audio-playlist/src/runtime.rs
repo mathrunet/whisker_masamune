@@ -17,6 +17,7 @@ struct Announcement {
     uri: String,
     mode: InterruptMode,
     position_ms: u64,
+    output_before_ns: Option<u64>,
 }
 
 struct State {
@@ -29,9 +30,131 @@ struct State {
     default_duration_ms: u64,
     failing: HashSet<String>,
     log: Vec<PlaylistEvent>,
+    /// Time added by [`RuntimeAudioPlaylistAdapter::advance`] on top of the output clock.
+    clock_offset_ns: u64,
+    report_output: bool,
+    /// IDs whose audio reaches the output, for [`PlaylistEvent::OutputStarted`] / `OutputEnded`.
+    audible: Vec<String>,
 }
 
 impl State {
+    fn now_ns(&self) -> u64 {
+        crate::output_clock_ns()
+            .unwrap_or(u64::MAX)
+            .saturating_add(self.clock_offset_ns)
+    }
+
+    /// Reports that audible `id` stopped at its deadline: playback is virtual, so the last
+    /// frame is presented right before the deadline.
+    fn stop_output_at(&mut self, id: &str, deadline: u64, events: &mut Vec<PlaylistEvent>) {
+        if let Some(index) = self.audible.iter().position(|audible| audible == id) {
+            self.audible.remove(index);
+            events.push(PlaylistEvent::OutputEnded {
+                id: id.to_owned(),
+                last_frame_ns: deadline,
+            });
+        }
+    }
+
+    /// Ends the announcement and the queue items whose output deadline has come.
+    fn enforce_deadlines(&mut self, events: &mut Vec<PlaylistEvent>) {
+        let now = self.now_ns();
+        if let Some((id, deadline)) = self.announcement.as_ref().and_then(|announcement| {
+            announcement
+                .output_before_ns
+                .filter(|deadline| now >= *deadline)
+                .map(|deadline| (announcement.id.clone(), deadline))
+        }) {
+            self.stop_output_at(&id, deadline, events);
+            self.end_announcement(false, events);
+        }
+        loop {
+            let mut index = 1;
+            while index < self.queue.len() {
+                if self.queue[index]
+                    .output_before_ns
+                    .is_some_and(|deadline| now >= deadline)
+                {
+                    let item = self.queue.remove(index).expect("index is in range");
+                    events.push(PlaylistEvent::ItemEnded {
+                        id: item.id,
+                        reason: EndReason::Expired,
+                    });
+                } else {
+                    index += 1;
+                }
+            }
+            match self.queue.front() {
+                Some(item)
+                    if item
+                        .output_before_ns
+                        .is_some_and(|deadline| now >= deadline) =>
+                {
+                    let (id, deadline) = (item.id.clone(), item.output_before_ns.unwrap_or(now));
+                    self.stop_output_at(&id, deadline, events);
+                    self.end_front(EndReason::Expired, events);
+                }
+                _ => return,
+            }
+        }
+    }
+
+    /// Reports the IDs whose audio started or stopped reaching the output.
+    fn reconcile_output(&mut self, events: &mut Vec<PlaylistEvent>) {
+        if !self.report_output {
+            return;
+        }
+        let mut audible = Vec::new();
+        if self.queue_audible()
+            && let Some(item) = self.queue.front()
+        {
+            audible.push(item.id.clone());
+        }
+        if let Some(announcement) = &self.announcement {
+            audible.push(announcement.id.clone());
+        }
+        let now = self.now_ns();
+        for id in &self.audible {
+            if !audible.contains(id) {
+                events.push(PlaylistEvent::OutputEnded {
+                    id: id.clone(),
+                    last_frame_ns: now,
+                });
+            }
+        }
+        for id in &audible {
+            if !self.audible.contains(id) {
+                events.push(PlaylistEvent::OutputStarted {
+                    id: id.clone(),
+                    first_frame_ns: now,
+                    earliest_ns: now,
+                    latest_ns: now,
+                });
+            }
+        }
+        self.audible = audible;
+    }
+
+    /// Milliseconds until the next output deadline of what is audible.
+    fn to_deadline_ms(&self) -> u64 {
+        let now = self.now_ns();
+        let front = self
+            .queue
+            .front()
+            .filter(|_| self.queue_audible())
+            .and_then(|item| item.output_before_ns);
+        let announcement = self
+            .announcement
+            .as_ref()
+            .and_then(|announcement| announcement.output_before_ns);
+        [front, announcement]
+            .into_iter()
+            .flatten()
+            .map(|deadline| deadline.saturating_sub(now).div_ceil(1_000_000))
+            .min()
+            .unwrap_or(u64::MAX)
+    }
+
     fn duration(&self, uri: &str) -> u64 {
         self.durations
             .get(uri)
@@ -162,6 +285,9 @@ impl Default for RuntimeAudioPlaylistAdapter {
                 default_duration_ms: DEFAULT_DURATION_MS,
                 failing: HashSet::new(),
                 log: Vec::new(),
+                clock_offset_ns: 0,
+                report_output: false,
+                audible: Vec::new(),
             })),
             handlers: Rc::default(),
             next_handler: Rc::default(),
@@ -204,15 +330,31 @@ impl RuntimeAudioPlaylistAdapter {
         self.state.borrow_mut().failing.insert(uri.to_owned());
     }
 
+    /// Reports [`PlaylistEvent::OutputStarted`] and [`PlaylistEvent::OutputEnded`] (off by
+    /// default). The runtime player has no output latency, so the first and last frames are
+    /// presented at the moment the item becomes audible or silent.
+    pub fn set_output_reporting(&self, report: bool) {
+        self.update(|state, _| state.report_output = report);
+    }
+
+    /// Current time on the adapter's output clock: [`crate::output_clock_ns`] plus the time
+    /// moved by [`RuntimeAudioPlaylistAdapter::advance`]. Output deadlines are compared with it.
+    pub fn now_ns(&self) -> u64 {
+        self.state.borrow().now_ns()
+    }
+
     /// Moves the clock by `ms` milliseconds: the current item (while audible) and the
-    /// announcement advance, finished items hand over to the next one without a gap, and the
-    /// events are delivered in order.
+    /// announcement advance, finished items hand over to the next one without a gap, output
+    /// deadlines end what reaches them, and the events are delivered in order.
     pub fn advance(&self, ms: u64) {
         let mut left = ms;
         loop {
             let mut events = Vec::new();
             {
                 let mut state = self.state.borrow_mut();
+                state.enforce_deadlines(&mut events);
+                state.reconcile_output(&mut events);
+                let to_deadline = state.to_deadline_ms();
                 let audible = state.queue_audible();
                 let to_item_end = match state.queue.front() {
                     Some(item) if audible => {
@@ -226,8 +368,14 @@ impl RuntimeAudioPlaylistAdapter {
                         .saturating_sub(announcement.position_ms),
                     None => u64::MAX,
                 };
-                let step = left.min(to_item_end).min(to_announcement_end);
+                let step = left
+                    .min(to_item_end)
+                    .min(to_announcement_end)
+                    .min(to_deadline);
                 left -= step;
+                state.clock_offset_ns = state
+                    .clock_offset_ns
+                    .saturating_add(step.saturating_mul(1_000_000));
                 if audible {
                     state.position_ms += step;
                 }
@@ -240,6 +388,8 @@ impl RuntimeAudioPlaylistAdapter {
                 if step == to_announcement_end {
                     state.end_announcement(true, &mut events);
                 }
+                state.enforce_deadlines(&mut events);
+                state.reconcile_output(&mut events);
             }
             let ended = !events.is_empty();
             self.emit(events);
@@ -251,18 +401,14 @@ impl RuntimeAudioPlaylistAdapter {
 
     /// Plays the current item to its end right away (also while paused).
     pub fn finish_current(&self) {
-        let mut events = Vec::new();
-        self.state
-            .borrow_mut()
-            .end_front(EndReason::Completed, &mut events);
-        self.emit(events);
+        self.update(|state, events| state.end_front(EndReason::Completed, events));
     }
 
     /// Plays the announcement to its end right away.
     pub fn finish_interrupt(&self) {
-        let mut events = Vec::new();
-        self.state.borrow_mut().end_announcement(true, &mut events);
-        self.emit(events);
+        self.update(|state, events| {
+            state.end_announcement(true, events);
+        });
     }
 
     /// Every event delivered so far, oldest first.
@@ -278,7 +424,13 @@ impl RuntimeAudioPlaylistAdapter {
     /// Runs `change` on the state and delivers the events it produced.
     fn update<T>(&self, change: impl FnOnce(&mut State, &mut Vec<PlaylistEvent>) -> T) -> T {
         let mut events = Vec::new();
-        let result = change(&mut self.state.borrow_mut(), &mut events);
+        let result = {
+            let mut state = self.state.borrow_mut();
+            let result = change(&mut state, &mut events);
+            state.enforce_deadlines(&mut events);
+            state.reconcile_output(&mut events);
+            result
+        };
         self.emit(events);
         result
     }
@@ -357,12 +509,12 @@ impl AudioPlaylistAdapter for RuntimeAudioPlaylistAdapter {
     }
 
     fn play(&self) -> NativeResult<()> {
-        self.state.borrow_mut().playing = true;
+        self.update(|state, _| state.playing = true);
         Ok(())
     }
 
     fn pause(&self) -> NativeResult<()> {
-        self.state.borrow_mut().playing = false;
+        self.update(|state, _| state.playing = false);
         Ok(())
     }
 
@@ -423,6 +575,7 @@ impl AudioPlaylistAdapter for RuntimeAudioPlaylistAdapter {
                 uri: request.uri.clone(),
                 mode: request.mode,
                 position_ms: 0,
+                output_before_ns: request.output_before_ns,
             });
             events.push(PlaylistEvent::InterruptStarted {
                 id: request.id.clone(),
@@ -440,6 +593,25 @@ impl AudioPlaylistAdapter for RuntimeAudioPlaylistAdapter {
 
     fn cancel_interrupt(&self) -> NativeResult<bool> {
         Ok(self.update(|state, events| state.end_announcement(false, events)))
+    }
+
+    fn set_output_deadline(&self, id: &str, output_before_ns: u64) -> NativeResult<bool> {
+        Ok(self.update(|state, _| {
+            let tighten = |current: &mut Option<u64>| {
+                *current = Some(current.map_or(output_before_ns, |c| c.min(output_before_ns)));
+            };
+            if let Some(announcement) = state.announcement.as_mut().filter(|a| a.id == id) {
+                tighten(&mut announcement.output_before_ns);
+                return true;
+            }
+            match state.queue.iter_mut().find(|item| item.id == id) {
+                Some(item) => {
+                    tighten(&mut item.output_before_ns);
+                    true
+                }
+                None => false,
+            }
+        }))
     }
 
     fn subscribe(&self, handler: Rc<dyn Fn(PlaylistEvent)>) -> Subscription {

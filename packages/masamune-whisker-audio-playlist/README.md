@@ -69,10 +69,32 @@ playlist.stop()?; // also clears the queue
     `cancel_interrupt`.
   - Events: `on_event` returns a `Subscription`; events stop when it is dropped.
 - `PlaylistEvent`: `ItemStarted { id, remaining }`, `ItemEnded { id, reason }`
-  (`Completed`, `Skipped`, `Removed`, `Failed`, `Stopped`), `QueueDrained`,
-  `Error { id, message }`, `InterruptStarted { id }`, `InterruptEnded { id, completed }`.
+  (`Completed`, `Skipped`, `Removed`, `Failed`, `Stopped`, `Expired`), `QueueDrained`,
+  `Error { id, message }`, `InterruptStarted { id }`, `InterruptEnded { id, completed }`,
+  `OutputStarted { id, first_frame_ns, earliest_ns, latest_ns }`,
+  `OutputEnded { id, last_frame_ns }`.
+- Output deadlines: `QueueItem::with_output_before_ns`, `InterruptOptions::with_output_before_ns`
+  and `AudioPlaylist::set_output_deadline(id, ns)` (only shortens). Values are on the
+  `output_clock_ns()` clock, a monotonic clock that keeps counting while the device sleeps
+  (`mach_continuous_time` on Apple platforms, `CLOCK_BOOTTIME` /
+  `SystemClock.elapsedRealtimeNanos` on Android).
 
 ### Behavior
+
+- **Output deadlines**: no frame of an item or announcement is presented at or after its
+  deadline. The native players stop it early enough to cover the output latency (iOS: the audio
+  session's `outputLatency` + `ioBufferDuration`; Android: a 150 ms bound) plus two periods of
+  the 40 ms monitor, end it with `ItemEnded { reason: Expired }` (announcements:
+  `InterruptEnded { completed: false }`), and never start an item whose deadline is closer than
+  that margin. This also holds with the screen locked, as long as the app keeps running in the
+  background audio mode.
+- **Output events**: `OutputStarted` reports that the first frame of an item or announcement
+  reached the output (between `earliest_ns` and `latest_ns`, detected from the advancing
+  playback position, so the interval is at most one monitor period plus the output latency
+  wide); `OutputEnded` reports that its audio stopped, with an upper bound of the last presented
+  frame. They are reported again when the output resumes (for example after a pausing
+  announcement). `RuntimeAudioPlaylistAdapter` reports them only after
+  `set_output_reporting(true)`.
 
 - The queue holds the current item first. Finished, skipped, failed and removed items leave it.
 - `set_queue` replaces the queue (the current item ends with `Removed`); use `append` to extend

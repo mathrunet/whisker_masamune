@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+mod clock;
 mod native;
 mod runtime;
 mod types;
@@ -7,6 +8,7 @@ mod types;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+pub use clock::output_clock_ns;
 pub use masamune_whisker_bridge::{NativeError, NativeResult, Subscription};
 pub use native::NativeAudioPlaylistAdapter;
 pub use runtime::RuntimeAudioPlaylistAdapter;
@@ -71,6 +73,16 @@ pub trait AudioPlaylistAdapter {
 
     /// Stops the running announcement and restores the queue. Returns whether one was playing.
     fn cancel_interrupt(&self) -> NativeResult<bool>;
+
+    /// Moves the output deadline of the queue item or announcement `id` to `output_before_ns`
+    /// ([`output_clock_ns`] clock) when that is earlier than its current deadline; a later
+    /// value is ignored. A deadline that is already too close ends the item with
+    /// [`EndReason::Expired`] (or the announcement with `completed: false`) right away.
+    /// Returns whether `id` was queued or announcing.
+    fn set_output_deadline(&self, id: &str, output_before_ns: u64) -> NativeResult<bool> {
+        let _ = (id, output_before_ns);
+        Err(NativeError("output deadlines are not supported".into()))
+    }
 
     /// Receives events while the returned [`Subscription`] is held.
     fn subscribe(&self, handler: Rc<dyn Fn(PlaylistEvent)>) -> Subscription;
@@ -201,8 +213,15 @@ impl AudioPlaylist {
             uri: uri.to_owned(),
             mode,
             volume,
+            output_before_ns: options.output_before_ns,
         })?;
         Ok(id)
+    }
+
+    /// Tightens the output deadline of a queue item or announcement. See
+    /// [`AudioPlaylistAdapter::set_output_deadline`].
+    pub fn set_output_deadline(&self, id: &str, output_before_ns: u64) -> NativeResult<bool> {
+        self.adapter.set_output_deadline(id, output_before_ns)
     }
 
     /// Stops the running announcement. See [`AudioPlaylistAdapter::cancel_interrupt`].

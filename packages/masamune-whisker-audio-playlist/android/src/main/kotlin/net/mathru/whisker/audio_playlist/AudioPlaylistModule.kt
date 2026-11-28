@@ -8,12 +8,19 @@
 //   is lowered meanwhile.
 // - Neither player handles audio focus: masamune-whisker-audio-session owns focus, interruptions
 //   and the mediaPlayback foreground service that keeps the process alive in the background.
+// - Output deadlines and output events use SystemClock.elapsedRealtimeNanos (CLOCK_BOOTTIME).
+//   While something plays, a monitor runs every MONITOR_INTERVAL_NS: it ends items and
+//   announcements early enough that no frame is presented at or after their deadline
+//   (OUTPUT_LATENCY_NS and two monitor periods are kept as a margin) and reports when audio starts
+//   reaching the output (the playback position advances) and when it stops.
 // - Everything runs on the main thread (ExoPlayer's application looper).
 
 package net.mathru.whisker.audio_playlist
 
 import android.net.Uri
+import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -29,7 +36,31 @@ import java.io.File
 
 @WhiskerModule
 class AudioPlaylistModule : Module() {
-    private class Announcement(val id: String, val duck: Boolean, val duckVolume: Float, val player: ExoPlayer)
+    private class Announcement(
+        val id: String,
+        val duck: Boolean,
+        val duckVolume: Float,
+        val player: ExoPlayer,
+        var deadline: Long?,
+    )
+
+    /** Output of the queue or the announcement: whether [id] reaches the output. */
+    private class Output(val id: String, var silentAt: Long, var silentPosition: Long) {
+        var audible = false
+    }
+
+    private val deadlines = mutableMapOf<String, Long>()
+    private val handler = Handler(Looper.getMainLooper())
+    private var monitoring = false
+    private var queueOutput: Output? = null
+    private var announcementOutput: Output? = null
+    private val monitorTask = object : Runnable {
+        override fun run() {
+            if (!monitoring) return
+            tick()
+            if (monitoring) handler.postDelayed(this, MONITOR_INTERVAL_NS / 1_000_000)
+        }
+    }
 
     private var queuePlayer: ExoPlayer? = null
     private val entries = mutableListOf<String>()
@@ -44,8 +75,11 @@ class AudioPlaylistModule : Module() {
         // setQueue({ items: [{ id, uri }] })
         Function("setQueue") { args ->
             call {
-                val items = items(Bridge.args(args))
+                val json = Bridge.args(args)
+                val items = items(json)
                 checkUnique(items.map { it.mediaId }, emptyList())
+                deadlines.clear()
+                deadlines.putAll(itemDeadlines(json))
                 setQueue(items)
                 true
             }
@@ -54,8 +88,10 @@ class AudioPlaylistModule : Module() {
         // append({ items: [{ id, uri }] })
         Function("append") { args ->
             call {
-                val items = items(Bridge.args(args))
+                val json = Bridge.args(args)
+                val items = items(json)
                 checkUnique(items.map { it.mediaId }, entries)
+                deadlines.putAll(itemDeadlines(json))
                 append(items)
                 true
             }
@@ -125,8 +161,18 @@ class AudioPlaylistModule : Module() {
                     duck = json.optString("mode") == "duck",
                     duckVolume = json.optDouble("duckVolume", 0.2).toFloat().coerceIn(0f, 1f),
                     volume = json.optDouble("volume", 1.0).toFloat().coerceIn(0f, 1f),
+                    deadline = if (json.has("outputBeforeNs")) json.getLong("outputBeforeNs") else null,
                 )
                 true
+            }
+        }
+
+        // setOutputDeadline({ id, outputBeforeNs }) -> whether the id was queued or announcing
+        Function("setOutputDeadline") { args ->
+            call {
+                val json = Bridge.args(args)
+                require(json.has("outputBeforeNs")) { "invalid output deadline" }
+                setOutputDeadline(json.optString("id"), json.getLong("outputBeforeNs"))
             }
         }
 
@@ -172,6 +218,7 @@ class AudioPlaylistModule : Module() {
             endCurrent("removed")
         } else {
             entries.removeAt(index)
+            deadlines.remove(id)
             player().removeMediaItem(index)
         }
         return true
@@ -182,17 +229,22 @@ class AudioPlaylistModule : Module() {
         entries.firstOrNull()?.let { emit("itemEnded", "id" to it, "reason" to "stopped") }
         entries.clear()
         playing = false
+        deadlines.clear()
         queuePlayer?.let {
             it.playWhenReady = false
             it.clearMediaItems()
         }
+        updateOutputs()
+        updateMonitor()
     }
 
     /** Ends the current item with [reason], drops it from the playlist and reports the next one. */
     private fun endCurrent(reason: String) {
         if (entries.isEmpty()) return
         val id = entries.removeAt(0)
+        deadlines.remove(id)
         emit("itemEnded", "id" to id, "reason" to reason)
+        updateOutputs()
         val player = player()
         if (entries.isEmpty()) {
             player.clearMediaItems()
@@ -227,8 +279,10 @@ class AudioPlaylistModule : Module() {
             val finished = player.currentMediaItemIndex.coerceAtMost(entries.size)
             repeat(finished) {
                 val id = entries.removeAt(0)
+                deadlines.remove(id)
                 emit("itemEnded", "id" to id, "reason" to "completed")
             }
+            updateOutputs()
             if (finished > 0) player.removeMediaItems(0, finished)
             startCurrent()
         }
@@ -238,8 +292,10 @@ class AudioPlaylistModule : Module() {
             // The last item finished.
             val ids = entries.toList()
             entries.clear()
+            deadlines.clear()
             ids.forEach { emit("itemEnded", "id" to it, "reason" to "completed") }
             queuePlayer?.clearMediaItems()
+            updateOutputs()
             emit("queueDrained")
         }
 
@@ -279,8 +335,10 @@ class AudioPlaylistModule : Module() {
 
     /** Plays the queue when the playlist is playing and no pausing announcement runs. */
     private fun applyPlayback() {
+        enforceDeadlines()
         val pausedByAnnouncement = announcement?.let { !it.duck } ?: false
         queuePlayer?.playWhenReady = playing && !pausedByAnnouncement && entries.isNotEmpty()
+        updateMonitor()
     }
 
     private fun applyVolume() {
@@ -304,7 +362,7 @@ class AudioPlaylistModule : Module() {
 
     // MARK: - Announcements
 
-    private fun interrupt(id: String, uri: Uri, duck: Boolean, duckVolume: Float, volume: Float) {
+    private fun interrupt(id: String, uri: Uri, duck: Boolean, duckVolume: Float, volume: Float, deadline: Long?) {
         endAnnouncement(completed = false, resume = false)
         val context = WhiskerApplication.appContext ?: throw IllegalStateException("no context")
         val player = ExoPlayer.Builder(context)
@@ -317,7 +375,7 @@ class AudioPlaylistModule : Module() {
             )
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
-        val next = Announcement(id, duck, duckVolume, player)
+        val next = Announcement(id, duck, duckVolume, player, deadline)
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED && announcement === next) endAnnouncement(completed = true)
@@ -335,8 +393,14 @@ class AudioPlaylistModule : Module() {
         applyVolume()
         applyPlayback()
         emit("interruptStarted", "id" to id)
+        if (deadline != null && now() + GUARD_NS >= deadline) {
+            // Too close to its deadline to be presented in full: it never starts.
+            endAnnouncement(completed = false)
+            return
+        }
         player.prepare()
         player.playWhenReady = true
+        updateMonitor()
     }
 
     /** Stops the announcement and, with [resume], restores the queue. Returns whether one ran. */
@@ -346,9 +410,124 @@ class AudioPlaylistModule : Module() {
         current.player.release()
         applyVolume()
         if (resume) applyPlayback()
+        updateOutputs()
         emit("interruptEnded", "id" to current.id, "completed" to completed)
+        updateMonitor()
         return true
     }
+
+    // MARK: - Output deadlines and output events
+
+    private fun setOutputDeadline(id: String, deadline: Long): Boolean {
+        val current = announcement
+        if (current != null && current.id == id) {
+            current.deadline = current.deadline?.let { minOf(it, deadline) } ?: deadline
+        } else if (id in entries) {
+            deadlines[id] = deadlines[id]?.let { minOf(it, deadline) } ?: deadline
+        } else {
+            return false
+        }
+        tick()
+        return true
+    }
+
+    /** Runs the monitor while something plays or could start playing. */
+    private fun updateMonitor() {
+        val needed = announcement != null || (playing && entries.isNotEmpty()) ||
+            queueOutput?.audible == true || announcementOutput?.audible == true
+        if (needed && !monitoring) {
+            monitoring = true
+            handler.post(monitorTask)
+        } else if (!needed && monitoring) {
+            monitoring = false
+            handler.removeCallbacks(monitorTask)
+        }
+    }
+
+    private fun tick() {
+        enforceDeadlines()
+        updateOutputs()
+        updateMonitor()
+    }
+
+    private fun enforceDeadlines() {
+        val limit = now() + GUARD_NS
+        announcement?.deadline?.let { if (limit >= it) endAnnouncement(completed = false) }
+        var index = 1
+        while (index < entries.size) {
+            val id = entries[index]
+            val deadline = deadlines[id]
+            if (deadline != null && limit >= deadline) {
+                entries.removeAt(index)
+                deadlines.remove(id)
+                player().removeMediaItem(index)
+                emit("itemEnded", "id" to id, "reason" to "expired")
+            } else {
+                index++
+            }
+        }
+        while (true) {
+            val deadline = entries.firstOrNull()?.let { deadlines[it] } ?: break
+            if (limit < deadline) break
+            endCurrent("expired")
+        }
+    }
+
+    /** Reports `outputStarted` once the position of an audible item advances and `outputEnded` as soon as it stops. */
+    private fun updateOutputs() {
+        val now = now()
+        val pausedByAnnouncement = announcement?.let { !it.duck } ?: false
+        val queueTarget = if (playing && !pausedByAnnouncement) entries.firstOrNull() else null
+        val queue = queuePlayer
+        queueOutput = update(
+            queueOutput,
+            queueTarget,
+            queue?.currentPosition ?: 0,
+            queue != null && queue.isPlaying && queue.currentMediaItem?.mediaId == queueTarget,
+            now,
+        )
+        val current = announcement
+        announcementOutput = update(
+            announcementOutput,
+            current?.id,
+            current?.player?.currentPosition ?: 0,
+            current?.player?.isPlaying == true,
+            now,
+        )
+    }
+
+    private fun update(output: Output?, target: String?, position: Long, running: Boolean, now: Long): Output? {
+        var next = output
+        if (next != null && (next.id != target || (next.audible && !running))) {
+            if (next.audible) emit("outputEnded", "id" to next.id, "lastFrameNs" to now + OUTPUT_LATENCY_NS)
+            next = null
+        }
+        if (target == null) return null
+        val tracked = next ?: Output(target, now, position)
+        if (!tracked.audible) {
+            if (running && position > tracked.silentPosition) {
+                // Frames rendered after `silentAt` reach the output OUTPUT_LATENCY_NS later.
+                val earliest = tracked.silentAt
+                val latest = now + OUTPUT_LATENCY_NS
+                val played = (position - tracked.silentPosition) * 1_000_000
+                val estimate = (latest - played).coerceIn(earliest, latest)
+                emit(
+                    "outputStarted",
+                    "id" to target,
+                    "firstFrameNs" to estimate,
+                    "earliestNs" to earliest,
+                    "latestNs" to latest,
+                )
+                tracked.audible = true
+            } else {
+                tracked.silentAt = now
+                tracked.silentPosition = position
+            }
+        }
+        return tracked
+    }
+
+    private fun now(): Long = SystemClock.elapsedRealtimeNanos()
 
     // MARK: - Helpers
 
@@ -373,6 +552,14 @@ class AudioPlaylistModule : Module() {
         }
     }
 
+    private fun itemDeadlines(json: JSONObject): Map<String, Long> {
+        val raw = json.optJSONArray("items") ?: return emptyMap()
+        return (0 until raw.length()).mapNotNull { index ->
+            val item = raw.getJSONObject(index)
+            if (item.has("outputBeforeNs")) item.optString("id") to item.getLong("outputBeforeNs") else null
+        }.toMap()
+    }
+
     private fun checkUnique(ids: List<String>, existing: List<String>) {
         val seen = existing.toMutableSet()
         ids.forEach { require(seen.add(it)) { "duplicate queue item id: $it" } }
@@ -384,5 +571,13 @@ class AudioPlaylistModule : Module() {
         val uri = Uri.parse(value)
         require(uri.scheme?.lowercase() in setOf("https", "file")) { "invalid audio source" }
         return uri
+    }
+
+    private companion object {
+        const val MONITOR_INTERVAL_NS = 40_000_000L
+
+        /** Conservative bound for the audio output latency (Media3 does not expose it). */
+        const val OUTPUT_LATENCY_NS = 150_000_000L
+        const val GUARD_NS = OUTPUT_LATENCY_NS + 2 * MONITOR_INTERVAL_NS + 20_000_000L
     }
 }

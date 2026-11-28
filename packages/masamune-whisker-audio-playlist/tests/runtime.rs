@@ -368,3 +368,84 @@ fn stop_clears_the_queue_and_the_announcement() {
     adapter.finish_current();
     assert!(adapter.take_events().is_empty());
 }
+
+#[test]
+fn output_deadlines_end_items_before_their_frames_reach_it() {
+    let (adapter, playlist) = setup();
+    adapter.set_output_reporting(true);
+    let deadline = adapter.now_ns() + 400_000_000;
+    playlist
+        .set_queue(&[
+            item("a").with_output_before_ns(deadline),
+            item("b").with_output_before_ns(deadline),
+            item("c"),
+        ])
+        .unwrap();
+    playlist.play().unwrap();
+    adapter.take_events();
+    adapter.advance(1_000);
+    let events = adapter.take_events();
+    assert!(events.contains(&ended("a", EndReason::Expired)));
+    let last = events.iter().find_map(|event| match event {
+        PlaylistEvent::OutputEnded { id, last_frame_ns } if id == "a" => Some(*last_frame_ns),
+        _ => None,
+    });
+    assert_eq!(last, Some(deadline));
+    // "b" shares the deadline and never starts; "c" has none and plays.
+    assert!(events.contains(&ended("b", EndReason::Expired)));
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        PlaylistEvent::OutputStarted { id, .. } if id == "b"
+    )));
+    assert_eq!(playlist.current_id().unwrap().as_deref(), Some("c"));
+}
+
+#[test]
+fn reports_output_and_tightens_deadlines() {
+    let (adapter, playlist) = setup();
+    playlist.set_queue(&[item("a")]).unwrap();
+    adapter.set_output_reporting(true);
+    adapter.take_events();
+    playlist.play().unwrap();
+    let events = adapter.take_events();
+    assert!(matches!(
+        &events[..],
+        [PlaylistEvent::OutputStarted { id, earliest_ns, first_frame_ns, latest_ns }]
+            if id == "a" && earliest_ns <= first_frame_ns && first_frame_ns <= latest_ns
+    ));
+    // A later deadline does not extend an earlier one.
+    let now = adapter.now_ns();
+    assert!(
+        playlist
+            .set_output_deadline("a", now + 100_000_000)
+            .unwrap()
+    );
+    assert!(
+        playlist
+            .set_output_deadline("a", now + 900_000_000)
+            .unwrap()
+    );
+    assert!(!playlist.set_output_deadline("x", now).unwrap());
+    adapter.advance(200);
+    let events = adapter.take_events();
+    assert!(matches!(&events[0], PlaylistEvent::OutputEnded { id, .. } if id == "a"));
+    assert_eq!(events[1], ended("a", EndReason::Expired));
+    assert!(matches!(&events[2], PlaylistEvent::QueueDrained));
+
+    // Announcements end unfinished at their deadline.
+    let id = playlist
+        .interrupt(
+            "/cache/n.m4a",
+            InterruptOptions::default().with_output_before_ns(adapter.now_ns() + 50_000_000),
+        )
+        .unwrap();
+    adapter.advance(100);
+    let events = adapter.take_events();
+    assert!(events.contains(&PlaylistEvent::InterruptEnded {
+        id: id.clone(),
+        completed: false
+    }));
+    assert!(events.iter().any(
+        |event| matches!(event, PlaylistEvent::OutputStarted { id: started, .. } if *started == id)
+    ));
+}
